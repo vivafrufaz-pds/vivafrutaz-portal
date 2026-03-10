@@ -23,11 +23,6 @@ export async function registerRoutes(
     })
   );
 
-  // Root route for preview
-  app.get("/", (req, res) => {
-    res.send("VivaFrutaz B2B System Running");
-  });
-
   // Health check route
   app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
