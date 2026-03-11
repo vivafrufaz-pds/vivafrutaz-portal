@@ -13,18 +13,18 @@ export default function AdminDashboard() {
   const activeCompanies = companies?.filter(c => c.active).length || 0;
 
   const stats = [
-    { label: "Total Orders", value: orders?.length || 0, icon: ShoppingCart, color: "text-blue-500", bg: "bg-blue-500/10" },
-    { label: "Total Revenue", value: `$${totalValue.toFixed(2)}`, icon: TrendingUp, color: "text-green-500", bg: "bg-green-500/10" },
-    { label: "Active Clients", value: activeCompanies, icon: Users, color: "text-orange-500", bg: "bg-orange-500/10" },
-    { label: "Pending Deliveries", value: orders?.length || 0, icon: Package, color: "text-purple-500", bg: "bg-purple-500/10" },
+    { label: "Total de Pedidos", value: orders?.length || 0, icon: ShoppingCart, color: "text-blue-500", bg: "bg-blue-500/10" },
+    { label: "Receita Total", value: `R$ ${totalValue.toFixed(2)}`, icon: TrendingUp, color: "text-green-500", bg: "bg-green-500/10" },
+    { label: "Clientes Ativos", value: activeCompanies, icon: Users, color: "text-orange-500", bg: "bg-orange-500/10" },
+    { label: "Entregas Pendentes", value: orders?.length || 0, icon: Package, color: "text-purple-500", bg: "bg-purple-500/10" },
   ];
 
   return (
     <Layout>
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-display font-bold text-foreground">Welcome back, {user?.name}</h1>
-          <p className="text-muted-foreground mt-1 text-lg">Here's what's happening at VivaFrutaz today.</p>
+          <h1 className="text-3xl font-display font-bold text-foreground">Olá, {user?.name}!</h1>
+          <p className="text-muted-foreground mt-1 text-lg">Veja o resumo de hoje no VivaFrutaz.</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -43,12 +43,11 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Quick Actions or Recent Activity could go here */}
         <div className="bg-card rounded-2xl p-8 border border-border/50 premium-shadow flex items-center justify-center min-h-[300px]">
           <div className="text-center">
             <Package className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-            <h3 className="text-xl font-bold text-foreground">System Active</h3>
-            <p className="text-muted-foreground mt-2">Use the sidebar to manage catalog, clients, and orders.</p>
+            <h3 className="text-xl font-bold text-foreground">Sistema Ativo</h3>
+            <p className="text-muted-foreground mt-2">Use o menu lateral para gerenciar catálogo, clientes e pedidos.</p>
           </div>
         </div>
       </div>

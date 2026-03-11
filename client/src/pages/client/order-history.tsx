@@ -2,7 +2,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCompanyOrders } from "@/hooks/use-ordering";
 import { Layout } from "@/components/Layout";
 import { format } from "date-fns";
-import { Receipt, Calendar, ArrowRight } from "lucide-react";
+import { ptBR } from "date-fns/locale";
+import { Receipt, Calendar, Plus } from "lucide-react";
 import { Link } from "wouter";
 
 export default function OrderHistoryPage() {
@@ -13,22 +14,25 @@ export default function OrderHistoryPage() {
     <Layout>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-foreground">Order History</h1>
-          <p className="text-muted-foreground mt-1">Review your past deliveries and invoices.</p>
+          <h1 className="text-3xl font-display font-bold text-foreground">Meus Pedidos</h1>
+          <p className="text-muted-foreground mt-1">Histórico de entregas e pedidos realizados.</p>
         </div>
-        <Link href="/client/order" className="px-6 py-3 bg-primary/10 text-primary font-bold rounded-xl hover:bg-primary/20 transition-colors">
-          New Order
+        <Link href="/client/order" className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25">
+          <Plus className="w-4 h-4" /> Novo Pedido
         </Link>
       </div>
 
       <div className="grid gap-6">
         {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground">Loading history...</div>
+          <div className="p-8 text-center text-muted-foreground">Carregando histórico...</div>
         ) : orders?.length === 0 ? (
           <div className="bg-card rounded-2xl p-12 text-center border border-border/50">
             <Receipt className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-foreground">No Orders Yet</h3>
-            <p className="text-muted-foreground mt-2">You haven't placed any orders with us.</p>
+            <h3 className="text-xl font-bold text-foreground">Nenhum Pedido</h3>
+            <p className="text-muted-foreground mt-2">Você ainda não realizou nenhum pedido.</p>
+            <Link href="/client/order" className="inline-flex items-center gap-2 mt-6 px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors">
+              Fazer Primeiro Pedido
+            </Link>
           </div>
         ) : (
           orders?.sort((a,b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()).map(order => (
@@ -38,21 +42,29 @@ export default function OrderHistoryPage() {
                   #{order.id.toString().padStart(4, '0')}
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-foreground">Total: ${Number(order.totalValue).toFixed(2)}</h3>
-                  <div className="flex items-center gap-4 text-sm font-medium text-muted-foreground mt-2">
-                    <span className="flex items-center gap-1"><Calendar className="w-4 h-4"/> Ordered: {format(new Date(order.orderDate), 'MMM d, yyyy')}</span>
+                  <h3 className="text-xl font-bold text-foreground">Total: R$ {Number(order.totalValue).toFixed(2)}</h3>
+                  <p className="text-sm font-semibold text-muted-foreground mt-1">{order.weekReference}</p>
+                  <div className="flex items-center gap-4 text-sm font-medium text-muted-foreground mt-1">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4"/>
+                      Pedido em: {format(new Date(order.orderDate), "d 'de' MMM 'de' yyyy", { locale: ptBR })}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-6 w-full md:w-auto">
-                <div className="bg-muted px-4 py-2 rounded-xl flex-1 md:flex-none">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Delivery Date</p>
-                  <p className="font-bold text-foreground">{format(new Date(order.deliveryDate), 'EEEE, MMM d')}</p>
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="bg-muted px-4 py-3 rounded-xl flex-1 md:flex-none">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Data de Entrega</p>
+                  <p className="font-bold text-foreground">{format(new Date(order.deliveryDate), "EEEE, d 'de' MMM", { locale: ptBR })}</p>
                 </div>
-                <button className="p-3 bg-primary/10 text-primary rounded-xl hover:bg-primary hover:text-white transition-all group">
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </button>
+                <Link
+                  href={`/client/order`}
+                  data-testid={`button-reorder-${order.id}`}
+                  className="p-3 bg-secondary/10 text-secondary rounded-xl hover:bg-secondary hover:text-white transition-all group font-bold text-sm px-4"
+                >
+                  Repetir
+                </Link>
               </div>
             </div>
           ))

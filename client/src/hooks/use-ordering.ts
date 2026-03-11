@@ -52,7 +52,7 @@ export function useCreateOrderWindow() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.orderWindows.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.orderWindows.active.path] });
-      toast({ title: "Order Window created" });
+      toast({ title: "Janela de pedido criada com sucesso!" });
     }
   });
 }
@@ -71,7 +71,7 @@ export function useOrders() {
 
 export function useCompanyOrders(companyId?: number) {
   return useQuery({
-    queryKey: [companyId ? buildUrl(api.orders.companyOrders.path, { companyId }) : null],
+    queryKey: [api.orders.companyOrders.path, companyId],
     queryFn: async () => {
       if (!companyId) return [];
       const url = buildUrl(api.orders.companyOrders.path, { companyId });
@@ -80,6 +80,20 @@ export function useCompanyOrders(companyId?: number) {
       return api.orders.companyOrders.responses[200].parse(await res.json());
     },
     enabled: !!companyId,
+  });
+}
+
+export function useOrderDetail(orderId?: number) {
+  return useQuery({
+    queryKey: [api.orders.get.path, orderId],
+    queryFn: async () => {
+      if (!orderId) return null;
+      const url = buildUrl(api.orders.get.path, { id: orderId });
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) return null;
+      return api.orders.get.responses[200].parse(await res.json());
+    },
+    enabled: !!orderId,
   });
 }
 
@@ -99,9 +113,11 @@ export function useCreateOrder() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.orders.list.path] });
-      // Invalidate company orders too
-      queryClient.invalidateQueries(); 
-      toast({ title: "Order placed successfully!" });
+      queryClient.invalidateQueries({ queryKey: [api.orders.companyOrders.path] });
+      toast({ title: "Pedido realizado com sucesso!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao enviar pedido", variant: "destructive" });
     }
   });
 }

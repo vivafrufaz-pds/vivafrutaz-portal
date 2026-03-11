@@ -16,10 +16,11 @@ export function useAuth() {
     queryFn: async () => {
       const res = await fetch(api.auth.me.path, { credentials: "include" });
       if (res.status === 401) return null;
-      if (!res.ok) throw new Error("Failed to fetch user");
+      if (!res.ok) throw new Error("Falha ao buscar usuário");
       return api.auth.me.responses[200].parse(await res.json());
     },
     retry: false,
+    staleTime: 60000,
   });
 
   const loginMutation = useMutation({
@@ -32,17 +33,17 @@ export function useAuth() {
       });
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.message || "Login failed");
+        throw new Error(error.message || "Falha no login");
       }
       return api.auth.login.responses[200].parse(await res.json());
     },
     onSuccess: (data) => {
       queryClient.setQueryData([api.auth.me.path], data);
-      toast({ title: "Welcome back!" });
+      toast({ title: "Bem-vindo ao VivaFrutaz!" });
       setLocation("/");
     },
     onError: (error: Error) => {
-      toast({ title: "Login Failed", description: error.message, variant: "destructive" });
+      toast({ title: "Falha no Acesso", description: error.message, variant: "destructive" });
     }
   });
 
@@ -65,7 +66,7 @@ export function useAuth() {
     isAuthenticated: !!authData?.user || !!authData?.company,
     isStaff: !!authData?.user,
     isClient: !!authData?.company,
-    role: authData?.user?.role, // 'ADMIN' | 'OPERATIONS_MANAGER' | 'PURCHASE_MANAGER'
+    role: authData?.user?.role,
     isLoading: meQuery.isLoading,
     login: loginMutation.mutateAsync,
     isLoggingIn: loginMutation.isPending,
