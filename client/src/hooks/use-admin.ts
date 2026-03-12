@@ -31,7 +31,35 @@ export function useCreateCompany() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.companies.list.path] });
-      toast({ title: "Company created successfully" });
+      toast({ title: "Empresa criada com sucesso!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao criar empresa", variant: "destructive" });
+    }
+  });
+}
+
+export function useUpdateCompany() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<z.infer<typeof api.companies.update.input>> }) => {
+      const url = buildUrl(api.companies.update.path, { id });
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update company");
+      return api.companies.update.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.companies.list.path] });
+      toast({ title: "Empresa atualizada com sucesso!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar empresa", variant: "destructive" });
     }
   });
 }
@@ -76,7 +104,7 @@ export function useCreatePriceGroup() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.priceGroups.list.path] });
-      toast({ title: "Price group created" });
+      toast({ title: "Grupo de preço criado com sucesso!" });
     }
   });
 }

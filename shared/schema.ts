@@ -18,13 +18,25 @@ export const priceGroups = pgTable("price_groups", {
 
 export const companies = pgTable("companies", {
   id: serial("id").primaryKey(),
+  // Dados Básicos
   companyName: text("company_name").notNull(),
   contactName: text("contact_name").notNull(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
+  phone: text("phone"),
   priceGroupId: integer("price_group_id").references(() => priceGroups.id),
-  allowedOrderDays: jsonb("allowed_order_days").notNull(), // array of strings
+  allowedOrderDays: jsonb("allowed_order_days").notNull(),
+  // Configurações
   active: boolean("active").default(true).notNull(),
+  clientType: text("client_type").default("mensal"), // 'pontual' | 'mensal'
+  minWeeklyBilling: numeric("min_weekly_billing", { precision: 10, scale: 2 }),
+  deliveryTime: text("delivery_time"), // e.g. "08:30"
+  // Financeiro
+  billingTerm: text("billing_term"), // '15' | '30' | '45'
+  billingType: text("billing_type"), // 'boleto' | 'deposito' | 'pix'
+  billingFormat: text("billing_format"), // 'diario' | 'semanal' | 'mensal'
+  paymentDates: text("payment_dates"), // free text e.g. "5, 15, 25"
+  financialNotes: text("financial_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
