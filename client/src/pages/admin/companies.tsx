@@ -5,7 +5,7 @@ import { Modal } from "@/components/Modal";
 import {
   Plus, Building2, Mail, Hash, Phone, Clock, Edit2,
   CheckCircle, XCircle, CalendarDays, CreditCard, DollarSign,
-  FileText, Settings, User
+  FileText, Settings, User, Percent
 } from "lucide-react";
 import type { Company } from "@shared/schema";
 
@@ -31,6 +31,7 @@ const emptyForm = {
   clientType: "mensal",
   minWeeklyBilling: "",
   deliveryTime: "",
+  adminFee: "0",
   billingTerm: "",
   billingType: "",
   billingFormat: "",
@@ -51,6 +52,7 @@ function companyToForm(c: Company): typeof emptyForm {
     clientType: c.clientType || "mensal",
     minWeeklyBilling: c.minWeeklyBilling ? String(c.minWeeklyBilling) : "",
     deliveryTime: c.deliveryTime || "",
+    adminFee: c.adminFee ? String(c.adminFee) : "0",
     billingTerm: c.billingTerm || "",
     billingType: c.billingType || "",
     billingFormat: c.billingFormat || "",
@@ -124,6 +126,7 @@ export default function CompaniesPage() {
       clientType: formData.clientType || null,
       minWeeklyBilling: formData.minWeeklyBilling ? String(formData.minWeeklyBilling) : null,
       deliveryTime: formData.deliveryTime || null,
+      adminFee: formData.adminFee ? String(formData.adminFee) : "0",
       billingTerm: formData.billingTerm || null,
       billingType: formData.billingType || null,
       billingFormat: formData.billingFormat || null,
@@ -408,6 +411,40 @@ export default function CompaniesPage() {
                     className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" />
                   <p className="text-xs text-muted-foreground mt-1">Aparece nos pedidos e relatórios. Ex: 08:30</p>
                 </div>
+              </div>
+
+              {/* Taxa administrativa */}
+              <div className="p-4 rounded-xl border-2 border-secondary/30 bg-secondary/5">
+                <label className="flex items-center gap-2 text-sm font-bold text-secondary mb-3">
+                  <Percent className="w-4 h-4" />
+                  Taxa Administrativa (%)
+                </label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="number" step="0.1" min="0" max="100"
+                    value={formData.adminFee}
+                    onChange={e => set("adminFee", e.target.value)}
+                    className="w-32 px-4 py-2.5 rounded-xl border-2 border-border focus:border-secondary outline-none text-xl font-bold text-center"
+                    placeholder="0"
+                  />
+                  <div className="flex gap-2">
+                    {["0", "5", "10", "12", "15", "20"].map(v => (
+                      <button key={v} type="button" onClick={() => set("adminFee", v)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-all ${formData.adminFee === v ? 'bg-secondary text-white border-secondary' : 'border-border text-muted-foreground hover:border-secondary/50'}`}>
+                        {v}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Aplicada automaticamente sobre o preço base de todos os produtos.
+                  Clientes não visualizam esta taxa.
+                </p>
+                {formData.adminFee && Number(formData.adminFee) > 0 && (
+                  <p className="text-xs font-bold text-secondary mt-1">
+                    Ex: produto R$ 10,00 → cliente vê R$ {(10 * (1 + Number(formData.adminFee) / 100)).toFixed(2)}
+                  </p>
+                )}
               </div>
             </div>
           )}

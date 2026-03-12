@@ -31,7 +31,32 @@ export function useCreateProduct() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.products.list.path] });
-      toast({ title: "Product created" });
+      toast({ title: "Produto criado com sucesso!" });
+    }
+  });
+}
+
+export function useUpdateProduct() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<z.infer<typeof api.products.update.input>> }) => {
+      const url = buildUrl(api.products.update.path, { id });
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update product");
+      return api.products.update.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.products.list.path] });
+      toast({ title: "Produto atualizado com sucesso!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar produto", variant: "destructive" });
     }
   });
 }
@@ -53,7 +78,6 @@ export function useUpdateProductPrice() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async (data: { id?: number; productId: number; priceGroupId: number; price: string | number }) => {
-      // If we have an ID, update. Else, create.
       const payload = { ...data, price: z.coerce.number().parse(data.price) };
       
       if (data.id) {
@@ -79,7 +103,6 @@ export function useUpdateProductPrice() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.productPrices.list.path] });
-      toast({ title: "Price saved successfully" });
     }
   });
 }

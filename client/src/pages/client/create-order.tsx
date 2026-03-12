@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useActiveOrderWindow, useCreateOrder, useCompanyOrders, useOrderDetail } from "@/hooks/use-ordering";
-import { useProducts, useProductPrices } from "@/hooks/use-catalog";
+import { useProducts } from "@/hooks/use-catalog";
 import { Layout } from "@/components/Layout";
 import { ShoppingCart, CheckCircle2, AlertCircle, RotateCcw } from "lucide-react";
 import { useLocation } from "wouter";
@@ -44,7 +44,6 @@ export default function CreateOrderPage() {
   const { company } = useAuth();
   const { data: activeWindow, isLoading: windowLoading } = useActiveOrderWindow();
   const { data: products } = useProducts();
-  const { data: prices } = useProductPrices();
   const createOrder = useCreateOrder();
   const { data: companyOrders } = useCompanyOrders(company?.id);
   const [, setLocation] = useLocation();
@@ -80,21 +79,19 @@ export default function CreateOrderPage() {
   const allowedDays = getAllowedDays();
 
   const availableProducts = useMemo(() => {
-    if (!products || !prices || !company) return [];
+    if (!products || !company) return [];
+    const adminFee = Number(company.adminFee || 0);
     return products
-      .filter(p => p.active)
+      .filter(p => p.active && p.basePrice)
       .map(product => {
-        const priceRecord = prices.find(p => 
-          Number(p.productId) === product.id && 
-          Number(p.priceGroupId) === company.priceGroupId
-        );
+        const base = Number(product.basePrice);
+        const finalPrice = base * (1 + adminFee / 100);
         return {
           ...product,
-          price: priceRecord ? Number(priceRecord.price) : null
+          price: Math.round(finalPrice * 100) / 100,
         };
-      })
-      .filter(p => p.price !== null);
-  }, [products, prices, company]);
+      });
+  }, [products, company]);
 
   const cartTotal = useMemo(() => {
     return Object.entries(cart).reduce((total, [productId, quantity]) => {
@@ -225,7 +222,7 @@ export default function CreateOrderPage() {
             </div>
             {availableProducts.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
-                Nenhum produto com preço disponível para o seu grupo. Contate o administrador.
+                Nenhum produto disponível no momento. Contate o administrador.
               </div>
             ) : (
               <div className="divide-y divide-border/50">

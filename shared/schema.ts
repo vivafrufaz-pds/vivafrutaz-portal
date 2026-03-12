@@ -7,7 +7,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role").notNull(), // ADMIN, OPERATIONS_MANAGER, PURCHASE_MANAGER
+  role: text("role").notNull(),
 });
 
 export const priceGroups = pgTable("price_groups", {
@@ -28,14 +28,16 @@ export const companies = pgTable("companies", {
   allowedOrderDays: jsonb("allowed_order_days").notNull(),
   // Configurações
   active: boolean("active").default(true).notNull(),
-  clientType: text("client_type").default("mensal"), // 'pontual' | 'mensal'
+  clientType: text("client_type").default("mensal"),
   minWeeklyBilling: numeric("min_weekly_billing", { precision: 10, scale: 2 }),
-  deliveryTime: text("delivery_time"), // e.g. "08:30"
+  deliveryTime: text("delivery_time"),
+  // Taxa administrativa (%)
+  adminFee: numeric("admin_fee", { precision: 5, scale: 2 }).default("0"),
   // Financeiro
-  billingTerm: text("billing_term"), // '15' | '30' | '45'
-  billingType: text("billing_type"), // 'boleto' | 'deposito' | 'pix'
-  billingFormat: text("billing_format"), // 'diario' | 'semanal' | 'mensal'
-  paymentDates: text("payment_dates"), // free text e.g. "5, 15, 25"
+  billingTerm: text("billing_term"),
+  billingType: text("billing_type"),
+  billingFormat: text("billing_format"),
+  paymentDates: text("payment_dates"),
   financialNotes: text("financial_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -46,6 +48,8 @@ export const products = pgTable("products", {
   category: text("category").notNull(),
   unit: text("unit").notNull(),
   active: boolean("active").default(true).notNull(),
+  // Preço base interno da VivaFrutaz
+  basePrice: numeric("base_price", { precision: 10, scale: 2 }),
 });
 
 export const productPrices = pgTable("product_prices", {
