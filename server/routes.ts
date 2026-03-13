@@ -341,14 +341,46 @@ export async function registerRoutes(
     res.json({ key: req.params.key, value });
   });
 
-  // Reports (Mock implementations for MVP)
+  // Admin order management
+  app.patch('/api/orders/:id', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { status, adminNote } = req.body;
+      const updates: any = {};
+      if (status !== undefined) updates.status = status;
+      if (adminNote !== undefined) updates.adminNote = adminNote;
+      const order = await storage.updateOrder(id, updates);
+      res.json(order);
+    } catch (err) {
+      console.error("Update order error:", err);
+      res.status(400).json({ message: "Bad request" });
+    }
+  });
+
+  app.put('/api/orders/:id/items', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { items } = req.body;
+      if (!Array.isArray(items)) return res.status(400).json({ message: "items required" });
+      await storage.updateOrderItems(id, items);
+      const result = await storage.getOrder(id);
+      res.json(result);
+    } catch (err) {
+      console.error("Update order items error:", err);
+      res.status(400).json({ message: "Bad request" });
+    }
+  });
+
+  // Reports — real data from DB
   app.get(api.reports.purchasing.path, async (req, res) => {
-    // Return mock data for MVP
-    res.json([
-      { productId: 1, productName: "Banana Box", totalQuantity: 200, unit: "kg" },
-      { productId: 2, productName: "Apple Box", totalQuantity: 150, unit: "kg" },
-      { productId: 3, productName: "Melon Box", totalQuantity: 90, unit: "kg" },
-    ]);
+    const { dateFrom, dateTo, companyId, productId } = req.query;
+    const data = await storage.getPurchasingReport({
+      dateFrom: dateFrom as string,
+      dateTo: dateTo as string,
+      companyId: companyId ? Number(companyId) : undefined,
+      productId: productId ? Number(productId) : undefined,
+    });
+    res.json(data);
   });
 
   app.get(api.reports.financial.path, async (req, res) => {

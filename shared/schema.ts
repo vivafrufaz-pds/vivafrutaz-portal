@@ -73,6 +73,8 @@ export const orderWindows = pgTable("order_windows", {
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   orderCode: text("order_code").unique(),
+  status: text("status").default("ACTIVE").notNull(),
+  adminNote: text("admin_note"),
   companyId: integer("company_id").references(() => companies.id).notNull(),
   orderDate: timestamp("order_date").defaultNow().notNull(),
   deliveryDate: timestamp("delivery_date").notNull(),

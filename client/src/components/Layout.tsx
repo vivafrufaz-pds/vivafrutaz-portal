@@ -17,7 +17,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/price-groups', label: 'Grupos de Preço', icon: Tag, roles: ['ADMIN'] },
     { href: '/admin/order-windows', label: 'Janelas de Pedido', icon: CalendarDays, roles: ['ADMIN', 'OPERATIONS_MANAGER'] },
     { href: '/admin/orders', label: 'Pedidos', icon: ShoppingCart, roles: ['ADMIN', 'OPERATIONS_MANAGER'] },
-    { href: '/admin/purchasing', label: 'Relatório de Compras', icon: BarChart3, roles: ['ADMIN', 'PURCHASE_MANAGER'] },
+    { href: '/admin/purchasing', label: 'Compras', icon: BarChart3, roles: ['ADMIN', 'PURCHASE_MANAGER'] },
     { href: '/admin/financial', label: 'Painel Financeiro', icon: PieChart, roles: ['ADMIN'] },
   ];
 

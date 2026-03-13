@@ -53,6 +53,9 @@ export interface IStorage {
   getOrder(id: number): Promise<{ order: Order, items: OrderItem[] } | undefined>;
   getCompanyOrders(companyId: number): Promise<Order[]>;
   createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order>;
+  updateOrder(id: number, updates: { status?: string; adminNote?: string }): Promise<Order>;
+  updateOrderItems(orderId: number, newItems: { productId: number; quantity: number; unitPrice: string; totalPrice: string }[]): Promise<void>;
+  getPurchasingReport(filters: { dateFrom?: string; dateTo?: string; companyId?: number; productId?: number }): Promise<any>;
 
   // System Settings
   getSetting(key: string): Promise<string | null>;
@@ -212,6 +215,113 @@ export class DatabaseStorage implements IStorage {
     if (!order) return undefined;
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
     return { order, items };
+  }
+
+  async updateOrder(id: number, updates: { status?: string; adminNote?: string }): Promise<Order> {
+    const [updated] = await db.update(orders).set(updates).where(eq(orders.id, id)).returning();
+    return updated;
+  }
+
+  async updateOrderItems(orderId: number, newItems: { productId: number; quantity: number; unitPrice: string; totalPrice: string }[]): Promise<void> {
+    await db.delete(orderItems).where(eq(orderItems.orderId, orderId));
+    if (newItems.length > 0) {
+      await db.insert(orderItems).values(newItems.map(item => ({ ...item, orderId })));
+    }
+    // Recalculate total
+    const total = newItems.reduce((s, i) => s + Number(i.totalPrice), 0);
+    await db.update(orders).set({ totalValue: String(total) }).where(eq(orders.id, orderId));
+  }
+
+  async getPurchasingReport(filters: {
+    dateFrom?: string;
+    dateTo?: string;
+    companyId?: number;
+    productId?: number;
+  }): Promise<{
+    products: { productId: number; productName: string; unit: string; totalQuantity: number; companies: { companyId: number; companyName: string; quantity: number }[] }[];
+    rawOrders: { orderCode: string; companyName: string; orderDate: string; deliveryDate: string; productName: string; quantity: number; unitPrice: number; totalPrice: number }[];
+  }> {
+    // Build conditions
+    const conditions: any[] = [];
+    if (filters.companyId) conditions.push(eq(orders.companyId, filters.companyId));
+    if (filters.productId) conditions.push(eq(orderItems.productId, filters.productId));
+    if (filters.dateFrom) conditions.push(gte(orders.orderDate, new Date(filters.dateFrom)));
+    if (filters.dateTo) {
+      const to = new Date(filters.dateTo);
+      to.setHours(23, 59, 59, 999);
+      conditions.push(lte(orders.orderDate, to));
+    }
+
+    // Only include ACTIVE orders
+    conditions.push(eq(orders.status, 'ACTIVE'));
+
+    const rows = await db
+      .select({
+        orderId: orders.id,
+        orderCode: orders.orderCode,
+        orderDate: orders.orderDate,
+        deliveryDate: orders.deliveryDate,
+        companyId: companies.id,
+        companyName: companies.companyName,
+        productId: products.id,
+        productName: products.name,
+        productUnit: products.unit,
+        quantity: orderItems.quantity,
+        unitPrice: orderItems.unitPrice,
+        totalPrice: orderItems.totalPrice,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orderItems.orderId, orders.id))
+      .innerJoin(companies, eq(orders.companyId, companies.id))
+      .innerJoin(products, eq(orderItems.productId, products.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(orders.orderDate));
+
+    // Aggregate by product
+    const productMap = new Map<number, {
+      productId: number; productName: string; unit: string; totalQuantity: number;
+      companyMap: Map<number, { companyId: number; companyName: string; quantity: number }>;
+    }>();
+
+    for (const row of rows) {
+      if (!productMap.has(row.productId)) {
+        productMap.set(row.productId, {
+          productId: row.productId,
+          productName: row.productName,
+          unit: row.productUnit,
+          totalQuantity: 0,
+          companyMap: new Map(),
+        });
+      }
+      const p = productMap.get(row.productId)!;
+      p.totalQuantity += row.quantity;
+      const existing = p.companyMap.get(row.companyId);
+      if (existing) existing.quantity += row.quantity;
+      else p.companyMap.set(row.companyId, { companyId: row.companyId, companyName: row.companyName, quantity: row.quantity });
+    }
+
+    const productsList = Array.from(productMap.values())
+      .map(p => ({
+        productId: p.productId,
+        productName: p.productName,
+        unit: p.unit,
+        totalQuantity: p.totalQuantity,
+        companies: Array.from(p.companyMap.values()).sort((a, b) => b.quantity - a.quantity),
+      }))
+      .sort((a, b) => b.totalQuantity - a.totalQuantity);
+
+    const rawOrders = rows.map(row => ({
+      orderCode: row.orderCode || `#${row.orderId}`,
+      companyName: row.companyName,
+      orderDate: row.orderDate.toISOString().split('T')[0],
+      deliveryDate: row.deliveryDate.toISOString().split('T')[0],
+      productName: row.productName,
+      quantity: row.quantity,
+      unitPrice: Number(row.unitPrice),
+      totalPrice: Number(row.totalPrice),
+    }));
+
+    return { products: productsList, rawOrders };
   }
 
   async getCompanyOrders(companyId: number): Promise<Order[]> {
