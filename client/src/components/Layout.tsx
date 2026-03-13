@@ -4,7 +4,7 @@ import { useLocation, Link } from 'wouter';
 import { 
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
-  ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog
+  ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive
 } from 'lucide-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -26,6 +26,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/password-reset-requests', label: 'Senhas de Clientes', icon: KeyRound, roles: ['ADMIN'] },
     { href: '/admin/special-orders', label: 'Pedidos Pontuais', icon: Star, roles: ['ADMIN', 'OPERATIONS_MANAGER'] },
     { href: '/admin/users', label: 'Usuários do Sistema', icon: UserCog, roles: ['ADMIN', 'DEVELOPER'] },
+    { href: '/admin/backups', label: 'Backup & E-mails', icon: HardDrive, roles: ['ADMIN', 'DEVELOPER'] },
   ];
 
   const clientLinks = [

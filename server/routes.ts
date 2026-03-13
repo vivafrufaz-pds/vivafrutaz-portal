@@ -5,6 +5,12 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import expressSession from "express-session";
 import MemoryStore from "memorystore";
+import {
+  sendOrderPlaced, sendOrderStatusChanged, sendAdminNewOrder,
+  sendPasswordResetResolved, sendSpecialOrderResolved, mailerStatus
+} from "./mailer";
+import { scheduleBackups, runBackup, listBackups, getBackupPath } from "./backup";
+import fs from "fs";
 
 const SessionStore = MemoryStore(expressSession);
 
@@ -23,9 +29,44 @@ export async function registerRoutes(
     })
   );
 
+  // Start backup scheduler
+  scheduleBackups();
+
   // Health check route
   app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
+  });
+
+  // --- Backup Routes ---
+  app.get('/api/admin/backups', async (req, res) => {
+    try {
+      const backups = listBackups();
+      res.json(backups);
+    } catch (err) {
+      res.status(500).json({ message: "Erro ao listar backups" });
+    }
+  });
+
+  app.post('/api/admin/backups', async (req, res) => {
+    try {
+      const filename = await runBackup();
+      res.status(201).json({ filename, message: "Backup criado com sucesso." });
+    } catch (err) {
+      res.status(500).json({ message: "Erro ao criar backup" });
+    }
+  });
+
+  app.get('/api/admin/backups/:filename', async (req, res) => {
+    const filepath = getBackupPath(req.params.filename);
+    if (!filepath) return res.status(404).json({ message: "Backup não encontrado" });
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${req.params.filename}"`);
+    fs.createReadStream(filepath).pipe(res);
+  });
+
+  // --- Mailer status ---
+  app.get('/api/admin/mailer-status', (req, res) => {
+    res.json(mailerStatus());
   });
 
   // Auth Routes
@@ -125,9 +166,30 @@ export async function registerRoutes(
   // Admin: approve/reject
   app.put('/api/special-order-requests/:id', async (req, res) => {
     try {
+      const id = Number(req.params.id);
       const { status, adminNote } = req.body;
-      const updated = await storage.updateSpecialOrderRequest(Number(req.params.id), { status, adminNote, resolvedAt: new Date() });
+      const allSpecial = await storage.getSpecialOrderRequests();
+      const sr = allSpecial.find(r => r.id === id);
+      const updated = await storage.updateSpecialOrderRequest(id, { status, adminNote, resolvedAt: new Date() });
       res.json(updated);
+
+      // Send email (non-blocking)
+      if (sr && (status === 'APPROVED' || status === 'REJECTED')) {
+        try {
+          const company = await storage.getCompany(sr.companyId);
+          if (company) {
+            await sendSpecialOrderResolved({
+              toEmail: company.email,
+              companyName: company.companyName,
+              requestedDay: sr.requestedDay || "—",
+              status,
+              adminNote,
+            });
+          }
+        } catch (emailErr) {
+          console.error("[EMAIL] Erro ao enviar email de pedido pontual:", emailErr);
+        }
+      }
     } catch { res.status(500).json({ message: "Erro interno" }); }
   });
 
@@ -208,16 +270,31 @@ export async function registerRoutes(
       const id = Number(req.params.id);
       const { status, newPassword, adminNote } = req.body;
       const updates: any = { status, adminNote, resolvedAt: new Date() };
-      if (newPassword && status === 'APPROVED') {
-        const req2 = await storage.getPasswordResetRequests();
-        const pr = req2.find(r => r.id === id);
-        if (pr) {
-          await storage.updateCompany(pr.companyId, { password: newPassword } as any);
-        }
+      const allReqs = await storage.getPasswordResetRequests();
+      const pr = allReqs.find(r => r.id === id);
+      if (newPassword && status === 'APPROVED' && pr) {
+        await storage.updateCompany(pr.companyId, { password: newPassword } as any);
         updates.newPassword = newPassword;
       }
       const updated = await storage.updatePasswordResetRequest(id, updates);
       res.json(updated);
+
+      // Send email (non-blocking)
+      if (pr) {
+        try {
+          const company = await storage.getCompany(pr.companyId);
+          if (company) {
+            await sendPasswordResetResolved({
+              toEmail: company.email,
+              companyName: company.companyName,
+              approved: status === 'APPROVED',
+              adminNote,
+            });
+          }
+        } catch (emailErr) {
+          console.error("[EMAIL] Erro ao enviar email de reset:", emailErr);
+        }
+      }
     } catch {
       res.status(500).json({ message: "Erro interno" });
     }
@@ -469,6 +546,30 @@ export async function registerRoutes(
       if (!order || !items) return res.status(400).json({ message: "Missing order or items" });
       const newOrder = await storage.createOrder(order, items);
       res.status(201).json(newOrder);
+
+      // Send emails (non-blocking)
+      try {
+        const company = await storage.getCompany(order.companyId);
+        if (company && newOrder) {
+          const no = newOrder as any;
+          const deliveryDay = no.deliveryDate || order.deliveryDate || "—";
+          await sendOrderPlaced({
+            toEmail: company.email,
+            companyName: company.companyName,
+            vfCode: no.vfCode || "",
+            deliveryDay,
+            totalItems: items.length,
+          });
+          // Notify admin
+          const adminUsers = await storage.getUsers();
+          const adminEmails = adminUsers.filter(u => u.role === 'ADMIN').map(u => u.email);
+          for (const adminEmail of adminEmails) {
+            await sendAdminNewOrder({ adminEmail, companyName: company.companyName, vfCode: no.vfCode || "", deliveryDay });
+          }
+        }
+      } catch (emailErr) {
+        console.error("[EMAIL] Erro ao enviar emails de pedido:", emailErr);
+      }
     } catch (err) {
       console.error("Order creation error:", err);
       res.status(400).json({ message: "Bad request" });
@@ -498,6 +599,28 @@ export async function registerRoutes(
       if (adminNote !== undefined) updates.adminNote = adminNote;
       const order = await storage.updateOrder(id, updates);
       res.json(order);
+
+      // Send status change email (non-blocking)
+      if (status && ['CONFIRMED', 'DELIVERED', 'CANCELLED'].includes(status)) {
+        try {
+          const orderData = await storage.getOrder(id);
+          if (orderData) {
+            const oa = orderData as any;
+            const company = await storage.getCompany(oa.companyId);
+            if (company) {
+              await sendOrderStatusChanged({
+                toEmail: company.email,
+                companyName: company.companyName,
+                vfCode: oa.vfCode || `#${id}`,
+                status,
+                adminNote,
+              });
+            }
+          }
+        } catch (emailErr) {
+          console.error("[EMAIL] Erro ao enviar email de status:", emailErr);
+        }
+      }
     } catch (err) {
       console.error("Update order error:", err);
       res.status(400).json({ message: "Bad request" });

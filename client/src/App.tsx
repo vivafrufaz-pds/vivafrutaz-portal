@@ -23,6 +23,7 @@ import PasswordResetRequestsPage from "@/pages/admin/password-reset-requests";
 
 import AdminSpecialOrders from "@/pages/admin/special-orders";
 import AdminUsers from "@/pages/admin/users";
+import AdminBackups from "@/pages/admin/backups";
 
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
@@ -98,6 +99,9 @@ function Router() {
       </Route>
       <Route path="/admin/users">
         {() => <ProtectedRoute component={AdminUsers} role="admin" />}
+      </Route>
+      <Route path="/admin/backups">
+        {() => <ProtectedRoute component={AdminBackups} role="admin" />}
       </Route>
 
       {/* Client Routes */}

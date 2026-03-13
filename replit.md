@@ -14,6 +14,9 @@ Key features:
 - User management admin page (CRUD for all staff users)
 - CNPJ + full delivery address on company profiles
 - Day-lock in cart: cannot switch day when cart has items
+- Automatic daily database backup (03:00 AM) with up to 30 kept; admin download UI
+- Automatic email system (nodemailer SMTP): order placed, status change, password reset, special orders
+- Email status indicator on Backup page (shows if SMTP is configured)
 - Full Brazilian Portuguese (PT-BR) interface
 
 ## User Preferences
