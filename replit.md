@@ -6,10 +6,14 @@ VivaFrutaz is a B2B corporate fruit ordering platform built for companies to log
 
 Key features:
 - Dual-portal system: Admin staff portal + Client company portal
-- Role-based access control (ADMIN, OPERATIONS_MANAGER, PURCHASE_MANAGER)
-- Price groups tied strictly to individual companies
-- Time-windowed ordering (order windows with open/close/delivery dates)
-- Purchasing and financial reports
+- Role-based access control (ADMIN, OPERATIONS_MANAGER, PURCHASE_MANAGER, DEVELOPER)
+- Price groups tied strictly to individual companies; finalPrice = basePrice × (1 + adminFee/100)
+- Time-windowed ordering (order windows with open/close/delivery dates) with delete support
+- Purchasing and financial reports with CSV export (NF / Nimbi formats)
+- Pedidos Pontuais (special orders): client requests + admin review workflow
+- User management admin page (CRUD for all staff users)
+- CNPJ + full delivery address on company profiles
+- Day-lock in cart: cannot switch day when cart has items
 - Full Brazilian Portuguese (PT-BR) interface
 
 ## User Preferences

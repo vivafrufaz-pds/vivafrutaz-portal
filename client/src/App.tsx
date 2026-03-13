@@ -21,9 +21,13 @@ import IndustrializedReport from "@/pages/admin/reports/industrialized";
 import FinancialReport from "@/pages/admin/reports/financial";
 import PasswordResetRequestsPage from "@/pages/admin/password-reset-requests";
 
+import AdminSpecialOrders from "@/pages/admin/special-orders";
+import AdminUsers from "@/pages/admin/users";
+
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
 import ClientOrderHistory from "@/pages/client/order-history";
+import ClientSpecialOrder from "@/pages/client/special-order";
 
 // Auth Guard Wrapper
 function ProtectedRoute({ component: Component, role }: { component: any, role?: 'admin' | 'client' }) {
@@ -89,6 +93,12 @@ function Router() {
       <Route path="/admin/password-reset-requests">
         {() => <ProtectedRoute component={PasswordResetRequestsPage} role="admin" />}
       </Route>
+      <Route path="/admin/special-orders">
+        {() => <ProtectedRoute component={AdminSpecialOrders} role="admin" />}
+      </Route>
+      <Route path="/admin/users">
+        {() => <ProtectedRoute component={AdminUsers} role="admin" />}
+      </Route>
 
       {/* Client Routes */}
       <Route path="/client">
@@ -99,6 +109,9 @@ function Router() {
       </Route>
       <Route path="/client/history">
         {() => <ProtectedRoute component={ClientOrderHistory} role="client" />}
+      </Route>
+      <Route path="/client/special-order">
+        {() => <ProtectedRoute component={ClientSpecialOrder} role="client" />}
       </Route>
 
       <Route component={NotFound} />

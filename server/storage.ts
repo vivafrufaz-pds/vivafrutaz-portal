@@ -1,10 +1,11 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
   type ProductPrice, type InsertProductPrice, type OrderWindow, type InsertOrderWindow,
+  type SpecialOrderRequest,
   type OrderException, type InsertOrderException,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
   type PasswordResetRequest
@@ -82,6 +83,20 @@ export interface IStorage {
   getPasswordResetRequests(): Promise<PasswordResetRequest[]>;
   createPasswordResetRequest(companyId: number): Promise<PasswordResetRequest>;
   updatePasswordResetRequest(id: number, updates: { status: string; newPassword?: string; adminNote?: string; resolvedAt?: Date }): Promise<PasswordResetRequest>;
+
+  // Special Order Requests
+  getSpecialOrderRequests(): Promise<SpecialOrderRequest[]>;
+  getSpecialOrderRequestsByCompany(companyId: number): Promise<SpecialOrderRequest[]>;
+  createSpecialOrderRequest(data: { companyId: number; requestedDay: string; description: string; quantity: string; observations?: string }): Promise<SpecialOrderRequest>;
+  updateSpecialOrderRequest(id: number, updates: { status: string; adminNote?: string; resolvedAt?: Date }): Promise<SpecialOrderRequest>;
+
+  // User Management
+  getUsers(): Promise<User[]>;
+  updateUser(id: number, updates: Partial<InsertUser>): Promise<User>;
+  deleteUser(id: number): Promise<void>;
+
+  // Order cleanup
+  deleteOrder(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -498,6 +513,42 @@ export class DatabaseStorage implements IStorage {
   async updatePasswordResetRequest(id: number, updates: { status: string; newPassword?: string; adminNote?: string; resolvedAt?: Date }): Promise<PasswordResetRequest> {
     const [updated] = await db.update(passwordResetRequests).set(updates as any).where(eq(passwordResetRequests.id, id)).returning();
     return updated;
+  }
+
+  async getSpecialOrderRequests(): Promise<SpecialOrderRequest[]> {
+    return await db.select().from(specialOrderRequests).orderBy(desc(specialOrderRequests.createdAt));
+  }
+
+  async getSpecialOrderRequestsByCompany(companyId: number): Promise<SpecialOrderRequest[]> {
+    return await db.select().from(specialOrderRequests).where(eq(specialOrderRequests.companyId, companyId)).orderBy(desc(specialOrderRequests.createdAt));
+  }
+
+  async createSpecialOrderRequest(data: { companyId: number; requestedDay: string; description: string; quantity: string; observations?: string }): Promise<SpecialOrderRequest> {
+    const [req] = await db.insert(specialOrderRequests).values({ ...data, status: 'PENDING' }).returning();
+    return req;
+  }
+
+  async updateSpecialOrderRequest(id: number, updates: { status: string; adminNote?: string; resolvedAt?: Date }): Promise<SpecialOrderRequest> {
+    const [updated] = await db.update(specialOrderRequests).set(updates as any).where(eq(specialOrderRequests.id, id)).returning();
+    return updated;
+  }
+
+  async getUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(users.id);
+  }
+
+  async updateUser(id: number, updates: Partial<InsertUser>): Promise<User> {
+    const [updated] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  async deleteOrder(id: number): Promise<void> {
+    await db.delete(orderItems).where(eq(orderItems.orderId, id));
+    await db.delete(orders).where(eq(orders.id, id));
   }
 }
 

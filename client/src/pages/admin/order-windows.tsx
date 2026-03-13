@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useOrderWindows, useCreateOrderWindow, useUpdateOrderWindow, useSetting, useUpdateSetting } from "@/hooks/use-ordering";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
+import { useToast } from "@/hooks/use-toast";
 import {
   CalendarDays, Plus, Clock, Truck, Power, PowerOff,
-  ShieldCheck, AlertTriangle, Unlock, Lock
+  ShieldCheck, AlertTriangle, Unlock, Lock, Trash2
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -15,8 +17,24 @@ export default function OrderWindowsPage() {
   const updateWindow = useUpdateOrderWindow();
   const { data: ordersEnabled } = useSetting('orders_enabled');
   const updateSetting = useUpdateSetting();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const deleteWindow = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/order-windows/${id}`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) throw new Error();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/order-windows'] });
+      toast({ title: "Janela excluída com sucesso." });
+      setConfirmDeleteId(null);
+    },
+    onError: () => toast({ title: "Erro ao excluir janela.", variant: "destructive" }),
+  });
   const [formData, setFormData] = useState({
     weekReference: "",
     orderOpenDate: "",
@@ -162,22 +180,32 @@ export default function OrderWindowsPage() {
                   </div>
                 </div>
 
-                {/* Force open toggle */}
-                {w.active && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Force open toggle */}
+                  {w.active && (
+                    <button
+                      data-testid={`button-force-open-${w.id}`}
+                      onClick={() => handleToggleForceOpen(w.id, wAny.forceOpen ?? false)}
+                      disabled={updateWindow.isPending}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm border-2 transition-all hover:-translate-y-0.5 ${
+                        wAny.forceOpen
+                          ? 'bg-orange-100 text-orange-700 border-orange-300'
+                          : 'bg-card text-muted-foreground border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      {wAny.forceOpen ? 'Prazo Estendido (clique para reverter)' : 'Manter Aberta'}
+                    </button>
+                  )}
+                  {/* Delete button */}
                   <button
-                    data-testid={`button-force-open-${w.id}`}
-                    onClick={() => handleToggleForceOpen(w.id, wAny.forceOpen ?? false)}
-                    disabled={updateWindow.isPending}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm border-2 transition-all hover:-translate-y-0.5 ${
-                      wAny.forceOpen
-                        ? 'bg-orange-100 text-orange-700 border-orange-300'
-                        : 'bg-card text-muted-foreground border-border hover:border-primary/50'
-                    }`}
+                    data-testid={`button-delete-window-${w.id}`}
+                    onClick={() => setConfirmDeleteId(w.id)}
+                    className="flex items-center gap-1.5 px-3 py-2 text-red-500 border-2 border-red-200 rounded-xl font-bold text-sm hover:bg-red-50 transition-colors"
                   >
-                    <ShieldCheck className="w-4 h-4" />
-                    {wAny.forceOpen ? 'Prazo Estendido (clique para reverter)' : 'Manter Aberta'}
+                    <Trash2 className="w-4 h-4" /> Excluir
                   </button>
-                )}
+                </div>
               </div>
             </div>
           );
@@ -245,6 +273,25 @@ export default function OrderWindowsPage() {
           </button>
         </form>
       </Modal>
+
+      {/* Delete confirmation modal */}
+      {confirmDeleteId !== null && (
+        <Modal isOpen onClose={() => setConfirmDeleteId(null)} title="Excluir Janela de Pedido" maxWidth="max-w-sm">
+          <div className="space-y-4 text-center">
+            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto">
+              <Trash2 className="w-8 h-8 text-red-600" />
+            </div>
+            <p className="text-foreground">Tem certeza que deseja excluir esta janela de pedido? Pedidos vinculados não serão afetados.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDeleteId(null)} className="flex-1 py-2.5 border-2 border-border font-bold rounded-xl">Cancelar</button>
+              <button onClick={() => deleteWindow.mutate(confirmDeleteId!)} disabled={deleteWindow.isPending}
+                className="flex-1 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50">
+                {deleteWindow.isPending ? "Excluindo..." : "Excluir"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </Layout>
   );
 }

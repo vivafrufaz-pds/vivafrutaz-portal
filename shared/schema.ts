@@ -24,8 +24,15 @@ export const companies = pgTable("companies", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   phone: text("phone"),
+  cnpj: text("cnpj"),
   priceGroupId: integer("price_group_id").references(() => priceGroups.id),
   allowedOrderDays: jsonb("allowed_order_days").notNull(),
+  // Endereço
+  addressStreet: text("address_street"),
+  addressNumber: text("address_number"),
+  addressNeighborhood: text("address_neighborhood"),
+  addressCity: text("address_city"),
+  addressZip: text("address_zip"),
   // Configurações
   active: boolean("active").default(true).notNull(),
   clientType: text("client_type").default("mensal"),
@@ -124,6 +131,20 @@ export const systemSettings = pgTable("system_settings", {
   value: text("value").notNull(),
 });
 
+// Solicitações de pedidos pontuais (clientes)
+export const specialOrderRequests = pgTable("special_order_requests", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  requestedDay: text("requested_day").notNull(),
+  description: text("description").notNull(),
+  quantity: text("quantity").notNull(),
+  observations: text("observations"),
+  status: text("status").default("PENDING").notNull(), // PENDING, APPROVED, REJECTED
+  adminNote: text("admin_note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
 // Solicitações de recuperação de senha (clientes)
 export const passwordResetRequests = pgTable("password_reset_requests", {
   id: serial("id").primaryKey(),
@@ -146,6 +167,7 @@ export const insertOrderWindowSchema = createInsertSchema(orderWindows).omit({ i
 export const insertOrderExceptionSchema = createInsertSchema(orderExceptions).omit({ id: true, createdAt: true });
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, orderCode: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
+export const insertSpecialOrderRequestSchema = createInsertSchema(specialOrderRequests).omit({ id: true, createdAt: true, resolvedAt: true });
 export const insertPasswordResetRequestSchema = createInsertSchema(passwordResetRequests).omit({ id: true, createdAt: true, resolvedAt: true });
 
 // ─── Types ────────────────────────────────────────────────────
@@ -169,5 +191,7 @@ export type Order = typeof orders.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+export type SpecialOrderRequest = typeof specialOrderRequests.$inferSelect;
+export type InsertSpecialOrderRequest = z.infer<typeof insertSpecialOrderRequestSchema>;
 export type PasswordResetRequest = typeof passwordResetRequests.$inferSelect;
 export type InsertPasswordResetRequest = z.infer<typeof insertPasswordResetRequestSchema>;

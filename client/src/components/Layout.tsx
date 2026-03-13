@@ -4,7 +4,7 @@ import { useLocation, Link } from 'wouter';
 import { 
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
-  ShieldCheck, Factory, FolderOpen, KeyRound
+  ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog
 } from 'lucide-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -24,12 +24,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/industrialized', label: 'Industrializados', icon: Factory, roles: ['ADMIN', 'PURCHASE_MANAGER'] },
     { href: '/admin/financial', label: 'Painel Financeiro', icon: PieChart, roles: ['ADMIN'] },
     { href: '/admin/password-reset-requests', label: 'Senhas de Clientes', icon: KeyRound, roles: ['ADMIN'] },
+    { href: '/admin/special-orders', label: 'Pedidos Pontuais', icon: Star, roles: ['ADMIN', 'OPERATIONS_MANAGER'] },
+    { href: '/admin/users', label: 'Usuários do Sistema', icon: UserCog, roles: ['ADMIN', 'DEVELOPER'] },
   ];
 
   const clientLinks = [
     { href: '/client', label: 'Início', icon: LayoutDashboard },
     { href: '/client/order', label: 'Novo Pedido', icon: ShoppingCart },
     { href: '/client/history', label: 'Meus Pedidos', icon: Receipt },
+    { href: '/client/special-order', label: 'Pedidos Pontuais', icon: Star },
   ];
 
   const links = isStaff 
@@ -41,6 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       case 'ADMIN': return 'Administrador';
       case 'OPERATIONS_MANAGER': return 'Gerente de Operações';
       case 'PURCHASE_MANAGER': return 'Gerente de Compras';
+      case 'DEVELOPER': return 'Desenvolvedor';
       default: return role || '';
     }
   };

@@ -93,6 +93,106 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Special Order Requests ───────────────────────────────────
+  // Client: submit special order
+  app.post('/api/special-order-requests', async (req, res) => {
+    try {
+      const { companyId, requestedDay, description, quantity, observations } = req.body;
+      if (!companyId || !requestedDay || !description || !quantity) {
+        return res.status(400).json({ message: "Campos obrigatórios faltando." });
+      }
+      const req2 = await storage.createSpecialOrderRequest({ companyId, requestedDay, description, quantity, observations });
+      res.status(201).json(req2);
+    } catch { res.status(500).json({ message: "Erro interno" }); }
+  });
+
+  // Client: list own requests
+  app.get('/api/special-order-requests/company/:companyId', async (req, res) => {
+    try {
+      const items = await storage.getSpecialOrderRequestsByCompany(Number(req.params.companyId));
+      res.json(items);
+    } catch { res.status(500).json({ message: "Erro interno" }); }
+  });
+
+  // Admin: list all
+  app.get('/api/special-order-requests', async (req, res) => {
+    try {
+      const items = await storage.getSpecialOrderRequests();
+      res.json(items);
+    } catch { res.status(500).json({ message: "Erro interno" }); }
+  });
+
+  // Admin: approve/reject
+  app.put('/api/special-order-requests/:id', async (req, res) => {
+    try {
+      const { status, adminNote } = req.body;
+      const updated = await storage.updateSpecialOrderRequest(Number(req.params.id), { status, adminNote, resolvedAt: new Date() });
+      res.json(updated);
+    } catch { res.status(500).json({ message: "Erro interno" }); }
+  });
+
+  // ─── User Management ───────────────────────────────────────────
+  app.get('/api/users', async (req, res) => {
+    try {
+      const allUsers = await storage.getUsers();
+      // Don't expose passwords
+      res.json(allUsers.map(u => ({ ...u, password: '***' })));
+    } catch { res.status(500).json({ message: "Erro interno" }); }
+  });
+
+  app.post('/api/users', async (req, res) => {
+    try {
+      const { name, email, password, role } = req.body;
+      if (!name || !email || !password || !role) return res.status(400).json({ message: "Campos obrigatórios faltando." });
+      const user = await storage.createUser({ name, email, password, role });
+      res.status(201).json({ ...user, password: '***' });
+    } catch { res.status(500).json({ message: "Email já cadastrado ou erro interno." }); }
+  });
+
+  app.put('/api/users/:id', async (req, res) => {
+    try {
+      const { name, email, password, role } = req.body;
+      const updates: any = {};
+      if (name) updates.name = name;
+      if (email) updates.email = email;
+      if (password && password !== '***') updates.password = password;
+      if (role) updates.role = role;
+      const user = await storage.updateUser(Number(req.params.id), updates);
+      res.json({ ...user, password: '***' });
+    } catch { res.status(500).json({ message: "Erro interno" }); }
+  });
+
+  app.delete('/api/users/:id', async (req, res) => {
+    try {
+      await storage.deleteUser(Number(req.params.id));
+      res.status(204).end();
+    } catch { res.status(500).json({ message: "Erro interno" }); }
+  });
+
+  // ─── Order Cleanup Check (Module 5) ────────────────────────────
+  app.get('/api/admin/order-cleanup-check', async (req, res) => {
+    try {
+      const twoMonthsAgo = new Date();
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      const allOrders = await storage.getOrders();
+      const old = allOrders.filter(o => new Date(o.orderDate) < twoMonthsAgo);
+      res.json({ count: old.length, oldestDate: old[old.length - 1]?.orderDate || null });
+    } catch { res.status(500).json({ message: "Erro interno" }); }
+  });
+
+  app.delete('/api/admin/order-cleanup', async (req, res) => {
+    try {
+      const twoMonthsAgo = new Date();
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      const allOrders = await storage.getOrders();
+      const oldOrders = allOrders.filter(o => new Date(o.orderDate) < twoMonthsAgo);
+      for (const o of oldOrders) {
+        await storage.deleteOrder(o.id);
+      }
+      res.json({ deleted: oldOrders.length });
+    } catch { res.status(500).json({ message: "Erro interno" }); }
+  });
+
   // Password Reset Requests — Admin routes
   app.get('/api/password-reset-requests', async (req, res) => {
     try {
@@ -595,8 +695,10 @@ async function seedDatabase() {
       const delEnd = new Date(today);
       delEnd.setDate(today.getDate() + 10);
 
+      const months = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+      const weekRef = `${months[delStart.getMonth()]} ${delStart.getDate()}–${delEnd.getDate()}/${delEnd.getFullYear()}`;
       await storage.createOrderWindow({
-        weekReference: "Week " + getWeekNumber(today),
+        weekReference: weekRef,
         orderOpenDate: open.toISOString(),
         orderCloseDate: close.toISOString(),
         deliveryStartDate: delStart.toISOString(),

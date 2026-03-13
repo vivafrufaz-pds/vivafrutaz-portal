@@ -25,6 +25,12 @@ const emptyForm = {
   email: "",
   password: "",
   phone: "",
+  cnpj: "",
+  addressStreet: "",
+  addressNumber: "",
+  addressNeighborhood: "",
+  addressCity: "",
+  addressZip: "",
   priceGroupId: "",
   allowedOrderDays: [] as string[],
   active: true,
@@ -40,12 +46,19 @@ const emptyForm = {
 };
 
 function companyToForm(c: Company): typeof emptyForm {
+  const ca = c as any;
   return {
     companyName: c.companyName,
     contactName: c.contactName,
     email: c.email,
     password: "",
     phone: c.phone || "",
+    cnpj: ca.cnpj || "",
+    addressStreet: ca.addressStreet || "",
+    addressNumber: ca.addressNumber || "",
+    addressNeighborhood: ca.addressNeighborhood || "",
+    addressCity: ca.addressCity || "",
+    addressZip: ca.addressZip || "",
     priceGroupId: c.priceGroupId ? String(c.priceGroupId) : "",
     allowedOrderDays: Array.isArray(c.allowedOrderDays) ? (c.allowedOrderDays as any[]).map(String) : [],
     active: c.active,
@@ -123,6 +136,12 @@ export default function CompaniesPage() {
       allowedOrderDays: formData.allowedOrderDays,
       active: formData.active,
       phone: formData.phone || null,
+      cnpj: formData.cnpj || null,
+      addressStreet: formData.addressStreet || null,
+      addressNumber: formData.addressNumber || null,
+      addressNeighborhood: formData.addressNeighborhood || null,
+      addressCity: formData.addressCity || null,
+      addressZip: formData.addressZip || null,
       clientType: formData.clientType || null,
       minWeeklyBilling: formData.minWeeklyBilling ? String(formData.minWeeklyBilling) : null,
       deliveryTime: formData.deliveryTime || null,
@@ -380,6 +399,12 @@ export default function CompaniesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-sm font-semibold mb-1">CNPJ</label>
+                  <input value={formData.cnpj} onChange={e => set("cnpj", e.target.value)}
+                    placeholder="00.000.000/0000-00"
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" />
+                </div>
+                <div>
                   <label className="block text-sm font-semibold mb-1">
                     {editingCompany ? "Nova Senha (deixe em branco para manter)" : "Senha *"}
                   </label>
@@ -396,6 +421,44 @@ export default function CompaniesPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Endereço */}
+              <div className="p-4 rounded-xl border-2 border-border bg-muted/10">
+                <p className="text-sm font-semibold mb-3 text-foreground">Endereço de Entrega</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Rua / Logradouro</label>
+                    <input value={formData.addressStreet} onChange={e => set("addressStreet", e.target.value)}
+                      placeholder="Rua das Flores"
+                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Número</label>
+                    <input value={formData.addressNumber} onChange={e => set("addressNumber", e.target.value)}
+                      placeholder="123"
+                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Bairro</label>
+                    <input value={formData.addressNeighborhood} onChange={e => set("addressNeighborhood", e.target.value)}
+                      placeholder="Centro"
+                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Cidade</label>
+                    <input value={formData.addressCity} onChange={e => set("addressCity", e.target.value)}
+                      placeholder="São Paulo"
+                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">CEP</label>
+                    <input value={formData.addressZip} onChange={e => set("addressZip", e.target.value)}
+                      placeholder="00000-000"
+                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-semibold mb-2">Dias de Entrega Permitidos</label>
                 <div className="flex flex-wrap gap-2">
