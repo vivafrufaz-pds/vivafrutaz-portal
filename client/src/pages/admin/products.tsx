@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useProducts, useCreateProduct, useUpdateProduct } from "@/hooks/use-catalog";
+import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
-import { Plus, Package, Edit2, DollarSign, CheckCircle, XCircle } from "lucide-react";
+import {
+  Plus, Package, Edit2, DollarSign, CheckCircle, XCircle,
+  Factory, Snowflake, AlignLeft, CalendarDays, Search, X
+} from "lucide-react";
 import type { Product } from "@shared/schema";
 
 const UNITS = [
@@ -11,7 +15,23 @@ const UNITS = [
   { value: "unidade", label: "Unidade" },
   { value: "pallet", label: "Pallet" },
   { value: "bandeja", label: "Bandeja" },
+  { value: "pote", label: "Pote" },
+  { value: "pacote", label: "Pacote" },
+  { value: "display", label: "Display" },
+  { value: "porcao", label: "Porção" },
 ];
+
+const DAYS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
+
+function useCategories() {
+  return useQuery({
+    queryKey: ['/api/categories'],
+    queryFn: async () => {
+      const res = await fetch('/api/categories', { credentials: 'include' });
+      return res.json() as Promise<{ id: number; name: string }[]>;
+    }
+  });
+}
 
 const emptyForm = {
   name: "",
@@ -19,6 +39,10 @@ const emptyForm = {
   unit: "kg",
   active: true,
   basePrice: "",
+  isIndustrialized: false,
+  isSeasonal: false,
+  observation: "",
+  availableDays: [] as string[],
 };
 
 function productToForm(p: Product): typeof emptyForm {
@@ -28,17 +52,25 @@ function productToForm(p: Product): typeof emptyForm {
     unit: p.unit,
     active: p.active,
     basePrice: p.basePrice ? String(p.basePrice) : "",
+    isIndustrialized: p.isIndustrialized ?? false,
+    isSeasonal: p.isSeasonal ?? false,
+    observation: (p as any).observation || "",
+    availableDays: Array.isArray((p as any).availableDays) ? (p as any).availableDays as string[] : [],
   };
 }
 
 export default function ProductsPage() {
   const { data: products, isLoading } = useProducts();
+  const { data: categories } = useCategories();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState(emptyForm);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
 
   const openCreate = () => {
     setEditingProduct(null);
@@ -60,6 +92,15 @@ export default function ProductsPage() {
   const set = (field: string, value: any) =>
     setFormData(prev => ({ ...prev, [field]: value }));
 
+  const toggleDay = (day: string) => {
+    setFormData(prev => ({
+      ...prev,
+      availableDays: prev.availableDays.includes(day)
+        ? prev.availableDays.filter(d => d !== day)
+        : [...prev.availableDays, day]
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload: any = {
@@ -68,6 +109,10 @@ export default function ProductsPage() {
       unit: formData.unit,
       active: formData.active,
       basePrice: formData.basePrice ? String(formData.basePrice) : null,
+      isIndustrialized: formData.isIndustrialized,
+      isSeasonal: formData.isSeasonal,
+      observation: formData.observation || null,
+      availableDays: formData.availableDays.length > 0 ? formData.availableDays : null,
     };
 
     if (editingProduct) {
@@ -80,12 +125,28 @@ export default function ProductsPage() {
 
   const isPending = createProduct.isPending || updateProduct.isPending;
 
+  const uniqueCategories = useMemo(() => {
+    const cats = new Set<string>();
+    products?.forEach(p => cats.add(p.category));
+    return Array.from(cats).sort();
+  }, [products]);
+
+  const filtered = useMemo(() => {
+    return (products || []).filter(p => {
+      const q = search.toLowerCase();
+      const matchSearch = !q || p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
+      const matchCat = filterCat === 'ALL' || p.category === filterCat;
+      const matchStatus = filterStatus === 'ALL' || (filterStatus === 'ACTIVE' ? p.active : !p.active);
+      return matchSearch && matchCat && matchStatus;
+    });
+  }, [products, search, filterCat, filterStatus]);
+
   return (
     <Layout>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">Catálogo de Produtos</h1>
-          <p className="text-muted-foreground mt-1">Gerencie frutas, unidades e preços base internos.</p>
+          <p className="text-muted-foreground mt-1">Gerencie frutas, unidades, preços e atributos.</p>
         </div>
         <button
           data-testid="button-add-product"
@@ -96,15 +157,39 @@ export default function ProductsPage() {
         </button>
       </div>
 
+      {/* Search + Filter Bar */}
+      <div className="bg-card rounded-2xl border border-border/50 premium-shadow p-4 mb-6 flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar produto..."
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none text-sm"
+          />
+          {search && <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>}
+        </div>
+        <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
+          className="px-3 py-2.5 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
+          <option value="ALL">Todas as categorias</option>
+          {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        {['ALL', 'ACTIVE', 'INACTIVE'].map(s => (
+          <button key={s} onClick={() => setFilterStatus(s)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all ${filterStatus === s ? 'bg-primary text-white border-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
+            {s === 'ALL' ? 'Todos' : s === 'ACTIVE' ? 'Ativos' : 'Inativos'}
+          </button>
+        ))}
+        <span className="text-xs text-muted-foreground font-medium">{filtered.length} produto{filtered.length !== 1 ? 's' : ''}</span>
+      </div>
+
       {/* Products grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {isLoading ? (
           <div className="col-span-full p-8 text-center text-muted-foreground">Carregando produtos...</div>
-        ) : products?.length === 0 ? (
-          <div className="col-span-full p-8 text-center text-muted-foreground">Nenhum produto cadastrado.</div>
-        ) : products?.map(product => (
+        ) : filtered.length === 0 ? (
+          <div className="col-span-full p-8 text-center text-muted-foreground">Nenhum produto encontrado.</div>
+        ) : filtered.map(product => (
           <div key={product.id} className="bg-card rounded-2xl p-6 border border-border/50 premium-shadow flex flex-col items-center text-center group relative">
-            {/* Edit button */}
             <button
               data-testid={`button-edit-product-${product.id}`}
               onClick={() => openEdit(product)}
@@ -113,6 +198,20 @@ export default function ProductsPage() {
               <Edit2 className="w-4 h-4" />
             </button>
 
+            {/* Flag badges top-left */}
+            <div className="absolute top-3 left-3 flex flex-col gap-1">
+              {(product as any).isIndustrialized && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-md text-xs font-bold">
+                  <Factory className="w-3 h-3" /> Ind.
+                </span>
+              )}
+              {(product as any).isSeasonal && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-md text-xs font-bold">
+                  <Snowflake className="w-3 h-3" /> Saz.
+                </span>
+              )}
+            </div>
+
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${product.active ? 'bg-secondary/10' : 'bg-muted'}`}>
               <Package className={`w-8 h-8 ${product.active ? 'text-secondary' : 'text-muted-foreground'}`} />
             </div>
@@ -120,11 +219,24 @@ export default function ProductsPage() {
             <h3 className="text-lg font-bold text-foreground">{product.name}</h3>
             <p className="text-sm font-semibold text-muted-foreground uppercase tracking-widest mt-1">{product.category}</p>
 
+            {(product as any).observation && (
+              <p className="text-xs text-muted-foreground mt-1.5 italic line-clamp-2">{(product as any).observation}</p>
+            )}
+
             <div className="mt-3 inline-block px-3 py-1 bg-muted rounded-lg text-sm font-bold text-foreground">
               Por {product.unit}
             </div>
 
-            {/* Base price badge */}
+            {(product as any).availableDays && Array.isArray((product as any).availableDays) && (product as any).availableDays.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1 justify-center">
+                {((product as any).availableDays as string[]).map(d => (
+                  <span key={d} className="px-1.5 py-0.5 bg-primary/10 text-primary text-xs font-medium rounded">
+                    {d.split('-')[0].slice(0, 3)}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {product.basePrice ? (
               <div className="mt-3 flex items-center gap-1.5 px-4 py-2 bg-primary/10 rounded-xl">
                 <DollarSign className="w-4 h-4 text-primary" />
@@ -150,6 +262,7 @@ export default function ProductsPage() {
         isOpen={isModalOpen}
         onClose={closeModal}
         title={editingProduct ? `Editar: ${editingProduct.name}` : "Novo Produto"}
+        maxWidth="max-w-2xl"
       >
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
@@ -162,9 +275,15 @@ export default function ProductsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold mb-1">Categoria *</label>
-              <input required value={formData.category} onChange={e => set("category", e.target.value)}
+              <input
+                required list="cat-list" value={formData.category} onChange={e => set("category", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none"
-                placeholder="ex: Frutas" />
+                placeholder="ex: Frutas In Natura"
+              />
+              <datalist id="cat-list">
+                {categories?.map(c => <option key={c.id} value={c.name} />)}
+                {["Frutas In Natura", "Frutas Higienizadas", "Frutas Cortadas", "Snacks Saudáveis", "Mix de Oleaginosas", "Industrializados"].map(c => <option key={c} value={c} />)}
+              </datalist>
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">Unidade *</label>
@@ -175,11 +294,67 @@ export default function ProductsPage() {
             </div>
           </div>
 
-          {/* Base Price — internal only */}
+          {/* Observação */}
+          <div>
+            <label className="flex items-center gap-1 text-sm font-semibold mb-1">
+              <AlignLeft className="w-4 h-4" /> Observação
+            </label>
+            <input value={formData.observation} onChange={e => set("observation", e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none"
+              placeholder="ex: Display com 12 unidades, Bandeja com 6 potes..." />
+            <p className="text-xs text-muted-foreground mt-1">Aparece no catálogo do cliente e nos relatórios.</p>
+          </div>
+
+          {/* Flags row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl border-2 border-orange-200 bg-orange-50">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <div className={`w-10 h-6 rounded-full transition-colors ${formData.isIndustrialized ? 'bg-orange-500' : 'bg-muted'} relative flex-shrink-0`}
+                  onClick={() => set("isIndustrialized", !formData.isIndustrialized)}>
+                  <div className={`w-4 h-4 rounded-full bg-white shadow absolute top-1 transition-all ${formData.isIndustrialized ? 'left-5' : 'left-1'}`} />
+                </div>
+                <div>
+                  <p className="font-bold text-sm text-orange-800 flex items-center gap-1"><Factory className="w-4 h-4" /> Industrializado</p>
+                  <p className="text-xs text-orange-600">Registrado no controle de industrializados</p>
+                </div>
+              </label>
+            </div>
+            <div className="p-4 rounded-xl border-2 border-blue-200 bg-blue-50">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <div className={`w-10 h-6 rounded-full transition-colors ${formData.isSeasonal ? 'bg-blue-500' : 'bg-muted'} relative flex-shrink-0`}
+                  onClick={() => set("isSeasonal", !formData.isSeasonal)}>
+                  <div className={`w-4 h-4 rounded-full bg-white shadow absolute top-1 transition-all ${formData.isSeasonal ? 'left-5' : 'left-1'}`} />
+                </div>
+                <div>
+                  <p className="font-bold text-sm text-blue-800 flex items-center gap-1"><Snowflake className="w-4 h-4" /> Sazonal</p>
+                  <p className="text-xs text-blue-600">Produto disponível sazonalmente</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Available days */}
+          <div>
+            <label className="flex items-center gap-1 text-sm font-semibold mb-2">
+              <CalendarDays className="w-4 h-4" /> Dias de Venda Disponíveis
+            </label>
+            <p className="text-xs text-muted-foreground mb-2">Deixe em branco para disponível todos os dias.</p>
+            <div className="flex flex-wrap gap-2">
+              {DAYS.map(day => (
+                <button
+                  key={day} type="button"
+                  onClick={() => toggleDay(day)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all ${formData.availableDays.includes(day) ? 'bg-primary text-white border-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
+                  {day.split('-')[0]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Base Price */}
           <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/5">
             <label className="flex items-center gap-2 text-sm font-bold text-primary mb-2">
-              <DollarSign className="w-4 h-4" />
-              Preço Base Interno (R$)
+              <DollarSign className="w-4 h-4" /> Preço Base Interno (R$)
             </label>
             <input
               type="number" step="0.01" min="0"
@@ -189,7 +364,7 @@ export default function ProductsPage() {
               className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none text-lg font-bold"
             />
             <p className="text-xs text-muted-foreground mt-2">
-              Preço interno da VivaFrutaz. O preço final ao cliente = preço base × (1 + taxa administrativa / 100).
+              Preço interno da VivaFrutaz. Preço final ao cliente = base × (1 + taxa admin / 100).
             </p>
           </div>
 

@@ -11,10 +11,13 @@ import Login from "@/pages/auth/login";
 import AdminDashboard from "@/pages/admin/dashboard";
 import AdminCompanies from "@/pages/admin/companies";
 import AdminProducts from "@/pages/admin/products";
+import AdminCategories from "@/pages/admin/categories";
 import AdminPriceGroups from "@/pages/admin/price-groups";
 import AdminOrderWindows from "@/pages/admin/order-windows";
 import AdminOrders from "@/pages/admin/orders";
+import AdminOrderExceptions from "@/pages/admin/order-exceptions";
 import PurchasingReport from "@/pages/admin/reports/purchasing";
+import IndustrializedReport from "@/pages/admin/reports/industrialized";
 import FinancialReport from "@/pages/admin/reports/financial";
 
 import ClientDashboard from "@/pages/client/dashboard";
@@ -58,17 +61,26 @@ function Router() {
       <Route path="/admin/products">
         {() => <ProtectedRoute component={AdminProducts} role="admin" />}
       </Route>
+      <Route path="/admin/categories">
+        {() => <ProtectedRoute component={AdminCategories} role="admin" />}
+      </Route>
       <Route path="/admin/price-groups">
         {() => <ProtectedRoute component={AdminPriceGroups} role="admin" />}
       </Route>
       <Route path="/admin/order-windows">
         {() => <ProtectedRoute component={AdminOrderWindows} role="admin" />}
       </Route>
+      <Route path="/admin/order-exceptions">
+        {() => <ProtectedRoute component={AdminOrderExceptions} role="admin" />}
+      </Route>
       <Route path="/admin/orders">
         {() => <ProtectedRoute component={AdminOrders} role="admin" />}
       </Route>
       <Route path="/admin/purchasing">
         {() => <ProtectedRoute component={PurchasingReport} role="admin" />}
+      </Route>
+      <Route path="/admin/industrialized">
+        {() => <ProtectedRoute component={IndustrializedReport} role="admin" />}
       </Route>
       <Route path="/admin/financial">
         {() => <ProtectedRoute component={FinancialReport} role="admin" />}

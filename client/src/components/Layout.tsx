@@ -3,7 +3,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLocation, Link } from 'wouter';
 import { 
   Leaf, LayoutDashboard, Users, Package, Tag, 
-  CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt
+  CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
+  ShieldCheck, Factory, FolderOpen
 } from 'lucide-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -14,10 +15,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin', label: 'Painel', icon: LayoutDashboard, roles: ['ADMIN'] },
     { href: '/admin/companies', label: 'Empresas', icon: Users, roles: ['ADMIN'] },
     { href: '/admin/products', label: 'Produtos', icon: Package, roles: ['ADMIN'] },
+    { href: '/admin/categories', label: 'Categorias', icon: FolderOpen, roles: ['ADMIN'] },
     { href: '/admin/price-groups', label: 'Grupos de Preço', icon: Tag, roles: ['ADMIN'] },
     { href: '/admin/order-windows', label: 'Janelas de Pedido', icon: CalendarDays, roles: ['ADMIN', 'OPERATIONS_MANAGER'] },
+    { href: '/admin/order-exceptions', label: 'Exceções de Pedido', icon: ShieldCheck, roles: ['ADMIN'] },
     { href: '/admin/orders', label: 'Pedidos', icon: ShoppingCart, roles: ['ADMIN', 'OPERATIONS_MANAGER'] },
     { href: '/admin/purchasing', label: 'Compras', icon: BarChart3, roles: ['ADMIN', 'PURCHASE_MANAGER'] },
+    { href: '/admin/industrialized', label: 'Industrializados', icon: Factory, roles: ['ADMIN', 'PURCHASE_MANAGER'] },
     { href: '/admin/financial', label: 'Painel Financeiro', icon: PieChart, roles: ['ADMIN'] },
   ];
 
@@ -61,13 +65,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Link 
                 key={link.href} 
                 href={link.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm ${
                   isActive 
                     ? 'bg-primary/10 text-primary' 
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
-                <Icon className={`w-5 h-5 ${isActive ? 'text-primary' : ''}`} />
+                <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-primary' : ''}`} />
                 {link.label}
               </Link>
             );
@@ -86,9 +90,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <button 
             data-testid="button-logout"
             onClick={() => logout()}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors font-medium"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors font-medium text-sm"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4" />
             Sair
           </button>
         </div>

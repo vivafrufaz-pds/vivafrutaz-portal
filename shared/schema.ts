@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, numeric, jsonb, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -42,6 +42,13 @@ export const companies = pgTable("companies", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const categories = pgTable("categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  active: boolean("active").default(true).notNull(),
+});
+
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -50,6 +57,14 @@ export const products = pgTable("products", {
   active: boolean("active").default(true).notNull(),
   // Preço base interno da VivaFrutaz
   basePrice: numeric("base_price", { precision: 10, scale: 2 }),
+  // Flags
+  isIndustrialized: boolean("is_industrialized").default(false).notNull(),
+  isSeasonal: boolean("is_seasonal").default(false).notNull(),
+  // Observação exibida ao cliente no catálogo e nos relatórios
+  observation: text("observation"),
+  // Dias da semana em que o produto está disponível (null = todos os dias)
+  // ex: ["Segunda-feira","Quarta-feira","Sexta-feira"]
+  availableDays: jsonb("available_days"),
 });
 
 export const productPrices = pgTable("product_prices", {
@@ -68,6 +83,16 @@ export const orderWindows = pgTable("order_windows", {
   deliveryEndDate: timestamp("delivery_end_date").notNull(),
   active: boolean("active").default(true).notNull(),
   forceOpen: boolean("force_open").default(false).notNull(),
+});
+
+// Empresas com exceção de pedidos (podem pedir mesmo com a janela fechada)
+export const orderExceptions = pgTable("order_exceptions", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  reason: text("reason").notNull(),
+  expiryDate: date("expiry_date"),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const orders = pgTable("orders", {
@@ -99,27 +124,35 @@ export const systemSettings = pgTable("system_settings", {
   value: text("value").notNull(),
 });
 
+// ─── Insert Schemas ───────────────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertPriceGroupSchema = createInsertSchema(priceGroups).omit({ id: true });
 export const insertCompanySchema = createInsertSchema(companies).omit({ id: true, createdAt: true });
+export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertProductPriceSchema = createInsertSchema(productPrices).omit({ id: true });
 export const insertOrderWindowSchema = createInsertSchema(orderWindows).omit({ id: true });
+export const insertOrderExceptionSchema = createInsertSchema(orderExceptions).omit({ id: true, createdAt: true });
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, orderCode: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
 
+// ─── Types ────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type PriceGroup = typeof priceGroups.$inferSelect;
 export type InsertPriceGroup = z.infer<typeof insertPriceGroupSchema>;
 export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
+export type Category = typeof categories.$inferSelect;
+export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type ProductPrice = typeof productPrices.$inferSelect;
 export type InsertProductPrice = z.infer<typeof insertProductPriceSchema>;
 export type OrderWindow = typeof orderWindows.$inferSelect;
 export type InsertOrderWindow = z.infer<typeof insertOrderWindowSchema>;
+export type OrderException = typeof orderExceptions.$inferSelect;
+export type InsertOrderException = z.infer<typeof insertOrderExceptionSchema>;
 export type Order = typeof orders.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type OrderItem = typeof orderItems.$inferSelect;

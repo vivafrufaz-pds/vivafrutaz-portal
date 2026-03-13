@@ -371,6 +371,89 @@ export async function registerRoutes(
     }
   });
 
+  // Categories
+  app.get('/api/categories', async (req, res) => {
+    const cats = await storage.getCategories();
+    res.json(cats);
+  });
+  app.post('/api/categories', async (req, res) => {
+    try {
+      const { name, description, active } = req.body;
+      if (!name) return res.status(400).json({ message: "name required" });
+      const cat = await storage.createCategory({ name, description: description || null, active: active ?? true });
+      res.status(201).json(cat);
+    } catch (err: any) {
+      if (err.code === '23505') return res.status(409).json({ message: "Categoria já existe" });
+      res.status(400).json({ message: "Bad request" });
+    }
+  });
+  app.put('/api/categories/:id', async (req, res) => {
+    try {
+      const { name, description, active } = req.body;
+      const cat = await storage.updateCategory(Number(req.params.id), { name, description, active });
+      res.json(cat);
+    } catch (err: any) {
+      if (err.code === '23505') return res.status(409).json({ message: "Categoria já existe" });
+      res.status(400).json({ message: "Bad request" });
+    }
+  });
+  app.delete('/api/categories/:id', async (req, res) => {
+    await storage.deleteCategory(Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // Order Exceptions
+  app.get('/api/order-exceptions', async (req, res) => {
+    const exceptions = await storage.getOrderExceptions();
+    res.json(exceptions);
+  });
+  app.post('/api/order-exceptions', async (req, res) => {
+    try {
+      const { companyId, reason, expiryDate, active } = req.body;
+      if (!companyId || !reason) return res.status(400).json({ message: "companyId and reason required" });
+      const exc = await storage.createOrderException({
+        companyId: Number(companyId),
+        reason,
+        expiryDate: expiryDate || null,
+        active: active ?? true,
+      });
+      res.status(201).json(exc);
+    } catch (err) {
+      res.status(400).json({ message: "Bad request" });
+    }
+  });
+  app.put('/api/order-exceptions/:id', async (req, res) => {
+    try {
+      const { reason, expiryDate, active } = req.body;
+      const exc = await storage.updateOrderException(Number(req.params.id), { reason, expiryDate: expiryDate || null, active });
+      res.json(exc);
+    } catch (err) {
+      res.status(400).json({ message: "Bad request" });
+    }
+  });
+  app.delete('/api/order-exceptions/:id', async (req, res) => {
+    await storage.deleteOrderException(Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // Check order exception for a company (used by client-side order check)
+  app.get('/api/order-exceptions/company/:companyId', async (req, res) => {
+    const exc = await storage.getCompanyException(Number(req.params.companyId));
+    res.json(exc || null);
+  });
+
+  // Industrialized products report
+  app.get('/api/reports/industrialized', async (req, res) => {
+    const { dateFrom, dateTo, companyId, productId } = req.query;
+    const data = await storage.getIndustrializedReport({
+      dateFrom: dateFrom as string,
+      dateTo: dateTo as string,
+      companyId: companyId ? Number(companyId) : undefined,
+      productId: productId ? Number(productId) : undefined,
+    });
+    res.json(data);
+  });
+
   // Reports — real data from DB
   app.get(api.reports.purchasing.path, async (req, res) => {
     const { dateFrom, dateTo, companyId, productId } = req.query;

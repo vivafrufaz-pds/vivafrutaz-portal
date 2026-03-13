@@ -1,9 +1,11 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, products, productPrices, orderWindows, orders, orderItems, systemSettings,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
-  type Company, type InsertCompany, type Product, type InsertProduct,
+  type Company, type InsertCompany, type Category, type InsertCategory,
+  type Product, type InsertProduct,
   type ProductPrice, type InsertProductPrice, type OrderWindow, type InsertOrderWindow,
+  type OrderException, type InsertOrderException,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem
 } from "@shared/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
@@ -28,6 +30,12 @@ export interface IStorage {
   updatePriceGroup(id: number, updates: Partial<InsertPriceGroup>): Promise<PriceGroup>;
   deletePriceGroup(id: number): Promise<void>;
 
+  // Categories
+  getCategories(): Promise<Category[]>;
+  createCategory(cat: InsertCategory): Promise<Category>;
+  updateCategory(id: number, updates: Partial<InsertCategory>): Promise<Category>;
+  deleteCategory(id: number): Promise<void>;
+
   // Products
   getProducts(): Promise<Product[]>;
   createProduct(product: InsertProduct): Promise<Product>;
@@ -48,6 +56,13 @@ export interface IStorage {
   updateOrderWindow(id: number, updates: Partial<InsertOrderWindow>): Promise<OrderWindow>;
   deleteOrderWindow(id: number): Promise<void>;
 
+  // Order Exceptions
+  getOrderExceptions(): Promise<OrderException[]>;
+  createOrderException(exc: InsertOrderException): Promise<OrderException>;
+  updateOrderException(id: number, updates: Partial<InsertOrderException>): Promise<OrderException>;
+  deleteOrderException(id: number): Promise<void>;
+  getCompanyException(companyId: number): Promise<OrderException | undefined>;
+
   // Orders
   getOrders(): Promise<Order[]>;
   getOrder(id: number): Promise<{ order: Order, items: OrderItem[] } | undefined>;
@@ -56,6 +71,7 @@ export interface IStorage {
   updateOrder(id: number, updates: { status?: string; adminNote?: string }): Promise<Order>;
   updateOrderItems(orderId: number, newItems: { productId: number; quantity: number; unitPrice: string; totalPrice: string }[]): Promise<void>;
   getPurchasingReport(filters: { dateFrom?: string; dateTo?: string; companyId?: number; productId?: number }): Promise<any>;
+  getIndustrializedReport(filters: { dateFrom?: string; dateTo?: string; companyId?: number; productId?: number }): Promise<any>;
 
   // System Settings
   getSetting(key: string): Promise<string | null>;
@@ -122,6 +138,24 @@ export class DatabaseStorage implements IStorage {
 
   async deletePriceGroup(id: number): Promise<void> {
     await db.delete(priceGroups).where(eq(priceGroups.id, id));
+  }
+
+  async getCategories(): Promise<Category[]> {
+    return await db.select().from(categories).orderBy(categories.name);
+  }
+
+  async createCategory(cat: InsertCategory): Promise<Category> {
+    const [newCat] = await db.insert(categories).values(cat).returning();
+    return newCat;
+  }
+
+  async updateCategory(id: number, updates: Partial<InsertCategory>): Promise<Category> {
+    const [updated] = await db.update(categories).set(updates).where(eq(categories.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCategory(id: number): Promise<void> {
+    await db.delete(categories).where(eq(categories.id, id));
   }
 
   async getProducts(): Promise<Product[]> {
@@ -357,6 +391,82 @@ export class DatabaseStorage implements IStorage {
 
       return updatedOrder;
     });
+  }
+
+  async getOrderExceptions(): Promise<OrderException[]> {
+    return await db.select().from(orderExceptions).orderBy(desc(orderExceptions.createdAt));
+  }
+
+  async createOrderException(exc: InsertOrderException): Promise<OrderException> {
+    const [newExc] = await db.insert(orderExceptions).values(exc).returning();
+    return newExc;
+  }
+
+  async updateOrderException(id: number, updates: Partial<InsertOrderException>): Promise<OrderException> {
+    const [updated] = await db.update(orderExceptions).set(updates).where(eq(orderExceptions.id, id)).returning();
+    return updated;
+  }
+
+  async deleteOrderException(id: number): Promise<void> {
+    await db.delete(orderExceptions).where(eq(orderExceptions.id, id));
+  }
+
+  async getCompanyException(companyId: number): Promise<OrderException | undefined> {
+    const now = new Date();
+    const rows = await db.select().from(orderExceptions).where(
+      and(eq(orderExceptions.companyId, companyId), eq(orderExceptions.active, true))
+    );
+    // Filter to non-expired exceptions (expiryDate null or >= today)
+    const valid = rows.filter(e => !e.expiryDate || new Date(e.expiryDate) >= now);
+    return valid[0];
+  }
+
+  async getIndustrializedReport(filters: {
+    dateFrom?: string;
+    dateTo?: string;
+    companyId?: number;
+    productId?: number;
+  }): Promise<any[]> {
+    const conditions: any[] = [eq(products.isIndustrialized, true), eq(orders.status, 'ACTIVE')];
+    if (filters.companyId) conditions.push(eq(orders.companyId, filters.companyId));
+    if (filters.productId) conditions.push(eq(orderItems.productId, filters.productId));
+    if (filters.dateFrom) conditions.push(gte(orders.orderDate, new Date(filters.dateFrom)));
+    if (filters.dateTo) {
+      const to = new Date(filters.dateTo);
+      to.setHours(23, 59, 59, 999);
+      conditions.push(lte(orders.orderDate, to));
+    }
+
+    const rows = await db
+      .select({
+        orderId: orders.id,
+        orderCode: orders.orderCode,
+        orderDate: orders.orderDate,
+        companyName: companies.companyName,
+        productName: products.name,
+        productUnit: products.unit,
+        quantity: orderItems.quantity,
+        unitPrice: orderItems.unitPrice,
+        totalPrice: orderItems.totalPrice,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orderItems.orderId, orders.id))
+      .innerJoin(companies, eq(orders.companyId, companies.id))
+      .innerJoin(products, eq(orderItems.productId, products.id))
+      .where(and(...conditions))
+      .orderBy(desc(orders.orderDate));
+
+    return rows.map(r => ({
+      orderId: r.orderId,
+      orderCode: r.orderCode || `#${r.orderId}`,
+      orderDate: r.orderDate.toISOString().split('T')[0],
+      companyName: r.companyName,
+      productName: r.productName,
+      unit: r.productUnit,
+      quantity: r.quantity,
+      unitPrice: Number(r.unitPrice),
+      totalPrice: Number(r.totalPrice),
+    }));
   }
 
   async getSetting(key: string): Promise<string | null> {
