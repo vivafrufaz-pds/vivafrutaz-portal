@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, products, productPrices, orderWindows, orders, orderItems,
+  users, priceGroups, companies, products, productPrices, orderWindows, orders, orderItems, systemSettings,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Product, type InsertProduct,
   type ProductPrice, type InsertProductPrice, type OrderWindow, type InsertOrderWindow,
@@ -53,6 +53,10 @@ export interface IStorage {
   getOrder(id: number): Promise<{ order: Order, items: OrderItem[] } | undefined>;
   getCompanyOrders(companyId: number): Promise<Order[]>;
   createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order>;
+
+  // System Settings
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -206,7 +210,6 @@ export class DatabaseStorage implements IStorage {
   async getOrder(id: number): Promise<{ order: Order, items: OrderItem[] } | undefined> {
     const [order] = await db.select().from(orders).where(eq(orders.id, id));
     if (!order) return undefined;
-    
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
     return { order, items };
   }
@@ -217,21 +220,44 @@ export class DatabaseStorage implements IStorage {
 
   async createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order> {
     return await db.transaction(async (tx) => {
+      // Insert order first to get the ID
       const [newOrder] = await tx.insert(orders).values({
         ...order,
-        deliveryDate: new Date(order.deliveryDate)
+        deliveryDate: new Date(order.deliveryDate),
       }).returning();
-      
+
+      // Generate order code: VF-YEAR-XXXXXX using the new ID
+      const year = new Date().getFullYear();
+      const orderCode = `VF-${year}-${String(newOrder.id).padStart(6, '0')}`;
+
+      // Update with the generated order code
+      const [updatedOrder] = await tx.update(orders)
+        .set({ orderCode })
+        .where(eq(orders.id, newOrder.id))
+        .returning();
+
+      // Insert order items
       if (items.length > 0) {
         const itemsWithOrderId = items.map(item => ({
           ...item,
-          orderId: newOrder.id
+          orderId: updatedOrder.id
         }));
         await tx.insert(orderItems).values(itemsWithOrderId);
       }
-      
-      return newOrder;
+
+      return updatedOrder;
     });
+  }
+
+  async getSetting(key: string): Promise<string | null> {
+    const [row] = await db.select().from(systemSettings).where(eq(systemSettings.key, key));
+    return row?.value ?? null;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    await db.insert(systemSettings)
+      .values({ key, value })
+      .onConflictDoUpdate({ target: systemSettings.key, set: { value } });
   }
 }
 

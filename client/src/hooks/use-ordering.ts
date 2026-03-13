@@ -22,8 +22,9 @@ export function useActiveOrderWindow() {
       const res = await fetch(api.orderWindows.active.path, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch active window");
       const data = await res.json();
-      return data ? api.orderWindows.active.responses[200].parse(data) : null;
-    }
+      return data || null;
+    },
+    refetchInterval: 60000, // re-check every minute
   });
 }
 
@@ -39,6 +40,7 @@ export function useCreateOrderWindow() {
         deliveryStartDate: new Date(data.deliveryStartDate).toISOString(),
         deliveryEndDate: new Date(data.deliveryEndDate).toISOString(),
         active: data.active ?? true,
+        forceOpen: data.forceOpen ?? false,
       };
       const res = await fetch(api.orderWindows.create.path, {
         method: "POST",
@@ -53,6 +55,62 @@ export function useCreateOrderWindow() {
       queryClient.invalidateQueries({ queryKey: [api.orderWindows.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.orderWindows.active.path] });
       toast({ title: "Janela de pedido criada com sucesso!" });
+    }
+  });
+}
+
+export function useUpdateOrderWindow() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const url = buildUrl(api.orderWindows.update.path, { id });
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update order window");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.orderWindows.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.orderWindows.active.path] });
+      toast({ title: "Janela de pedido atualizada!" });
+    }
+  });
+}
+
+// ========== SYSTEM SETTINGS ==========
+export function useSetting(key: string) {
+  return useQuery({
+    queryKey: ['/api/settings', key],
+    queryFn: async () => {
+      const res = await fetch(`/api/settings/${key}`, { credentials: "include" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.value as string | null;
+    }
+  });
+}
+
+export function useUpdateSetting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ key, value }: { key: string; value: string }) => {
+      const res = await fetch(`/api/settings/${key}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update setting");
+      return res.json();
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/settings', vars.key] });
+      queryClient.invalidateQueries({ queryKey: [api.orderWindows.active.path] });
     }
   });
 }
@@ -109,12 +167,11 @@ export function useCreateOrder() {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to create order");
-      return api.orders.create.responses[201].parse(await res.json());
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.orders.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.orders.companyOrders.path] });
-      toast({ title: "Pedido realizado com sucesso!" });
     },
     onError: () => {
       toast({ title: "Erro ao enviar pedido", variant: "destructive" });

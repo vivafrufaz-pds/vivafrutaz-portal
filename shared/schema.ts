@@ -67,6 +67,7 @@ export const orderWindows = pgTable("order_windows", {
   deliveryStartDate: timestamp("delivery_start_date").notNull(),
   deliveryEndDate: timestamp("delivery_end_date").notNull(),
   active: boolean("active").default(true).notNull(),
+  forceOpen: boolean("force_open").default(false).notNull(),
 });
 
 export const orders = pgTable("orders", {
@@ -89,6 +90,11 @@ export const orderItems = pgTable("order_items", {
   quantity: integer("quantity").notNull(),
   unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull(),
   totalPrice: numeric("total_price", { precision: 10, scale: 2 }).notNull(),
+});
+
+export const systemSettings = pgTable("system_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
