@@ -3,15 +3,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
-import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code } from "lucide-react";
+import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code, Crown, BarChart3 } from "lucide-react";
 
 type AdminUser = { id: number; name: string; email: string; password: string; role: string; };
 
 const ROLES = [
   { value: "ADMIN", label: "Administrador", desc: "Acesso total ao sistema", icon: Shield, color: "text-red-600 bg-red-100" },
+  { value: "DIRECTOR", label: "Diretor", desc: "Acesso total + alterar qualquer senha", icon: Crown, color: "text-yellow-700 bg-yellow-100" },
   { value: "OPERATIONS_MANAGER", label: "Gerente de Operações", desc: "Janelas de pedido e pedidos", icon: ShieldCheck, color: "text-blue-600 bg-blue-100" },
-  { value: "PURCHASE_MANAGER", label: "Financeiro / Compras", desc: "Relatórios, compras e exportações", icon: DollarSign, color: "text-green-600 bg-green-100" },
-  { value: "DEVELOPER", label: "Desenvolvedor", desc: "Acesso total + logs do sistema", icon: Code, color: "text-purple-600 bg-purple-100" },
+  { value: "PURCHASE_MANAGER", label: "Gerente de Compras", desc: "Compras e relatórios", icon: DollarSign, color: "text-green-600 bg-green-100" },
+  { value: "FINANCEIRO", label: "Financeiro", desc: "Pedidos, painel financeiro e exportações", icon: BarChart3, color: "text-emerald-600 bg-emerald-100" },
+  { value: "DEVELOPER", label: "Desenvolvedor", desc: "Acesso técnico + logs + backups", icon: Code, color: "text-purple-600 bg-purple-100" },
 ];
 
 const blank = { name: "", email: "", password: "", role: "ADMIN" };

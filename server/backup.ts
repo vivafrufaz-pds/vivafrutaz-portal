@@ -108,13 +108,13 @@ export function getBackupPath(filename: string): string | null {
 
 export function scheduleBackups() {
   ensureBackupDir();
-  // Run every day at 03:00 AM (server time / UTC)
-  cron.schedule("0 3 * * *", async () => {
+  // Run every day at 17:00 (server time)
+  cron.schedule("0 17 * * *", async () => {
     try {
       await runBackup();
     } catch (err) {
       console.error("[BACKUP] Erro ao criar backup automático:", err);
     }
   });
-  console.log("[BACKUP] Backup automático agendado para 03:00 diariamente.");
+  console.log("[BACKUP] Backup automático agendado para 17:00 diariamente.");
 }

@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -8,7 +8,7 @@ import {
   type SpecialOrderRequest,
   type OrderException, type InsertOrderException,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
-  type PasswordResetRequest
+  type PasswordResetRequest, type SystemLog
 } from "@shared/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 
@@ -97,6 +97,10 @@ export interface IStorage {
 
   // Order cleanup
   deleteOrder(id: number): Promise<void>;
+
+  // System Logs
+  createLog(log: { action: string; description: string; userId?: number; companyId?: number; userEmail?: string; userRole?: string; ip?: string; level?: string }): Promise<void>;
+  getLogs(limit?: number): Promise<SystemLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -549,6 +553,18 @@ export class DatabaseStorage implements IStorage {
   async deleteOrder(id: number): Promise<void> {
     await db.delete(orderItems).where(eq(orderItems.orderId, id));
     await db.delete(orders).where(eq(orders.id, id));
+  }
+
+  async createLog(log: { action: string; description: string; userId?: number; companyId?: number; userEmail?: string; userRole?: string; ip?: string; level?: string }): Promise<void> {
+    try {
+      await db.insert(systemLogs).values({ ...log, level: log.level || "INFO" });
+    } catch (err) {
+      console.error("[LOG] Failed to write system log:", err);
+    }
+  }
+
+  async getLogs(limit = 200): Promise<SystemLog[]> {
+    return db.select().from(systemLogs).orderBy(desc(systemLogs.createdAt)).limit(limit);
   }
 }
 

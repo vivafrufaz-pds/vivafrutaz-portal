@@ -12,21 +12,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   const adminLinks = [
-    { href: '/admin', label: 'Painel', icon: LayoutDashboard, roles: ['ADMIN'] },
-    { href: '/admin/companies', label: 'Empresas', icon: Users, roles: ['ADMIN'] },
-    { href: '/admin/products', label: 'Produtos', icon: Package, roles: ['ADMIN'] },
-    { href: '/admin/categories', label: 'Categorias', icon: FolderOpen, roles: ['ADMIN'] },
-    { href: '/admin/price-groups', label: 'Grupos de Preço', icon: Tag, roles: ['ADMIN'] },
-    { href: '/admin/order-windows', label: 'Janelas de Pedido', icon: CalendarDays, roles: ['ADMIN', 'OPERATIONS_MANAGER'] },
-    { href: '/admin/order-exceptions', label: 'Exceções de Pedido', icon: ShieldCheck, roles: ['ADMIN'] },
-    { href: '/admin/orders', label: 'Pedidos', icon: ShoppingCart, roles: ['ADMIN', 'OPERATIONS_MANAGER'] },
-    { href: '/admin/purchasing', label: 'Compras', icon: BarChart3, roles: ['ADMIN', 'PURCHASE_MANAGER'] },
-    { href: '/admin/industrialized', label: 'Industrializados', icon: Factory, roles: ['ADMIN', 'PURCHASE_MANAGER'] },
-    { href: '/admin/financial', label: 'Painel Financeiro', icon: PieChart, roles: ['ADMIN'] },
-    { href: '/admin/password-reset-requests', label: 'Senhas de Clientes', icon: KeyRound, roles: ['ADMIN'] },
-    { href: '/admin/special-orders', label: 'Pedidos Pontuais', icon: Star, roles: ['ADMIN', 'OPERATIONS_MANAGER'] },
-    { href: '/admin/users', label: 'Usuários do Sistema', icon: UserCog, roles: ['ADMIN', 'DEVELOPER'] },
-    { href: '/admin/backups', label: 'Backup & E-mails', icon: HardDrive, roles: ['ADMIN', 'DEVELOPER'] },
+    { href: '/admin', label: 'Painel', icon: LayoutDashboard, roles: ['ADMIN', 'DIRECTOR'] },
+    { href: '/admin/companies', label: 'Empresas', icon: Users, roles: ['ADMIN', 'DIRECTOR'] },
+    { href: '/admin/products', label: 'Produtos', icon: Package, roles: ['ADMIN', 'DIRECTOR'] },
+    { href: '/admin/categories', label: 'Categorias', icon: FolderOpen, roles: ['ADMIN', 'DIRECTOR'] },
+    { href: '/admin/price-groups', label: 'Grupos de Preço', icon: Tag, roles: ['ADMIN', 'DIRECTOR'] },
+    { href: '/admin/order-windows', label: 'Janelas de Pedido', icon: CalendarDays, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR'] },
+    { href: '/admin/order-exceptions', label: 'Exceções de Pedido', icon: ShieldCheck, roles: ['ADMIN', 'DIRECTOR'] },
+    { href: '/admin/orders', label: 'Pedidos', icon: ShoppingCart, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'DIRECTOR'] },
+    { href: '/admin/purchasing', label: 'Compras', icon: BarChart3, roles: ['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR'] },
+    { href: '/admin/industrialized', label: 'Industrializados', icon: Factory, roles: ['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR'] },
+    { href: '/admin/financial', label: 'Painel Financeiro', icon: PieChart, roles: ['ADMIN', 'FINANCEIRO', 'DIRECTOR'] },
+    { href: '/admin/password-reset-requests', label: 'Senhas de Clientes', icon: KeyRound, roles: ['ADMIN', 'DIRECTOR'] },
+    { href: '/admin/special-orders', label: 'Pedidos Pontuais', icon: Star, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR'] },
+    { href: '/admin/users', label: 'Usuários do Sistema', icon: UserCog, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'] },
+    { href: '/admin/backups', label: 'Backup & E-mails', icon: HardDrive, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'] },
+    { href: '/admin/developer', label: 'Área do Desenvolvedor', icon: ShieldCheck, roles: ['DEVELOPER', 'ADMIN', 'DIRECTOR'] },
   ];
 
   const clientLinks = [
@@ -46,6 +47,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       case 'OPERATIONS_MANAGER': return 'Gerente de Operações';
       case 'PURCHASE_MANAGER': return 'Gerente de Compras';
       case 'DEVELOPER': return 'Desenvolvedor';
+      case 'FINANCEIRO': return 'Financeiro';
+      case 'DIRECTOR': return 'Diretor';
       default: return role || '';
     }
   };

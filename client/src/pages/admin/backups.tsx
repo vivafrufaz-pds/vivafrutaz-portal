@@ -51,7 +51,7 @@ export default function BackupsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">Backup do Sistema</h1>
-          <p className="text-muted-foreground mt-1">Backups automáticos diários às 03h. Mantidos os últimos 30.</p>
+          <p className="text-muted-foreground mt-1">Backups automáticos diários às 17h. Mantidos os últimos 30.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => refetch()} className="flex items-center gap-2 px-4 py-2.5 border-2 border-border rounded-xl text-sm font-bold hover:bg-muted transition-colors">

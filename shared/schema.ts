@@ -165,6 +165,24 @@ export const insertProductSchema = createInsertSchema(products).omit({ id: true 
 export const insertProductPriceSchema = createInsertSchema(productPrices).omit({ id: true });
 export const insertOrderWindowSchema = createInsertSchema(orderWindows).omit({ id: true });
 export const insertOrderExceptionSchema = createInsertSchema(orderExceptions).omit({ id: true, createdAt: true });
+// ─── System Logs ─────────────────────────────────────────────
+export const systemLogs = pgTable("system_logs", {
+  id: serial("id").primaryKey(),
+  action: text("action").notNull(),
+  description: text("description").notNull(),
+  userId: integer("user_id"),
+  companyId: integer("company_id"),
+  userEmail: text("user_email"),
+  userRole: text("user_role"),
+  ip: text("ip"),
+  level: text("level").notNull().default("INFO"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSystemLogSchema = createInsertSchema(systemLogs).omit({ id: true, createdAt: true });
+export type SystemLog = typeof systemLogs.$inferSelect;
+export type InsertSystemLog = z.infer<typeof insertSystemLogSchema>;
+
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, orderCode: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
 export const insertSpecialOrderRequestSchema = createInsertSchema(specialOrderRequests).omit({ id: true, createdAt: true, resolvedAt: true });

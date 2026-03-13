@@ -69,22 +69,37 @@ export async function registerRoutes(
     res.json(mailerStatus());
   });
 
+  // --- System Logs API ---
+  app.get('/api/admin/logs', async (req, res) => {
+    try {
+      const limit = Math.min(Number(req.query.limit) || 200, 500);
+      const logs = await storage.getLogs(limit);
+      res.json(logs);
+    } catch {
+      res.status(500).json({ message: "Erro ao buscar logs" });
+    }
+  });
+
   // Auth Routes
   app.post(api.auth.login.path, async (req, res) => {
     try {
       const input = api.auth.login.input.parse(req.body);
       
+      const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || '';
       if (input.type === 'admin') {
         const user = await storage.getUserByEmail(input.email);
         if (!user || user.password !== input.password) {
+          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login falhou: ${input.email}`, userEmail: input.email, level: 'WARN', ip });
           return res.status(401).json({ message: "Email ou senha incorretos." });
         }
         (req.session as any).userId = user.id;
         (req.session as any).userType = 'admin';
+        await storage.createLog({ action: 'LOGIN', description: `Login realizado: ${user.name} (${user.role})`, userId: user.id, userEmail: user.email, userRole: user.role, ip });
         return res.json({ user });
       } else {
         const company = await storage.getCompanyByEmail(input.email);
         if (!company || company.password !== input.password) {
+          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login cliente falhou: ${input.email}`, userEmail: input.email, level: 'WARN', ip });
           return res.status(401).json({ message: "Email ou senha incorretos." });
         }
         if (!company.active) {
@@ -92,6 +107,7 @@ export async function registerRoutes(
         }
         (req.session as any).companyId = company.id;
         (req.session as any).userType = 'company';
+        await storage.createLog({ action: 'LOGIN', description: `Login cliente: ${company.companyName}`, companyId: company.id, userEmail: company.email, userRole: 'CLIENT', ip });
         return res.json({ company });
       }
     } catch (err) {
@@ -540,12 +556,30 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  // In-memory duplicate protection (companyId+day → timestamp)
+  const recentOrders = new Map<string, number>();
+
   app.post(api.orders.create.path, async (req, res) => {
     try {
       const { order, items } = req.body;
       if (!order || !items) return res.status(400).json({ message: "Missing order or items" });
+
+      // Duplicate order protection (60-second window)
+      const dupKey = `${order.companyId}:${order.deliveryDate || ''}:${order.orderWindowId || ''}`;
+      const lastSubmit = recentOrders.get(dupKey);
+      if (lastSubmit && Date.now() - lastSubmit < 60000) {
+        return res.status(409).json({ message: "Pedido já enviado. Aguarde a confirmação antes de enviar novamente." });
+      }
+      recentOrders.set(dupKey, Date.now());
+
       const newOrder = await storage.createOrder(order, items);
       res.status(201).json(newOrder);
+
+      // Log order creation
+      try {
+        const no = newOrder as any;
+        await storage.createLog({ action: 'ORDER_CREATED', description: `Pedido criado: ${no.vfCode || `#${no.id}`} (empresa ${order.companyId})`, companyId: order.companyId, userRole: 'CLIENT' });
+      } catch {}
 
       // Send emails (non-blocking)
       try {
