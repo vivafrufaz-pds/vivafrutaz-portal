@@ -71,11 +71,13 @@ export const orderWindows = pgTable("order_windows", {
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
+  orderCode: text("order_code").unique(),
   companyId: integer("company_id").references(() => companies.id).notNull(),
   orderDate: timestamp("order_date").defaultNow().notNull(),
   deliveryDate: timestamp("delivery_date").notNull(),
   weekReference: text("week_reference").notNull(),
   totalValue: numeric("total_value", { precision: 10, scale: 2 }).notNull(),
+  orderNote: text("order_note"),
   allowReplication: boolean("allow_replication").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -95,7 +97,7 @@ export const insertCompanySchema = createInsertSchema(companies).omit({ id: true
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertProductPriceSchema = createInsertSchema(productPrices).omit({ id: true });
 export const insertOrderWindowSchema = createInsertSchema(orderWindows).omit({ id: true });
-export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true });
+export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, orderCode: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
 
 export type User = typeof users.$inferSelect;
