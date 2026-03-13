@@ -1,12 +1,13 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
   type ProductPrice, type InsertProductPrice, type OrderWindow, type InsertOrderWindow,
   type OrderException, type InsertOrderException,
-  type Order, type InsertOrder, type OrderItem, type InsertOrderItem
+  type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
+  type PasswordResetRequest
 } from "@shared/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 
@@ -76,6 +77,11 @@ export interface IStorage {
   // System Settings
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
+
+  // Password Reset Requests
+  getPasswordResetRequests(): Promise<PasswordResetRequest[]>;
+  createPasswordResetRequest(companyId: number): Promise<PasswordResetRequest>;
+  updatePasswordResetRequest(id: number, updates: { status: string; newPassword?: string; adminNote?: string; resolvedAt?: Date }): Promise<PasswordResetRequest>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -478,6 +484,20 @@ export class DatabaseStorage implements IStorage {
     await db.insert(systemSettings)
       .values({ key, value })
       .onConflictDoUpdate({ target: systemSettings.key, set: { value } });
+  }
+
+  async getPasswordResetRequests(): Promise<PasswordResetRequest[]> {
+    return await db.select().from(passwordResetRequests).orderBy(desc(passwordResetRequests.createdAt));
+  }
+
+  async createPasswordResetRequest(companyId: number): Promise<PasswordResetRequest> {
+    const [req] = await db.insert(passwordResetRequests).values({ companyId, status: 'PENDING' }).returning();
+    return req;
+  }
+
+  async updatePasswordResetRequest(id: number, updates: { status: string; newPassword?: string; adminNote?: string; resolvedAt?: Date }): Promise<PasswordResetRequest> {
+    const [updated] = await db.update(passwordResetRequests).set(updates as any).where(eq(passwordResetRequests.id, id)).returning();
+    return updated;
   }
 }
 

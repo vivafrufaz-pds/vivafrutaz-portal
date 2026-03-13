@@ -36,15 +36,18 @@ export async function registerRoutes(
       if (input.type === 'admin') {
         const user = await storage.getUserByEmail(input.email);
         if (!user || user.password !== input.password) {
-          return res.status(401).json({ message: "Invalid credentials" });
+          return res.status(401).json({ message: "Email ou senha incorretos." });
         }
         (req.session as any).userId = user.id;
         (req.session as any).userType = 'admin';
         return res.json({ user });
       } else {
         const company = await storage.getCompanyByEmail(input.email);
-        if (!company || company.password !== input.password || !company.active) {
-          return res.status(401).json({ message: "Invalid credentials or inactive account" });
+        if (!company || company.password !== input.password) {
+          return res.status(401).json({ message: "Email ou senha incorretos." });
+        }
+        if (!company.active) {
+          return res.status(401).json({ message: "Esta conta está inativa. Entre em contato com a VivaFrutaz." });
         }
         (req.session as any).companyId = company.id;
         (req.session as any).userType = 'company';
@@ -74,6 +77,50 @@ export async function registerRoutes(
     req.session.destroy((err) => {
       res.json({ message: "Logged out successfully" });
     });
+  });
+
+  // Forgot Password — Client submits a request
+  app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ message: "Email obrigatório." });
+      const company = await storage.getCompanyByEmail(email);
+      if (!company) return res.status(404).json({ message: "Email não encontrado no sistema." });
+      const request = await storage.createPasswordResetRequest(company.id);
+      return res.json({ message: "Solicitação enviada! A equipe VivaFrutaz irá redefinir sua senha em breve.", requestId: request.id });
+    } catch (err) {
+      res.status(500).json({ message: "Erro interno. Tente novamente." });
+    }
+  });
+
+  // Password Reset Requests — Admin routes
+  app.get('/api/password-reset-requests', async (req, res) => {
+    try {
+      const requests = await storage.getPasswordResetRequests();
+      res.json(requests);
+    } catch {
+      res.status(500).json({ message: "Erro interno" });
+    }
+  });
+
+  app.put('/api/password-reset-requests/:id', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { status, newPassword, adminNote } = req.body;
+      const updates: any = { status, adminNote, resolvedAt: new Date() };
+      if (newPassword && status === 'APPROVED') {
+        const req2 = await storage.getPasswordResetRequests();
+        const pr = req2.find(r => r.id === id);
+        if (pr) {
+          await storage.updateCompany(pr.companyId, { password: newPassword } as any);
+        }
+        updates.newPassword = newPassword;
+      }
+      const updated = await storage.updatePasswordResetRequest(id, updates);
+      res.json(updated);
+    } catch {
+      res.status(500).json({ message: "Erro interno" });
+    }
   });
 
   // Companies

@@ -19,6 +19,7 @@ import AdminOrderExceptions from "@/pages/admin/order-exceptions";
 import PurchasingReport from "@/pages/admin/reports/purchasing";
 import IndustrializedReport from "@/pages/admin/reports/industrialized";
 import FinancialReport from "@/pages/admin/reports/financial";
+import PasswordResetRequestsPage from "@/pages/admin/password-reset-requests";
 
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
@@ -84,6 +85,9 @@ function Router() {
       </Route>
       <Route path="/admin/financial">
         {() => <ProtectedRoute component={FinancialReport} role="admin" />}
+      </Route>
+      <Route path="/admin/password-reset-requests">
+        {() => <ProtectedRoute component={PasswordResetRequestsPage} role="admin" />}
       </Route>
 
       {/* Client Routes */}

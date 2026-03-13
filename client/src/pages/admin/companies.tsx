@@ -434,12 +434,18 @@ export default function CompaniesPage() {
 
               {/* Tipo de cliente */}
               <div className="p-4 rounded-xl border-2 border-border bg-muted/20">
-                <p className="text-sm font-semibold mb-3 text-foreground">Tipo de Cliente</p>
-                <div className="flex gap-3">
-                  {[{ value: "mensal", label: "Mensal" }, { value: "pontual", label: "Pontual" }].map(opt => (
+                <p className="text-sm font-semibold mb-1 text-foreground">Tipo de Cliente</p>
+                <p className="text-xs text-muted-foreground mb-3">Define o perfil e frequência de pedidos do cliente.</p>
+                <div className="flex gap-3 flex-wrap">
+                  {[
+                    { value: "semanal", label: "Semanal", desc: "Pedidos todas as semanas" },
+                    { value: "mensal", label: "Mensal", desc: "Programação mensal de pedidos" },
+                    { value: "pontual", label: "Pontual", desc: "Esporádico, sem notificações" },
+                  ].map(opt => (
                     <button key={opt.value} type="button" onClick={() => set("clientType", opt.value)}
-                      className={`px-5 py-2.5 rounded-xl font-bold text-sm border-2 transition-all ${formData.clientType === opt.value ? 'bg-primary text-white border-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
-                      {opt.label}
+                      className={`flex-1 min-w-[100px] px-4 py-3 rounded-xl font-bold text-sm border-2 transition-all text-left ${formData.clientType === opt.value ? 'bg-primary text-white border-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
+                      <p>{opt.label}</p>
+                      <p className={`text-xs font-normal mt-0.5 ${formData.clientType === opt.value ? 'text-white/80' : 'text-muted-foreground'}`}>{opt.desc}</p>
                     </button>
                   ))}
                 </div>
@@ -473,6 +479,16 @@ export default function CompaniesPage() {
                   <Percent className="w-4 h-4" />
                   Taxa Administrativa (%)
                 </label>
+                {/* Quick-select by operator */}
+                <div className="flex gap-2 mb-3 flex-wrap">
+                  <span className="text-xs text-muted-foreground self-center font-medium">Seleção rápida:</span>
+                  {[{ label: "GRSA", value: "27" }, { label: "SODEXO", value: "18" }].map(op => (
+                    <button key={op.label} type="button" onClick={() => set("adminFee", op.value)}
+                      className={`px-4 py-1.5 rounded-xl text-sm font-bold border-2 transition-all ${formData.adminFee === op.value ? 'bg-secondary text-white border-secondary shadow-md' : 'border-secondary/40 text-secondary hover:bg-secondary/10'}`}>
+                      {op.label} — {op.value}%
+                    </button>
+                  ))}
+                </div>
                 <div className="flex items-center gap-4">
                   <input
                     type="number" step="0.1" min="0" max="100"
@@ -481,7 +497,7 @@ export default function CompaniesPage() {
                     className="w-32 px-4 py-2.5 rounded-xl border-2 border-border focus:border-secondary outline-none text-xl font-bold text-center"
                     placeholder="0"
                   />
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {["0", "5", "10", "12", "15", "20"].map(v => (
                       <button key={v} type="button" onClick={() => set("adminFee", v)}
                         className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-all ${formData.adminFee === v ? 'bg-secondary text-white border-secondary' : 'border-border text-muted-foreground hover:border-secondary/50'}`}>
@@ -491,13 +507,14 @@ export default function CompaniesPage() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Aplicada automaticamente sobre o preço base de todos os produtos.
-                  Clientes não visualizam esta taxa.
+                  Aplicada automaticamente sobre o preço base. Clientes <strong>não visualizam</strong> esta taxa.
                 </p>
                 {formData.adminFee && Number(formData.adminFee) > 0 && (
-                  <p className="text-xs font-bold text-secondary mt-1">
-                    Ex: produto R$ 10,00 → cliente vê R$ {(10 * (1 + Number(formData.adminFee) / 100)).toFixed(2)}
-                  </p>
+                  <div className="mt-2 p-2 bg-secondary/10 rounded-lg">
+                    <p className="text-xs font-bold text-secondary">
+                      Exemplo: produto R$ 10,00 → cliente vê R$ {(10 * (1 + Number(formData.adminFee) / 100)).toFixed(2)}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>

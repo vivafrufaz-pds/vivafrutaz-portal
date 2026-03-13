@@ -4,7 +4,7 @@ import { useLocation, Link } from 'wouter';
 import { 
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
-  ShieldCheck, Factory, FolderOpen
+  ShieldCheck, Factory, FolderOpen, KeyRound
 } from 'lucide-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -23,6 +23,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/purchasing', label: 'Compras', icon: BarChart3, roles: ['ADMIN', 'PURCHASE_MANAGER'] },
     { href: '/admin/industrialized', label: 'Industrializados', icon: Factory, roles: ['ADMIN', 'PURCHASE_MANAGER'] },
     { href: '/admin/financial', label: 'Painel Financeiro', icon: PieChart, roles: ['ADMIN'] },
+    { href: '/admin/password-reset-requests', label: 'Senhas de Clientes', icon: KeyRound, roles: ['ADMIN'] },
   ];
 
   const clientLinks = [

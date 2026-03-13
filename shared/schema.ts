@@ -124,6 +124,17 @@ export const systemSettings = pgTable("system_settings", {
   value: text("value").notNull(),
 });
 
+// Solicitações de recuperação de senha (clientes)
+export const passwordResetRequests = pgTable("password_reset_requests", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  status: text("status").default("PENDING").notNull(), // PENDING, APPROVED, REJECTED
+  newPassword: text("new_password"),
+  adminNote: text("admin_note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
 // ─── Insert Schemas ───────────────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertPriceGroupSchema = createInsertSchema(priceGroups).omit({ id: true });
@@ -135,6 +146,7 @@ export const insertOrderWindowSchema = createInsertSchema(orderWindows).omit({ i
 export const insertOrderExceptionSchema = createInsertSchema(orderExceptions).omit({ id: true, createdAt: true });
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, orderCode: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
+export const insertPasswordResetRequestSchema = createInsertSchema(passwordResetRequests).omit({ id: true, createdAt: true, resolvedAt: true });
 
 // ─── Types ────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
@@ -157,3 +169,5 @@ export type Order = typeof orders.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+export type PasswordResetRequest = typeof passwordResetRequests.$inferSelect;
+export type InsertPasswordResetRequest = z.infer<typeof insertPasswordResetRequestSchema>;
