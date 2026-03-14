@@ -81,6 +81,7 @@ export default function CreateOrderPage() {
   const [successOrder, setSuccessOrder] = useState<{ orderCode: string; total: number } | null>(null);
   const [filterCategory, setFilterCategory] = useState("ALL");
   const [search, setSearch] = useState("");
+  const [showBillingWarning, setShowBillingWarning] = useState(false);
 
   // Reopen (SOLICITAR ALTERAÇÃO) state
   const [showReopenModal, setShowReopenModal] = useState(false);
@@ -234,6 +235,18 @@ export default function CreateOrderPage() {
 
   const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + i.subtotal, 0), [cartItems]);
 
+  // Weekly billing: sum of all non-cancelled orders in the current week
+  const weeklyOrdersTotal = useMemo(() => {
+    if (!companyOrders || !activeWindow) return 0;
+    return companyOrders
+      .filter(o => o.status !== 'CANCELLED' && o.weekReference === activeWindow.weekReference)
+      .reduce((sum, o) => sum + (parseFloat(o.totalValue as string) || 0), 0);
+  }, [companyOrders, activeWindow]);
+
+  const minWeeklyBilling = parseFloat((company as any)?.minWeeklyBilling || '0') || 0;
+  const projectedWeeklyTotal = weeklyOrdersTotal + cartTotal;
+  const billingShortfall = minWeeklyBilling > 0 ? Math.max(0, minWeeklyBilling - projectedWeeklyTotal) : 0;
+
   const cartHasItems = cartItems.length > 0;
 
   // Module 1: handle day click — block if cart has items
@@ -278,9 +291,16 @@ export default function CreateOrderPage() {
     setTimeout(() => setReplicating(false), 600);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (force = false) => {
     if (!activeWindow || !company || !deliveryDate) return;
     if (submitting) return; // proteção clique duplo
+
+    // Minimum weekly billing check
+    if (!force && minWeeklyBilling > 0 && projectedWeeklyTotal < minWeeklyBilling) {
+      setShowBillingWarning(true);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const items = cartItems.map(({ product, qty }) => ({
@@ -426,6 +446,51 @@ export default function CreateOrderPage() {
                 data-testid="button-confirm-reopen"
                 className="flex-1 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors text-sm disabled:opacity-50">
                 {requestReopenMut.isPending ? 'Enviando...' : 'Enviar Solicitação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Minimum weekly billing warning modal */}
+      {showBillingWarning && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-2xl p-8 max-w-md w-full premium-shadow border border-border/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Faturamento mínimo não atingido</h3>
+                <p className="text-xs text-muted-foreground">Verifique os valores antes de continuar</p>
+              </div>
+            </div>
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-5 space-y-1.5 text-sm">
+              <p className="font-bold text-orange-800">
+                ATENÇÃO: o faturamento mínimo semanal deste contrato é de R$ {fmtBRL(minWeeklyBilling)}.
+              </p>
+              <p className="text-orange-700">
+                O valor total de pedidos da semana atual é R$ {fmtBRL(projectedWeeklyTotal)}.
+              </p>
+              <p className="text-orange-700 font-medium">
+                Para atingir o mínimo, faltam R$ {fmtBRL(billingShortfall)}.
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground mb-5">
+              Para finalizar os pedidos da semana é necessário atingir o valor mínimo, ou você pode continuar assim mesmo.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowBillingWarning(false)}
+                data-testid="button-billing-add-more"
+                className="flex-1 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm">
+                Adicionar Mais Produtos
+              </button>
+              <button
+                onClick={() => { setShowBillingWarning(false); handleSubmit(true); }}
+                data-testid="button-billing-continue"
+                className="flex-1 py-2.5 border-2 border-border text-muted-foreground font-bold rounded-xl hover:bg-muted transition-colors text-sm">
+                Continuar Pedido
               </button>
             </div>
           </div>
@@ -680,6 +745,27 @@ export default function CreateOrderPage() {
                   <p className="text-2xl font-display font-bold text-primary">R$ {fmtBRL(cartTotal)}</p>
                 </div>
 
+                {/* Weekly minimum billing indicator */}
+                {minWeeklyBilling > 0 && (
+                  <div className={`p-3 rounded-xl border text-xs ${projectedWeeklyTotal >= minWeeklyBilling ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'}`}>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className={`font-bold ${projectedWeeklyTotal >= minWeeklyBilling ? 'text-green-700' : 'text-orange-700'}`}>
+                        Faturamento semanal
+                      </span>
+                      <span className={`font-bold ${projectedWeeklyTotal >= minWeeklyBilling ? 'text-green-700' : 'text-orange-700'}`}>
+                        R$ {fmtBRL(projectedWeeklyTotal)} / R$ {fmtBRL(minWeeklyBilling)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-white/60 rounded-full h-1.5">
+                      <div className={`h-1.5 rounded-full transition-all ${projectedWeeklyTotal >= minWeeklyBilling ? 'bg-green-500' : 'bg-orange-400'}`}
+                        style={{ width: `${Math.min(100, (projectedWeeklyTotal / minWeeklyBilling) * 100)}%` }} />
+                    </div>
+                    {billingShortfall > 0 && (
+                      <p className="text-orange-600 mt-1.5 font-medium">Faltam R$ {fmtBRL(billingShortfall)} para o mínimo semanal.</p>
+                    )}
+                  </div>
+                )}
+
                 {/* Date-lock: block submission if order already exists for this delivery date */}
                 {existingOrderForDate && existingOrderForDate.status !== 'OPEN_FOR_EDITING' ? (
                   <div className="rounded-xl border-2 border-orange-200 bg-orange-50 p-4 space-y-3">
@@ -727,7 +813,7 @@ export default function CreateOrderPage() {
                   </div>
                 ) : (
                   <>
-                    <button data-testid="button-submit-order" onClick={handleSubmit}
+                    <button data-testid="button-submit-order" onClick={() => handleSubmit(false)}
                       disabled={!selectedDay || !deliveryDate || cartItems.length === 0 || createOrder.isPending || submitting || !!existingOrderForDate}
                       className="w-full py-3.5 bg-secondary text-secondary-foreground font-bold rounded-xl shadow-lg shadow-secondary/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none flex justify-center items-center gap-2">
                       <CheckCircle2 className="w-5 h-5" />

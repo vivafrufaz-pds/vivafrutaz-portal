@@ -355,20 +355,19 @@ export default function CompaniesPage() {
       return;
     }
 
-    const enderecoCompleto = parts.join(", ");
+    const enderecoCompleto = parts.join(", ") + ", Brasil";
     setGeocoding(true);
     try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(enderecoCompleto)}&format=json&limit=1&countrycodes=br`;
-      const res = await fetch(url, { headers: { "Accept-Language": "pt-BR", "User-Agent": "VivaFrutaz/1.0" } });
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(enderecoCompleto)}`, { credentials: "include" });
       const data = await res.json();
-      if (data && data.length > 0) {
+      if (Array.isArray(data) && data.length > 0) {
         const { lat, lon } = data[0];
         setFormData(prev => ({ ...prev, latitude: parseFloat(lat).toFixed(7), longitude: parseFloat(lon).toFixed(7) }));
         toast({ title: "Coordenadas encontradas!", description: `Lat: ${parseFloat(lat).toFixed(5)}, Lon: ${parseFloat(lon).toFixed(5)}` });
       } else {
         toast({
-          title: "Endereço não localizado",
-          description: "Não foi possível localizar automaticamente o endereço. Verifique os dados ou informe manualmente.",
+          title: "Endereço não encontrado",
+          description: "Verifique os dados ou ajuste o CEP.",
           variant: "destructive",
         });
       }
@@ -854,12 +853,27 @@ export default function CompaniesPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1">
-                    <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-primary" /> Horário de Entrega</span>
+                    <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-primary" /> Janela de Entrega</span>
                   </label>
-                  <input type="time" value={formData.deliveryTime}
-                    onChange={e => set("deliveryTime", e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" />
-                  <p className="text-xs text-muted-foreground mt-1">Aparece nos pedidos e relatórios. Ex: 08:30</p>
+                  {(() => {
+                    const cfg = formData.deliveryConfigJson || DEFAULT_DELIVERY_CONFIG;
+                    const enabled = Object.entries(cfg).filter(([, v]) => v.enabled);
+                    if (enabled.length === 0) {
+                      return <p className="text-xs text-muted-foreground py-2">Configure os dias de entrega na aba <strong>Configuração de Entrega</strong> para ver as janelas aqui.</p>;
+                    }
+                    return (
+                      <div className="space-y-1.5">
+                        {enabled.map(([day, v]) => (
+                          <div key={day} className="flex items-center gap-3 px-3 py-2 bg-primary/5 border border-primary/20 rounded-xl">
+                            <Clock className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                            <span className="text-sm font-semibold text-foreground">{day}</span>
+                            <span className="text-sm text-muted-foreground ml-auto">{v.startTime} – {v.endTime}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  <p className="text-xs text-muted-foreground mt-1">Janelas configuradas na aba Configuração de Entrega.</p>
                 </div>
               </div>
 
