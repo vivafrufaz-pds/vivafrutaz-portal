@@ -2,7 +2,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useOrders } from "@/hooks/use-ordering";
 import { useCompanies } from "@/hooks/use-admin";
 import { Layout } from "@/components/Layout";
-import { ShoppingCart, Users, TrendingUp, Package, Wrench, CheckCircle, AlertTriangle } from "lucide-react";
+import { ShoppingCart, Users, TrendingUp, Package, Wrench, CheckCircle, AlertTriangle, FlaskConical } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -84,6 +84,84 @@ function MaintenanceToggle() {
   );
 }
 
+function TestModeToggle() {
+  const { data, isLoading } = useQuery<{ enabled: boolean }>({
+    queryKey: ['/api/settings/test-mode'],
+    staleTime: 10000,
+  });
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const toggle = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await fetch('/api/settings/test-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Sem permissão');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/settings/test-mode'] });
+      toast({
+        title: data.enabled ? 'Modo Teste ativado' : 'Modo Teste desativado',
+        description: data.enabled
+          ? 'Pedidos criados não afetarão dados reais.'
+          : 'Sistema retornado ao modo normal.',
+        variant: data.enabled ? 'destructive' : 'default',
+      });
+    },
+    onError: () => toast({ title: 'Erro ao alterar modo teste', variant: 'destructive' }),
+  });
+
+  const enabled = data?.enabled ?? false;
+
+  return (
+    <div className={`rounded-2xl border-2 p-5 flex items-center justify-between gap-4 premium-shadow transition-all ${
+      enabled ? 'bg-amber-50 border-amber-300' : 'bg-card border-border/50'
+    }`}>
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${enabled ? 'bg-amber-100' : 'bg-muted'}`}>
+          <FlaskConical className={`w-5 h-5 ${enabled ? 'text-amber-700' : 'text-muted-foreground'}`} />
+        </div>
+        <div>
+          <p className="font-bold text-sm text-foreground">Modo Teste</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {enabled
+              ? 'Pedidos são salvos como TESTE — não afetam dados reais'
+              : 'Pedidos são processados normalmente'}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        {enabled ? (
+          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-200 text-amber-800 rounded-full text-xs font-bold">
+            <FlaskConical className="w-3 h-3" /> TESTE ATIVO
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">
+            <CheckCircle className="w-3 h-3" /> NORMAL
+          </span>
+        )}
+        <button
+          data-testid="button-toggle-test-mode"
+          onClick={() => toggle.mutate(!enabled)}
+          disabled={toggle.isPending || isLoading}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 ${
+            enabled
+              ? 'bg-green-500 hover:bg-green-600 text-white'
+              : 'bg-amber-500 hover:bg-amber-600 text-white'
+          }`}
+        >
+          {toggle.isPending ? '...' : enabled ? 'Desativar Teste' : 'Ativar Modo Teste'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const { user } = useAuth();
   const { data: orders } = useOrders();
@@ -126,6 +204,7 @@ export default function AdminDashboard() {
         </div>
 
         {canToggleMaintenance && <MaintenanceToggle />}
+        {canToggleMaintenance && <TestModeToggle />}
 
         <div className="bg-card rounded-2xl p-8 border border-border/50 premium-shadow flex items-center justify-center min-h-[200px]">
           <div className="text-center">

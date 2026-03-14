@@ -1,15 +1,23 @@
 import React from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useLocation, Link } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { 
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
-  ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive
+  ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical
 } from 'lucide-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, company, isStaff, isClient, logout } = useAuth();
   const [location] = useLocation();
+
+  const { data: testModeData } = useQuery<{ enabled: boolean }>({
+    queryKey: ['/api/settings/test-mode'],
+    staleTime: 30000,
+    enabled: isStaff,
+  });
+  const testModeActive = testModeData?.enabled ?? false;
 
   const adminLinks = [
     { href: '/admin', label: 'Painel', icon: LayoutDashboard, roles: ['ADMIN', 'DIRECTOR'] },
@@ -108,6 +116,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
+        {testModeActive && (
+          <div className="flex items-center justify-center gap-2 bg-amber-400 text-amber-900 px-4 py-2 text-sm font-bold shrink-0 z-20">
+            <FlaskConical className="w-4 h-4" />
+            MODO TESTE ATIVO — Pedidos criados não afetam dados reais
+            <FlaskConical className="w-4 h-4" />
+          </div>
+        )}
         <header className="h-16 border-b border-border/50 bg-card/50 backdrop-blur-sm flex items-center px-8 shrink-0 z-0">
           <h2 className="text-lg font-bold text-foreground">
             {links.find(l => l.href === location)?.label || 'Painel'}

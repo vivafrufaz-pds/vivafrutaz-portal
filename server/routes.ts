@@ -656,6 +656,26 @@ export async function registerRoutes(
       const { order, items } = req.body;
       if (!order || !items) return res.status(400).json({ message: "Missing order or items" });
 
+      // Check if test mode is active — intercept and save to test_orders table
+      const testMode = await storage.getSetting('test_mode');
+      if (testMode === 'true') {
+        const company = await storage.getCompany(order.companyId);
+        const year = new Date().getFullYear();
+        const testCode = `TESTE-${year}-${String(Date.now()).slice(-6)}`;
+        const testOrder = await storage.createTestOrder({
+          orderCode: testCode,
+          companyId: order.companyId,
+          companyName: company?.companyName || `Empresa #${order.companyId}`,
+          deliveryDate: new Date(order.deliveryDate),
+          weekReference: order.weekReference,
+          totalValue: order.totalValue,
+          orderNote: order.orderNote || null,
+          items,
+        });
+        await storage.createLog({ action: 'TEST_ORDER_CREATED', description: `Pedido de teste criado: ${testCode}`, companyId: order.companyId, userRole: 'CLIENT', level: 'INFO' });
+        return res.status(201).json({ ...testOrder, id: testOrder.id, orderCode: testCode, vfCode: testCode, isTestOrder: true });
+      }
+
       // Duplicate order protection (60-second window)
       const dupKey = `${order.companyId}:${order.deliveryDate || ''}:${order.orderWindowId || ''}`;
       const lastSubmit = recentOrders.get(dupKey);
@@ -876,6 +896,91 @@ export async function registerRoutes(
         { productName: "Apple Box", totalSold: 150 }
       ]
     });
+  });
+
+  // --- Password Change Route ---
+  app.put('/api/users/:id/password', async (req, res) => {
+    try {
+      const sess = req.session as any;
+      const actorId = sess?.userId;
+      const actor = actorId ? await storage.getUser(actorId) : null;
+
+      // Only ADMIN, DIRECTOR, DEVELOPER may change passwords
+      if (!actor || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(actor.role)) {
+        await storage.createLog({ action: 'PASSWORD_CHANGE_BLOCKED', description: `Tentativa de alteração de senha bloqueada (sem permissão)`, userEmail: actor?.email || '', userRole: actor?.role || '', ip: req.ip || '', level: 'WARN' });
+        return res.status(403).json({ message: 'Acesso restrito. Apenas diretoria ou administração podem alterar esta senha.' });
+      }
+
+      const targetId = Number(req.params.id);
+      const target = await storage.getUser(targetId);
+      if (!target) return res.status(404).json({ message: 'Usuário não encontrado' });
+
+      // Protect critical profiles: only ADMIN/DIRECTOR/DEVELOPER targets allowed (already checked actor role above, so this is fine)
+      const { newPassword } = req.body;
+      if (!newPassword || newPassword.trim().length < 3) {
+        return res.status(400).json({ message: 'Senha inválida' });
+      }
+
+      await storage.updateUser(targetId, { password: newPassword.trim() });
+      await storage.createLog({
+        action: 'PASSWORD_CHANGED',
+        description: `Senha alterada: usuário "${target.email}" (${target.role}) por "${actor.email}" (${actor.role})`,
+        userId: actor.id,
+        userEmail: actor.email,
+        userRole: actor.role,
+        ip: req.ip || '',
+        level: 'WARN',
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('Password change error:', err);
+      res.status(500).json({ message: 'Erro interno' });
+    }
+  });
+
+  // --- Test Mode ---
+  app.get('/api/settings/test-mode', async (req, res) => {
+    try {
+      const val = await storage.getSetting('test_mode');
+      res.json({ enabled: val === 'true' });
+    } catch {
+      res.json({ enabled: false });
+    }
+  });
+
+  app.post('/api/settings/test-mode', async (req, res) => {
+    try {
+      const sess = req.session as any;
+      const userId = sess?.userId;
+      const user = userId ? await storage.getUser(userId) : null;
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+        return res.status(403).json({ message: 'Sem permissão' });
+      }
+      const { enabled } = req.body;
+      await storage.setSetting('test_mode', enabled ? 'true' : 'false');
+      await storage.createLog({
+        action: enabled ? 'TEST_MODE_ON' : 'TEST_MODE_OFF',
+        description: `Modo teste ${enabled ? 'ativado' : 'desativado'} por ${user.email}`,
+        userId: user.id,
+        userEmail: user.email,
+        userRole: user.role,
+        ip: req.ip || '',
+        level: 'WARN',
+      });
+      res.json({ enabled });
+    } catch (err) {
+      console.error('Test mode toggle error:', err);
+      res.status(500).json({ message: 'Erro interno' });
+    }
+  });
+
+  app.get('/api/admin/test-orders', async (req, res) => {
+    try {
+      const orders = await storage.getTestOrders();
+      res.json(orders);
+    } catch {
+      res.status(500).json({ message: 'Erro interno' });
+    }
   });
 
   // --- Maintenance Mode ---

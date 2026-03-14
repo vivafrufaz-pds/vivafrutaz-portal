@@ -28,6 +28,8 @@ Key features:
 - Cart auto-save/recovery: localStorage (key vf_cart_{companyId}_{windowId}); toast on restore; cleared on submit
 - Role-based route protection: per-route allowedRoles in ProtectedRoute; unauthorized access logs + redirect to /admin
 - Maintenance mode: stored in systemSettings (key: maintenance_mode); toggle in admin dashboard; blocks all client routes; ADMIN/DIRECTOR/DEVELOPER bypass
+- Secure password change: PUT /api/users/:id/password; only ADMIN/DIRECTOR/DEVELOPER can change passwords; confirmation dialog; full audit logging; temp password Viva2026@
+- Test mode: stored in systemSettings (key: test_mode); orders intercepted to test_orders table with TESTE-{year}-{id} code; amber banner shown to staff; toggle in dashboard for ADMIN/DIRECTOR/DEVELOPER
 
 ## User Preferences
 

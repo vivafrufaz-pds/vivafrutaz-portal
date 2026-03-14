@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
-import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code, Crown, BarChart3 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code, Crown, BarChart3, KeyRound, AlertTriangle } from "lucide-react";
 
 type AdminUser = { id: number; name: string; email: string; password: string; role: string; active: boolean; };
 
@@ -16,14 +17,24 @@ const ROLES = [
   { value: "DEVELOPER", label: "Desenvolvedor", desc: "Acesso técnico + logs + backups", icon: Code, color: "text-purple-600 bg-purple-100" },
 ];
 
+const PRIVILEGED_ROLES = ['ADMIN', 'DIRECTOR', 'DEVELOPER'];
+const TEMP_PASSWORD = "Viva2026@";
+
 const blank = { name: "", email: "", password: "", role: "ADMIN", active: true };
 
 export default function UsersAdminPage() {
   const { toast } = useToast();
+  const { user: me } = useAuth();
   const queryClient = useQueryClient();
   const [modal, setModal] = useState<{ open: boolean; editing: AdminUser | null }>({ open: false, editing: null });
   const [form, setForm] = useState(blank);
   const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
+  const [pwdModal, setPwdModal] = useState<AdminUser | null>(null);
+  const [pwdConfirm, setPwdConfirm] = useState<{ user: AdminUser; newPwd: string } | null>(null);
+  const [newPwd, setNewPwd] = useState(TEMP_PASSWORD);
+  const [useCustomPwd, setUseCustomPwd] = useState(false);
+
+  const canManageUsers = me && PRIVILEGED_ROLES.includes(me.role);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['/api/users'],
@@ -65,8 +76,42 @@ export default function UsersAdminPage() {
     },
   });
 
+  const changePassword = useMutation({
+    mutationFn: async ({ userId, password }: { userId: number; password: string }) => {
+      const res = await fetch(`/api/users/${userId}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: password }),
+        credentials: 'include',
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message || 'Erro'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Senha alterada com sucesso!" });
+      setPwdConfirm(null);
+      setPwdModal(null);
+      setNewPwd(TEMP_PASSWORD);
+      setUseCustomPwd(false);
+    },
+    onError: (e: any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
   const openCreate = () => { setForm(blank); setModal({ open: true, editing: null }); };
-  const openEdit = (u: AdminUser) => { setForm({ name: u.name, email: u.email, password: '', role: u.role, active: u.active !== false }); setModal({ open: true, editing: u }); };
+  const openEdit = (u: AdminUser) => {
+    setForm({ name: u.name, email: u.email, password: '', role: u.role, active: u.active !== false });
+    setModal({ open: true, editing: u });
+  };
+
+  const openPasswordChange = (u: AdminUser) => {
+    if (!canManageUsers) {
+      toast({ title: "Acesso restrito. Apenas diretoria ou administração podem alterar esta senha.", variant: "destructive" });
+      return;
+    }
+    setNewPwd(TEMP_PASSWORD);
+    setUseCustomPwd(false);
+    setPwdModal(u);
+  };
 
   return (
     <Layout>
@@ -75,10 +120,12 @@ export default function UsersAdminPage() {
           <h1 className="text-3xl font-display font-bold text-foreground">Usuários do Sistema</h1>
           <p className="text-muted-foreground mt-1">Gerencie os membros da equipe e suas permissões.</p>
         </div>
-        <button onClick={openCreate} data-testid="button-new-user"
-          className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl shadow-lg shadow-primary/25 hover:-translate-y-0.5 transition-all">
-          <Plus className="w-5 h-5" /> Novo Usuário
-        </button>
+        {canManageUsers && (
+          <button onClick={openCreate} data-testid="button-new-user"
+            className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl shadow-lg shadow-primary/25 hover:-translate-y-0.5 transition-all">
+            <Plus className="w-5 h-5" /> Novo Usuário
+          </button>
+        )}
       </div>
 
       {/* Role reference */}
@@ -108,60 +155,78 @@ export default function UsersAdminPage() {
           <UserCircle className="w-5 h-5 text-primary" />
           <h2 className="font-bold text-foreground">Equipe Cadastrada</h2>
         </div>
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-muted/30 border-b border-border/50 text-muted-foreground text-xs uppercase tracking-wider">
-              <th className="px-6 py-4 font-semibold">Nome</th>
-              <th className="px-6 py-4 font-semibold">Email</th>
-              <th className="px-6 py-4 font-semibold">Perfil</th>
-              <th className="px-6 py-4 font-semibold">Status</th>
-              <th className="px-6 py-4 font-semibold"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/50">
-            {isLoading ? (
-              <tr><td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">Carregando...</td></tr>
-            ) : users?.map(u => {
-              const role = ROLES.find(r => r.value === u.role);
-              const Icon = role?.icon || UserCircle;
-              return (
-                <tr key={u.id} className="hover:bg-muted/10 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${role?.color || 'bg-muted text-muted-foreground'}`}>
-                        <Icon className="w-5 h-5" />
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-muted/30 border-b border-border/50 text-muted-foreground text-xs uppercase tracking-wider">
+                <th className="px-6 py-4 font-semibold">Nome</th>
+                <th className="px-6 py-4 font-semibold">Email</th>
+                <th className="px-6 py-4 font-semibold">Perfil</th>
+                <th className="px-6 py-4 font-semibold">Status</th>
+                {canManageUsers && <th className="px-6 py-4 font-semibold text-right">Ações</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {isLoading ? (
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">Carregando...</td></tr>
+              ) : users?.map(u => {
+                const role = ROLES.find(r => r.value === u.role);
+                const Icon = role?.icon || UserCircle;
+                const isSelf = me && (me as any).id === u.id;
+                return (
+                  <tr key={u.id} className="hover:bg-muted/10 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${role?.color || 'bg-muted text-muted-foreground'}`}>
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-foreground">{u.name}</span>
+                          {isSelf && <span className="ml-2 text-xs text-primary font-bold">(você)</span>}
+                        </div>
                       </div>
-                      <span className="font-bold text-foreground">{u.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-muted-foreground">{u.email}</td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${role?.color || 'bg-muted text-muted-foreground'}`}>
-                      <Icon className="w-3 h-3" /> {role?.label || u.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${u.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                      {u.active !== false ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 justify-end">
-                      <button onClick={() => openEdit(u)}
-                        className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors">
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => setConfirmDelete(u)}
-                        className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">{u.email}</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${role?.color || 'bg-muted text-muted-foreground'}`}>
+                        <Icon className="w-3 h-3" /> {role?.label || u.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${u.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                        {u.active !== false ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    {canManageUsers && (
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <button onClick={() => openPasswordChange(u)}
+                            data-testid={`button-pwd-${u.id}`}
+                            title="Alterar Senha"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors">
+                            <KeyRound className="w-3.5 h-3.5" /> Senha
+                          </button>
+                          <button onClick={() => openEdit(u)}
+                            data-testid={`button-edit-${u.id}`}
+                            title="Editar"
+                            className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setConfirmDelete(u)}
+                            data-testid={`button-delete-${u.id}`}
+                            title="Excluir"
+                            className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Create/Edit Modal */}
@@ -179,11 +244,13 @@ export default function UsersAdminPage() {
               <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
                 className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" placeholder="email@vivafrutaz.com" />
             </div>
-            <div>
-              <label className="block text-sm font-semibold mb-1.5">{modal.editing ? "Nova Senha (opcional)" : "Senha *"}</label>
-              <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" placeholder={modal.editing ? "Deixe em branco para manter" : "••••••••"} />
-            </div>
+            {!modal.editing && (
+              <div>
+                <label className="block text-sm font-semibold mb-1.5">Senha *</label>
+                <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" placeholder="••••••••" />
+              </div>
+            )}
           </div>
 
           <div>
@@ -219,13 +286,103 @@ export default function UsersAdminPage() {
             </button>
           </div>
 
-          <button onClick={() => { if (!form.name || !form.email || (!modal.editing && !form.password)) { toast({ title: "Preencha todos os campos obrigatórios.", variant: "destructive" }); return; } save.mutate(); }}
+          <button onClick={() => {
+            if (!form.name || !form.email || (!modal.editing && !form.password)) {
+              toast({ title: "Preencha todos os campos obrigatórios.", variant: "destructive" }); return;
+            }
+            save.mutate();
+          }}
             disabled={save.isPending}
             className="w-full py-3 bg-primary text-white font-bold rounded-xl hover:-translate-y-0.5 transition-transform disabled:opacity-50">
             {save.isPending ? "Salvando..." : modal.editing ? "Salvar Alterações" : "Criar Usuário"}
           </button>
         </div>
       </Modal>
+
+      {/* Password Change Modal */}
+      {pwdModal && !pwdConfirm && (
+        <Modal isOpen onClose={() => { setPwdModal(null); setNewPwd(TEMP_PASSWORD); setUseCustomPwd(false); }}
+          title={`Alterar Senha — ${pwdModal.name}`} maxWidth="max-w-md">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
+              <KeyRound className="w-5 h-5 text-orange-600 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-orange-800">Usuário: {pwdModal.email}</p>
+                <p className="text-xs text-orange-600">Perfil: {ROLES.find(r => r.value === pwdModal.role)?.label || pwdModal.role}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl border border-border/50">
+              <button type="button" onClick={() => { setUseCustomPwd(false); setNewPwd(TEMP_PASSWORD); }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${!useCustomPwd ? 'bg-primary text-white' : 'border border-border text-muted-foreground'}`}>
+                Senha Temporária
+              </button>
+              <button type="button" onClick={() => { setUseCustomPwd(true); setNewPwd(""); }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${useCustomPwd ? 'bg-primary text-white' : 'border border-border text-muted-foreground'}`}>
+                Senha Personalizada
+              </button>
+            </div>
+
+            {!useCustomPwd ? (
+              <div className="p-4 bg-green-50 rounded-xl border border-green-100 text-center">
+                <p className="text-xs font-bold text-green-700 uppercase tracking-wider mb-1">Senha Temporária</p>
+                <p className="text-2xl font-mono font-bold text-green-800">{TEMP_PASSWORD}</p>
+                <p className="text-xs text-green-600 mt-2">O usuário deverá alterar a senha no próximo acesso.</p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-semibold mb-1.5">Nova Senha *</label>
+                <input type="text" value={newPwd} onChange={e => setNewPwd(e.target.value)}
+                  data-testid="input-new-password"
+                  placeholder="Digite a nova senha"
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none font-mono" />
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={() => { setPwdModal(null); setNewPwd(TEMP_PASSWORD); setUseCustomPwd(false); }}
+                className="flex-1 py-2.5 border-2 border-border font-bold rounded-xl text-muted-foreground hover:bg-muted">
+                Cancelar
+              </button>
+              <button
+                data-testid="button-confirm-password-change"
+                onClick={() => {
+                  if (!newPwd.trim()) { toast({ title: "Digite uma senha válida.", variant: "destructive" }); return; }
+                  setPwdConfirm({ user: pwdModal, newPwd: newPwd.trim() });
+                }}
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl transition-colors">
+                Prosseguir
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Password Confirmation Modal */}
+      {pwdConfirm && (
+        <Modal isOpen onClose={() => setPwdConfirm(null)} title="Confirmar Alteração de Senha" maxWidth="max-w-sm">
+          <div className="space-y-4 text-center">
+            <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-8 h-8 text-orange-600" />
+            </div>
+            <p className="text-foreground">
+              Confirmar alteração de senha do usuário <strong>{pwdConfirm.user.name}</strong>?
+            </p>
+            <p className="text-sm text-muted-foreground">Esta ação será registrada no sistema de logs.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setPwdConfirm(null)}
+                className="flex-1 py-2.5 border-2 border-border font-bold rounded-xl">Cancelar</button>
+              <button
+                data-testid="button-execute-password-change"
+                onClick={() => changePassword.mutate({ userId: pwdConfirm.user.id, password: pwdConfirm.newPwd })}
+                disabled={changePassword.isPending}
+                className="flex-1 py-2.5 bg-orange-500 text-white font-bold rounded-xl hover:bg-orange-600 disabled:opacity-50">
+                {changePassword.isPending ? "Alterando..." : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Delete confirmation */}
       {confirmDelete && (

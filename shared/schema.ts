@@ -158,6 +158,21 @@ export const passwordResetRequests = pgTable("password_reset_requests", {
   resolvedAt: timestamp("resolved_at"),
 });
 
+// ─── Pedidos de Teste (modo teste) ────────────────────────────
+export const testOrders = pgTable("test_orders", {
+  id: serial("id").primaryKey(),
+  orderCode: text("order_code").unique(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  companyName: text("company_name").notNull(),
+  deliveryDate: timestamp("delivery_date").notNull(),
+  weekReference: text("week_reference").notNull(),
+  totalValue: numeric("total_value", { precision: 10, scale: 2 }).notNull(),
+  orderNote: text("order_note"),
+  items: jsonb("items").notNull(),
+  createdBy: integer("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ─── Insert Schemas ───────────────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertPriceGroupSchema = createInsertSchema(priceGroups).omit({ id: true });
@@ -215,3 +230,4 @@ export type SpecialOrderRequest = typeof specialOrderRequests.$inferSelect;
 export type InsertSpecialOrderRequest = z.infer<typeof insertSpecialOrderRequestSchema>;
 export type PasswordResetRequest = typeof passwordResetRequests.$inferSelect;
 export type InsertPasswordResetRequest = z.infer<typeof insertPasswordResetRequestSchema>;
+export type TestOrder = typeof testOrders.$inferSelect;

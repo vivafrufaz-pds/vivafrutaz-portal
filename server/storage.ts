@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -8,7 +8,7 @@ import {
   type SpecialOrderRequest,
   type OrderException, type InsertOrderException,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
-  type PasswordResetRequest, type SystemLog
+  type PasswordResetRequest, type SystemLog, type TestOrder
 } from "@shared/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 
@@ -94,6 +94,10 @@ export interface IStorage {
   getUsers(): Promise<User[]>;
   updateUser(id: number, updates: Partial<InsertUser>): Promise<User>;
   deleteUser(id: number): Promise<void>;
+
+  // Test Orders
+  createTestOrder(data: { orderCode: string; companyId: number; companyName: string; deliveryDate: Date; weekReference: string; totalValue: string; orderNote?: string | null; items: any[]; createdBy?: number }): Promise<TestOrder>;
+  getTestOrders(): Promise<TestOrder[]>;
 
   // Order cleanup
   deleteOrder(id: number): Promise<void>;
@@ -548,6 +552,15 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: number): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  async createTestOrder(data: { orderCode: string; companyId: number; companyName: string; deliveryDate: Date; weekReference: string; totalValue: string; orderNote?: string | null; items: any[]; createdBy?: number }): Promise<TestOrder> {
+    const [order] = await db.insert(testOrders).values(data).returning();
+    return order;
+  }
+
+  async getTestOrders(): Promise<TestOrder[]> {
+    return await db.select().from(testOrders).orderBy(desc(testOrders.createdAt));
   }
 
   async deleteOrder(id: number): Promise<void> {
