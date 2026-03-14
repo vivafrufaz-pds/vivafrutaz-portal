@@ -1173,7 +1173,7 @@ export async function registerRoutes(
       await storage.createLog({
         action: 'UNAUTHORIZED_ACCESS',
         description: `Tentativa de acesso não autorizado à rota: ${route || '?'}`,
-        userId: user?.id || null,
+        userId: user?.id ?? undefined,
         userEmail: user?.email || '(desconhecido)',
         userRole: user?.role || '(desconhecido)',
         ip: req.ip || '',
@@ -1757,7 +1757,7 @@ export async function registerRoutes(
       for (const o of periodOrders.filter(x => x.status !== 'CANCELLED')) {
         if (!companyMap[o.companyId]) {
           const co = allCompanies.find(c => c.id === o.companyId);
-          companyMap[o.companyId] = { companyId: o.companyId, companyName: co?.name || `Empresa #${o.companyId}`, total: 0, count: 0 };
+          companyMap[o.companyId] = { companyId: o.companyId, companyName: co?.companyName || `Empresa #${o.companyId}`, total: 0, count: 0 };
         }
         companyMap[o.companyId].total += parseFloat(o.totalValue || '0');
         companyMap[o.companyId].count += 1;
@@ -1797,7 +1797,7 @@ export async function registerRoutes(
       const inactiveCompanies = allCompanies.filter(c => c.active).map(c => {
         const last = lastOrderByCompany[c.id];
         const daysSince = last ? Math.floor((Date.now() - last.getTime()) / 86400000) : 9999;
-        return { id: c.id, name: c.name, lastOrder: last ? last.toISOString().slice(0,10) : null, daysSince };
+        return { id: c.id, name: c.companyName, lastOrder: last ? last.toISOString().slice(0,10) : null, daysSince };
       }).filter(c => c.daysSince >= 7).sort((a, b) => b.daysSince - a.daysSince).slice(0, 15);
 
       // Purchase forecast (avg weekly by product, last 8 weeks)
@@ -1941,10 +1941,10 @@ async function seedDatabase() {
       const weekRef = `${months[delStart.getMonth()]} ${delStart.getDate()}–${delEnd.getDate()}/${delEnd.getFullYear()}`;
       await storage.createOrderWindow({
         weekReference: weekRef,
-        orderOpenDate: open.toISOString(),
-        orderCloseDate: close.toISOString(),
-        deliveryStartDate: delStart.toISOString(),
-        deliveryEndDate: delEnd.toISOString(),
+        orderOpenDate: open,
+        orderCloseDate: close,
+        deliveryStartDate: delStart,
+        deliveryEndDate: delEnd,
         active: true
       });
     }

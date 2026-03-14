@@ -84,7 +84,7 @@ export default function CategoriesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const data = { name: form.name, description: form.description || null, active: form.active };
+    const data = { name: form.name, description: form.description || undefined, active: form.active };
     if (editing) {
       update.mutate({ id: editing.id, data });
     } else {

@@ -96,9 +96,9 @@ async function exportToExcel(rawOrders: any[], filters: any) {
     const entry = productMap.get(key)!;
     entry.qty += r.quantity;
   }
-  for (const [name, val] of productMap.entries()) {
+  Array.from(productMap.entries()).forEach(([name, val]) => {
     summaryData.push([name, val.unit || 'un', val.qty]);
-  }
+  });
   summaryData.sort((a, b) => b[2] - a[2]);
 
   const ws2 = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryData]);

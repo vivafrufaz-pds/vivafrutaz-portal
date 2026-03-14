@@ -36,13 +36,13 @@ function formatDate(iso: string) {
 type AuditIssue = { severity: string; category: string; message: string };
 
 function analyzeLogsForBugs(logs: any[]): Array<{ type: string; description: string; suggestion: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> {
-  const bugs = [];
+  const bugs: Array<{ type: string; description: string; suggestion: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
   if (!logs || logs.length === 0) return bugs;
 
   const loginFails = logs.filter(l => l.action === 'LOGIN_FAILED');
   const recentFails = loginFails.filter(l => (Date.now() - new Date(l.createdAt).getTime()) < 60 * 60 * 1000);
   if (recentFails.length >= 3) {
-    const ips = [...new Set(recentFails.map(l => l.ip).filter(Boolean))];
+    const ips = Array.from(new Set(recentFails.map(l => l.ip).filter(Boolean)));
     bugs.push({ type: 'Segurança — Brute Force Potencial', description: `${recentFails.length} tentativas de login falhas na última hora (IPs: ${ips.join(', ') || 'desconhecido'}).`, suggestion: 'Considere implementar rate limiting por IP ou bloquear temporariamente os IPs suspeitos.', priority: 'HIGH' as const });
   }
 
@@ -237,8 +237,8 @@ export default function DeveloperPage() {
     window.location.href = '/api/logs/export';
   };
 
-  const allActions = [...new Set((logs || []).map((l: any) => l.action))].sort();
-  const allUsers = [...new Set((logs || []).map((l: any) => l.userEmail).filter(Boolean))].sort();
+  const allActions = Array.from(new Set((logs || []).map((l: any) => l.action))).sort();
+  const allUsers = Array.from(new Set((logs || []).map((l: any) => l.userEmail).filter(Boolean))).sort();
 
   const filtered = (logs || []).filter((l: any) => {
     if (levelFilter !== "ALL" && l.level !== levelFilter) return false;
@@ -427,7 +427,7 @@ export default function DeveloperPage() {
               <span className="font-bold text-sm text-primary">{selectedLogs.size} log(s) selecionado(s)</span>
               <button
                 data-testid="button-delete-selected-logs"
-                onClick={() => deleteSelectedMut.mutate([...selectedLogs])}
+                onClick={() => deleteSelectedMut.mutate(Array.from(selectedLogs))}
                 disabled={deleteSelectedMut.isPending}
                 className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-50"
               >
