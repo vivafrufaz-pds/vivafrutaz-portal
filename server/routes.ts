@@ -302,9 +302,10 @@ export async function registerRoutes(
       }
     } catch (err) {
       if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: err.errors[0].message });
+        return res.status(400).json({ message: "Usuário ou senha incorretos." });
       }
-      res.status(500).json({ message: "Internal server error" });
+      console.error('[LOGIN] Erro interno:', err);
+      res.status(500).json({ message: "Erro ao processar login. Tente novamente." });
     }
   });
 

@@ -33,7 +33,11 @@ export default function Login() {
     const email = type === 'admin'
       ? normalizeToFullEmail(adminUsername)
       : normalizeToFullEmail(companyUsername);
-    await login({ email, password, type });
+    try {
+      await login({ email, password, type });
+    } catch {
+      // Error toast already shown by useAuth onError handler
+    }
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
