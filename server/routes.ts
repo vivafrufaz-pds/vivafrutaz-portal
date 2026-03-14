@@ -9,7 +9,7 @@ import {
   sendOrderPlaced, sendOrderStatusChanged, sendAdminNewOrder,
   sendPasswordResetResolved, sendSpecialOrderResolved, mailerStatus, sendTestEmail
 } from "./mailer";
-import { scheduleBackups, runBackup, listBackups, getBackupPath, deleteBackup, cleanOldBackups } from "./backup";
+import { scheduleBackups, runBackup, runBackupSQL, listBackups, getBackupPath, deleteBackup, cleanOldBackups } from "./backup";
 import fs from "fs";
 import { db } from "./db";
 import { orders, orderItems, companies, products } from "@shared/schema";
@@ -57,6 +57,9 @@ export async function registerRoutes(
   // --- Backup Routes ---
   app.get('/api/admin/backups', async (req, res) => {
     try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const backups = listBackups();
       res.json(backups);
     } catch (err) {
@@ -66,19 +69,47 @@ export async function registerRoutes(
 
   app.post('/api/admin/backups', async (req, res) => {
     try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const filename = await runBackup();
-      res.status(201).json({ filename, message: "Backup criado com sucesso." });
-    } catch (err) {
-      res.status(500).json({ message: "Erro ao criar backup" });
+      await storage.createLog({ action: 'BACKUP_CREATED', description: `Backup JSON criado manualmente: ${filename}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.status(201).json({ filename, message: "Backup JSON criado com sucesso." });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao criar backup: " + err?.message });
+    }
+  });
+
+  app.post('/api/admin/backups/sql', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const filename = await runBackupSQL();
+      await storage.createLog({ action: 'BACKUP_CREATED', description: `Backup SQL criado manualmente: ${filename}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.status(201).json({ filename, message: "Backup SQL criado com sucesso." });
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao criar backup SQL: " + err?.message });
     }
   });
 
   app.get('/api/admin/backups/:filename', async (req, res) => {
-    const filepath = getBackupPath(req.params.filename);
-    if (!filepath) return res.status(404).json({ message: "Backup não encontrado" });
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="${req.params.filename}"`);
-    fs.createReadStream(filepath).pipe(res);
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const filename = req.params.filename;
+      const filepath = getBackupPath(filename);
+      if (!filepath) return res.status(404).json({ message: "Backup não encontrado" });
+      const contentType = filename.endsWith('.sql') ? 'application/sql' : 'application/json';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      res.setHeader('Cache-Control', 'no-cache');
+      await storage.createLog({ action: 'BACKUP_DOWNLOAD', description: `Download de backup: ${filename}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      fs.createReadStream(filepath).pipe(res);
+    } catch (err: any) {
+      res.status(500).json({ message: "Erro ao baixar backup" });
+    }
   });
 
   // --- Delete specific backup ---

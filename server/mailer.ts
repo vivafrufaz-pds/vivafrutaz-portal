@@ -174,6 +174,43 @@ export const mailerStatus = () => ({
   from: SMTP_FROM,
 });
 
+export function isMailerConfigured(): boolean {
+  return isConfigured();
+}
+
+export async function sendMailWithAttachment(
+  to: string,
+  subject: string,
+  html: string,
+  attachment: { filename: string; filepath: string; contentType: string }
+): Promise<{ sent: boolean; reason?: string }> {
+  if (!isConfigured()) {
+    console.log(`[MAILER] Email com anexo não enviado (SMTP não configurado). Para: ${to}`);
+    return { sent: false, reason: "SMTP não configurado" };
+  }
+  try {
+    const transporter = createTransporter()!;
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to,
+      subject,
+      html,
+      attachments: [
+        {
+          filename: attachment.filename,
+          path: attachment.filepath,
+          contentType: attachment.contentType,
+        },
+      ],
+    });
+    console.log(`[MAILER] Email com anexo enviado para ${to}: ${subject}`);
+    return { sent: true };
+  } catch (err: any) {
+    console.error(`[MAILER] Falha ao enviar email com anexo para ${to}:`, err.message);
+    return { sent: false, reason: err.message };
+  }
+}
+
 export async function sendTestEmail(toEmail: string) {
   const html = wrapTemplate("Teste de envio de e-mail", `
     <p>Este é um <strong>e-mail de teste</strong> enviado pelo sistema VivaFrutaz.</p>

@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
   HardDrive, Plus, Download, RefreshCw, CheckCircle, WifiOff,
-  Trash2, Send, AlertTriangle, Mail, X
+  Trash2, Send, AlertTriangle, Mail, X, Database, FileCode2, Loader2
 } from "lucide-react";
 
 function formatBytes(bytes: number) {
@@ -21,8 +21,10 @@ function formatDate(iso: string) {
   });
 }
 
+type Backup = { filename: string; size: number; createdAt: string; format: string };
+
 export default function BackupsPage() {
-  const { data: backups, isLoading, refetch } = useQuery<{ filename: string; size: number; createdAt: string }[]>({
+  const { data: backups, isLoading, refetch } = useQuery<Backup[]>({
     queryKey: ['/api/admin/backups'],
   });
   const { data: mailerStatus } = useQuery<{ configured: boolean; smtp: string | null; from: string }>({
@@ -35,18 +37,33 @@ export default function BackupsPage() {
   const [showCleanConfirm, setShowCleanConfirm] = useState(false);
   const [showSmtpTest, setShowSmtpTest] = useState(false);
   const [smtpTestEmail, setSmtpTestEmail] = useState("");
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
-  const createBackup = useMutation({
+  // ─── Mutations ────────────────────────────────────────────────
+  const createJsonBackup = useMutation({
     mutationFn: async () => {
       const res = await fetch('/api/admin/backups', { method: 'POST', credentials: 'include' });
-      if (!res.ok) throw new Error();
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message || 'Erro'); }
       return res.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/backups'] });
-      toast({ title: `Backup criado: ${data.filename}` });
+      toast({ title: `Backup JSON criado: ${data.filename}` });
     },
-    onError: () => toast({ title: "Erro ao criar backup.", variant: "destructive" }),
+    onError: (e: any) => toast({ title: e.message || "Erro ao criar backup JSON.", variant: "destructive" }),
+  });
+
+  const createSqlBackup = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/admin/backups/sql', { method: 'POST', credentials: 'include' });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message || 'Erro'); }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/backups'] });
+      toast({ title: `Backup SQL criado: ${data.filename}` });
+    },
+    onError: (e: any) => toast({ title: e.message || "Erro ao criar backup SQL.", variant: "destructive" }),
   });
 
   const deleteBackupMut = useMutation({
@@ -58,7 +75,7 @@ export default function BackupsPage() {
     onSuccess: (_, filename) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/backups'] });
       setDeleteConfirm(null);
-      toast({ title: `Backup "${filename}" excluído.` });
+      toast({ title: `Backup excluído com sucesso.` });
     },
     onError: (e: any) => toast({ title: e.message || "Erro ao excluir backup.", variant: "destructive" }),
   });
@@ -96,22 +113,49 @@ export default function BackupsPage() {
     onError: (e: any) => toast({ title: e.message || "Erro ao enviar e-mail de teste.", variant: "destructive" }),
   });
 
-  const downloadBackup = (filename: string) => {
-    const a = document.createElement('a');
-    a.href = `/api/admin/backups/${filename}`;
-    a.download = filename;
-    a.click();
+  // ─── Download via fetch+blob (reliable, avoids frontend router interception) ──
+  const downloadBackup = async (filename: string) => {
+    if (downloadingFile) return;
+    setDownloadingFile(filename);
+    try {
+      const res = await fetch(`/api/admin/backups/${encodeURIComponent(filename)}`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.message || 'Arquivo não encontrado');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: `Download iniciado: ${filename}` });
+    } catch (err: any) {
+      toast({ title: err.message || 'Erro ao baixar backup', variant: 'destructive' });
+    } finally {
+      setDownloadingFile(null);
+    }
   };
+
+  const isCreating = createJsonBackup.isPending || createSqlBackup.isPending;
 
   return (
     <Layout>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">Backup do Sistema</h1>
-          <p className="text-muted-foreground mt-1">Backups automáticos diários às 17h. Mantidos os últimos 30.</p>
+          <p className="text-muted-foreground mt-1">
+            Backups automáticos diários às 17h · Máximo de {backups?.length || 0}/30 backups mantidos
+          </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => refetch()} className="flex items-center gap-2 px-4 py-2.5 border-2 border-border rounded-xl text-sm font-bold hover:bg-muted transition-colors">
+          <button onClick={() => refetch()} title="Atualizar lista" className="flex items-center gap-2 px-4 py-2.5 border-2 border-border rounded-xl text-sm font-bold hover:bg-muted transition-colors">
             <RefreshCw className="w-4 h-4" /> Atualizar
           </button>
           <button
@@ -122,12 +166,22 @@ export default function BackupsPage() {
             <Trash2 className="w-4 h-4" /> Limpar Antigos (&gt;30d)
           </button>
           <button
+            data-testid="button-create-sql-backup"
+            onClick={() => createSqlBackup.mutate()}
+            disabled={isCreating}
+            className="flex items-center gap-2 px-4 py-2.5 border-2 border-blue-200 text-blue-700 rounded-xl text-sm font-bold hover:bg-blue-50 transition-colors disabled:opacity-50"
+          >
+            <FileCode2 className="w-4 h-4" />
+            {createSqlBackup.isPending ? "Gerando SQL..." : "Gerar SQL"}
+          </button>
+          <button
             data-testid="button-create-backup"
-            onClick={() => createBackup.mutate()}
-            disabled={createBackup.isPending}
+            onClick={() => createJsonBackup.mutate()}
+            disabled={isCreating}
             className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:-translate-y-0.5 transition-transform shadow-lg shadow-primary/20 disabled:opacity-50"
           >
-            <Plus className="w-4 h-4" /> {createBackup.isPending ? "Gerando..." : "Gerar Agora"}
+            <Plus className="w-4 h-4" />
+            {createJsonBackup.isPending ? "Gerando JSON..." : "Gerar JSON"}
           </button>
         </div>
       </div>
@@ -139,12 +193,12 @@ export default function BackupsPage() {
           : <WifiOff className="w-6 h-6 text-orange-500 flex-shrink-0" />}
         <div className="flex-1">
           <p className="font-bold text-sm text-foreground">
-            {mailerStatus?.configured ? "E-mails automáticos ativos" : "E-mails automáticos não configurados"}
+            {mailerStatus?.configured ? "E-mails automáticos ativos — backup é enviado por e-mail ao admin" : "E-mails automáticos não configurados"}
           </p>
           <p className="text-xs text-muted-foreground">
             {mailerStatus?.configured
               ? `Servidor: ${mailerStatus.smtp} · Remetente: ${mailerStatus.from}`
-              : "Configure as variáveis SMTP_HOST, SMTP_USER e SMTP_PASS para ativar o envio de e-mails automáticos."}
+              : "Configure as variáveis SMTP_HOST, SMTP_USER e SMTP_PASS para ativar o envio de e-mails automáticos com backup em anexo."}
           </p>
         </div>
         {mailerStatus?.configured && (
@@ -156,6 +210,18 @@ export default function BackupsPage() {
             <Send className="w-4 h-4" /> Testar SMTP
           </button>
         )}
+      </div>
+
+      {/* Format legend */}
+      <div className="flex gap-3 mb-4">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs">JSON</span>
+          Backup completo em JSON (padrão)
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-xs">SQL</span>
+          Backup com INSERTs SQL (restauração direta no PostgreSQL)
+        </div>
       </div>
 
       {/* Backups list */}
@@ -172,57 +238,74 @@ export default function BackupsPage() {
           <div className="p-12 text-center">
             <HardDrive className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
             <p className="font-bold text-foreground">Nenhum backup encontrado</p>
-            <p className="text-muted-foreground text-sm mt-1">Clique em "Gerar Agora" para criar o primeiro backup.</p>
+            <p className="text-muted-foreground text-sm mt-1">Clique em "Gerar JSON" ou "Gerar SQL" para criar o primeiro backup.</p>
           </div>
         ) : (
           <ul className="divide-y divide-border/50">
-            {backups.map((b) => (
-              <li key={b.filename} data-testid={`row-backup-${b.filename}`}
-                className="p-4 flex items-center justify-between hover:bg-muted/10 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                    <HardDrive className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-foreground text-sm">{b.filename}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(b.createdAt)} · {formatBytes(b.size)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    data-testid={`button-download-backup-${b.filename}`}
-                    onClick={() => downloadBackup(b.filename)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-border text-sm font-bold hover:border-primary/50 hover:bg-primary/5 transition-colors"
-                  >
-                    <Download className="w-4 h-4" /> Baixar
-                  </button>
-                  {deleteConfirm === b.filename ? (
-                    <div className="flex gap-1">
-                      <button
-                        data-testid={`button-confirm-delete-backup-${b.filename}`}
-                        onClick={() => deleteBackupMut.mutate(b.filename)}
-                        disabled={deleteBackupMut.isPending}
-                        className="flex items-center gap-1 px-3 py-2 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-50"
-                      >
-                        {deleteBackupMut.isPending ? '...' : 'Confirmar'}
-                      </button>
-                      <button onClick={() => setDeleteConfirm(null)}
-                        className="px-3 py-2 border-2 border-border rounded-xl text-sm font-bold hover:bg-muted transition-colors">
-                        <X className="w-4 h-4" />
-                      </button>
+            {backups.map((b) => {
+              const isSQL = b.format === 'sql' || b.filename.endsWith('.sql');
+              const isDownloading = downloadingFile === b.filename;
+              return (
+                <li key={b.filename} data-testid={`row-backup-${b.filename}`}
+                  className="p-4 flex items-center justify-between hover:bg-muted/10 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSQL ? 'bg-blue-100' : 'bg-primary/10'}`}>
+                      {isSQL
+                        ? <FileCode2 className="w-5 h-5 text-blue-600" />
+                        : <Database className="w-5 h-5 text-primary" />
+                      }
                     </div>
-                  ) : (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-foreground text-sm">{b.filename}</p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${isSQL ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {isSQL ? 'SQL' : 'JSON'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{formatDate(b.createdAt)} · {formatBytes(b.size)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <button
-                      data-testid={`button-delete-backup-${b.filename}`}
-                      onClick={() => setDeleteConfirm(b.filename)}
-                      className="p-2 rounded-xl border-2 border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+                      data-testid={`button-download-backup-${b.filename}`}
+                      onClick={() => downloadBackup(b.filename)}
+                      disabled={isDownloading}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-border text-sm font-bold hover:border-primary/50 hover:bg-primary/5 transition-colors disabled:opacity-50"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {isDownloading
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <Download className="w-4 h-4" />
+                      }
+                      {isDownloading ? 'Baixando...' : 'Baixar'}
                     </button>
-                  )}
-                </div>
-              </li>
-            ))}
+                    {deleteConfirm === b.filename ? (
+                      <div className="flex gap-1">
+                        <button
+                          data-testid={`button-confirm-delete-backup-${b.filename}`}
+                          onClick={() => deleteBackupMut.mutate(b.filename)}
+                          disabled={deleteBackupMut.isPending}
+                          className="flex items-center gap-1 px-3 py-2 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-50"
+                        >
+                          {deleteBackupMut.isPending ? '...' : 'Confirmar'}
+                        </button>
+                        <button onClick={() => setDeleteConfirm(null)}
+                          className="px-3 py-2 border-2 border-border rounded-xl text-sm font-bold hover:bg-muted transition-colors">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        data-testid={`button-delete-backup-${b.filename}`}
+                        onClick={() => setDeleteConfirm(b.filename)}
+                        className="p-2 rounded-xl border-2 border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -230,14 +313,14 @@ export default function BackupsPage() {
       {/* Clean old backups modal */}
       {showCleanConfirm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+          <div className="bg-white dark:bg-card rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-5 h-5 text-orange-600" />
               </div>
               <div>
                 <h3 className="font-bold text-lg text-foreground">Limpar Backups Antigos</h3>
-                <p className="text-sm text-muted-foreground mt-1">Todos os backups com mais de 30 dias serão excluídos permanentemente.</p>
+                <p className="text-sm text-muted-foreground mt-1">Todos os backups (JSON e SQL) com mais de 30 dias serão excluídos permanentemente.</p>
               </div>
             </div>
             <div className="flex gap-3 justify-end">
@@ -261,7 +344,7 @@ export default function BackupsPage() {
       {/* SMTP test modal */}
       {showSmtpTest && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+          <div className="bg-white dark:bg-card rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
                 <Mail className="w-5 h-5 text-green-600" />
