@@ -8,11 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Plus, AlertTriangle, CheckCircle2, Clock, ImageIcon, MessageSquareReply } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle2, Clock, ImageIcon, MessageSquareReply, Trash2, Camera } from 'lucide-react';
 import type { ClientIncident } from '@shared/schema';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -37,6 +37,16 @@ const STATUS_COLOR: Record<string, string> = {
   RESOLVED: 'bg-green-100 text-green-800',
 };
 
+const MAX_PHOTOS = 5;
+const MAX_SIZE_MB = 5;
+
+interface PhotoEntry {
+  base64: string;
+  mime: string;
+  name: string;
+  preview: string;
+}
+
 function IncidentForm({ onClose, companyId, companyName }: { onClose: () => void; companyId: number; companyName: string }) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -46,48 +56,81 @@ function IncidentForm({ onClose, companyId, companyName }: { onClose: () => void
     contactPhone: '',
     contactEmail: '',
   });
-  const [photoBase64, setPhotoBase64] = useState<string | undefined>();
-  const [photoMime, setPhotoMime] = useState<string | undefined>();
-  const [photoName, setPhotoName] = useState<string | undefined>();
+  const [photos, setPhotos] = useState<PhotoEntry[]>([]);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: 'Imagem muito grande (máx. 5MB)', variant: 'destructive' });
-      return;
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const remaining = MAX_PHOTOS - photos.length;
+    const toProcess = files.slice(0, remaining);
+
+    if (files.length > remaining) {
+      toast({ title: `Máximo de ${MAX_PHOTOS} fotos permitido. Apenas as primeiras ${remaining} foram adicionadas.`, variant: 'destructive' });
     }
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const result = ev.target?.result as string;
-      const parts = result.split(',');
-      setPhotoBase64(parts[1]);
-      setPhotoMime(file.type);
-      setPhotoName(file.name);
-    };
-    reader.readAsDataURL(file);
+
+    toProcess.forEach(file => {
+      if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+        toast({ title: `"${file.name}" excede ${MAX_SIZE_MB}MB e foi ignorado.`, variant: 'destructive' });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const result = ev.target?.result as string;
+        const [header, base64] = result.split(',');
+        const mime = header.match(/:(.*?);/)?.[1] || file.type;
+        setPhotos(prev => prev.length < MAX_PHOTOS
+          ? [...prev, { base64, mime, name: file.name, preview: result }]
+          : prev
+        );
+      };
+      reader.readAsDataURL(file);
+    });
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const removePhoto = (idx: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== idx));
   };
 
   const createMut = useMutation({
-    mutationFn: (data: any) => apiRequest('POST', '/api/client-incidents', data),
+    mutationFn: async (data: any) => {
+      const res = await fetch('/api/client-incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.message || 'Erro ao registrar ocorrência');
+      }
+      return res.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/client-incidents'] });
-      toast({ title: 'Ocorrência registrada com sucesso!' });
+      toast({ title: 'Ocorrência registrada com sucesso. Nossa equipe irá analisar.' });
       onClose();
     },
-    onError: () => toast({ title: 'Erro ao registrar ocorrência', variant: 'destructive' }),
+    onError: (err: any) => toast({
+      title: 'Erro ao registrar ocorrência',
+      description: err?.message || 'Tente novamente.',
+      variant: 'destructive',
+    }),
   });
 
   const handleSubmit = () => {
-    if (!form.type || !form.description) {
-      return toast({ title: 'Preencha os campos obrigatórios', variant: 'destructive' });
+    if (!form.type || !form.description.trim()) {
+      return toast({ title: 'Preencha os campos obrigatórios: tipo e descrição.', variant: 'destructive' });
     }
+    const photosJson = photos.length > 0 ? JSON.stringify(photos.map(p => ({ base64: p.base64, mime: p.mime, name: p.name }))) : undefined;
     createMut.mutate({
       companyId,
       companyName,
       ...form,
-      photoBase64,
-      photoMime,
+      photosJson,
+      photoBase64: photos[0]?.base64,
+      photoMime: photos[0]?.mime,
     });
   };
 
@@ -96,7 +139,7 @@ function IncidentForm({ onClose, companyId, companyName }: { onClose: () => void
       <div>
         <Label>Tipo de ocorrência *</Label>
         <Select value={form.type} onValueChange={v => setForm(p => ({ ...p, type: v }))}>
-          <SelectTrigger data-testid="select-incident-type">
+          <SelectTrigger data-testid="select-incident-type" className="mt-1">
             <SelectValue placeholder="Selecione o tipo" />
           </SelectTrigger>
           <SelectContent>
@@ -106,44 +149,108 @@ function IncidentForm({ onClose, companyId, companyName }: { onClose: () => void
           </SelectContent>
         </Select>
       </div>
+
       <div>
         <Label>Descrição detalhada *</Label>
-        <Textarea data-testid="input-incident-description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Descreva o problema com detalhes" rows={4} />
+        <Textarea
+          data-testid="input-incident-description"
+          value={form.description}
+          onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+          placeholder="Descreva o problema com detalhes"
+          rows={4}
+          className="mt-1"
+        />
       </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label>Número de contato</Label>
-          <Input data-testid="input-incident-phone" value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} placeholder="(11) 99999-9999" />
+          <Input
+            data-testid="input-incident-phone"
+            value={form.contactPhone}
+            onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))}
+            placeholder="(11) 99999-9999"
+            className="mt-1"
+          />
         </div>
         <div>
           <Label>Email</Label>
-          <Input data-testid="input-incident-email" type="email" value={form.contactEmail} onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))} placeholder="contato@empresa.com" />
+          <Input
+            data-testid="input-incident-email"
+            type="email"
+            value={form.contactEmail}
+            onChange={e => setForm(p => ({ ...p, contactEmail: e.target.value }))}
+            placeholder="contato@empresa.com"
+            className="mt-1"
+          />
         </div>
       </div>
+
+      {/* Photos section */}
       <div>
-        <Label>Foto do problema (opcional)</Label>
-        <div
-          className="mt-1 border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
-          onClick={() => fileRef.current?.click()}
-          data-testid="upload-incident-photo"
-        >
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
-          {photoName ? (
-            <div className="flex items-center justify-center gap-2 text-sm text-primary font-medium">
-              <ImageIcon className="w-4 h-4" />
-              {photoName}
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              <ImageIcon className="w-6 h-6 mx-auto mb-1 opacity-50" />
-              Clique para anexar uma foto (máx. 5MB)
-            </div>
-          )}
+        <div className="flex items-center justify-between mb-2">
+          <Label>Fotos do problema (opcional, máx. {MAX_PHOTOS})</Label>
+          <span className="text-xs text-muted-foreground">{photos.length}/{MAX_PHOTOS}</span>
         </div>
+
+        {/* Thumbnails grid */}
+        {photos.length > 0 && (
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {photos.map((p, idx) => (
+              <div key={idx} className="relative group rounded-xl overflow-hidden border-2 border-border aspect-square bg-muted">
+                <img
+                  src={p.preview}
+                  alt={p.name}
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => removePhoto(idx)}
+                  data-testid={`button-remove-photo-${idx}`}
+                  className="absolute top-1 right-1 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Remover foto"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1.5 py-0.5 truncate">
+                  {p.name}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add photos button */}
+        {photos.length < MAX_PHOTOS && (
+          <div
+            onClick={() => fileRef.current?.click()}
+            className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/2 transition-colors"
+            data-testid="upload-incident-photo"
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpg,image/jpeg,image/png"
+              multiple
+              className="hidden"
+              onChange={handleFiles}
+            />
+            <Camera className="w-6 h-6 mx-auto mb-1.5 text-muted-foreground/60" />
+            <p className="text-sm font-medium text-muted-foreground">
+              {photos.length === 0 ? 'Clique para adicionar fotos' : 'Adicionar mais fotos'}
+            </p>
+            <p className="text-xs text-muted-foreground/70 mt-0.5">JPG, PNG · máx. {MAX_SIZE_MB}MB por foto</p>
+          </div>
+        )}
       </div>
+
       <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Cancelar</Button>
-        <Button data-testid="button-submit-incident" onClick={handleSubmit} disabled={createMut.isPending}>
+        <Button variant="outline" onClick={onClose} disabled={createMut.isPending}>Cancelar</Button>
+        <Button
+          data-testid="button-submit-incident"
+          onClick={handleSubmit}
+          disabled={createMut.isPending}
+        >
           {createMut.isPending ? 'Enviando...' : 'Registrar Ocorrência'}
         </Button>
       </DialogFooter>
@@ -155,7 +262,7 @@ export default function ClientIncidentsPage() {
   const { company, isLoading: authLoading } = useAuth();
   const [showForm, setShowForm] = useState(false);
 
-  const { data: incidents = [], isLoading } = useQuery<ClientIncident[]>({
+  const { data: incidents = [], isLoading, isError } = useQuery<ClientIncident[]>({
     queryKey: ['/api/client-incidents'],
   });
 
@@ -187,6 +294,12 @@ export default function ClientIncidentsPage() {
         <div className="space-y-3">
           {[1,2,3].map(i => <div key={i} className="h-24 bg-muted rounded-xl animate-pulse" />)}
         </div>
+      ) : isError ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <AlertTriangle className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="font-medium">Não foi possível carregar os dados no momento.</p>
+          <p className="text-sm mt-1">Tente novamente em alguns instantes.</p>
+        </div>
       ) : incidents.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
           <AlertTriangle className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -195,48 +308,78 @@ export default function ClientIncidentsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {incidents.map(inc => (
-            <Card key={inc.id} data-testid={`card-incident-${inc.id}`} className="premium-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm text-foreground">{TYPE_LABELS[inc.type] || inc.type}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[inc.status]}`}>
-                        {STATUS_LABEL[inc.status]}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">{inc.description}</p>
-                    {(inc as any).responseMessage && (
-                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <MessageSquareReply className="w-3.5 h-3.5 text-blue-600" />
-                          <p className="text-xs font-semibold text-blue-700">
-                            Resposta oficial da VivaFrutaz
-                            {(inc as any).respondedByName && <span className="font-normal text-blue-600"> — {(inc as any).respondedByName}</span>}
-                          </p>
-                        </div>
-                        <p className="text-sm text-blue-900">{(inc as any).responseMessage}</p>
+          {incidents.map(inc => {
+            let parsedPhotos: Array<{ base64: string; mime: string; name: string }> = [];
+            try {
+              if ((inc as any).photosJson) parsedPhotos = JSON.parse((inc as any).photosJson);
+            } catch {}
+
+            return (
+              <Card key={inc.id} data-testid={`card-incident-${inc.id}`} className="premium-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm text-foreground">{TYPE_LABELS[inc.type] || inc.type}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[inc.status] || 'bg-muted text-muted-foreground'}`}>
+                          {STATUS_LABEL[inc.status] || inc.status}
+                        </span>
                       </div>
-                    )}
+                      <p className="text-sm text-muted-foreground line-clamp-2">{inc.description}</p>
+
+                      {/* Photo thumbnails (read-only) */}
+                      {parsedPhotos.length > 0 && (
+                        <div className="flex gap-1.5 mt-2 flex-wrap">
+                          {parsedPhotos.map((ph, i) => (
+                            <img
+                              key={i}
+                              src={`data:${ph.mime};base64,${ph.base64}`}
+                              alt={ph.name}
+                              className="w-12 h-12 object-cover rounded-lg border border-border"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {/* Legacy single photo */}
+                      {parsedPhotos.length === 0 && inc.photoBase64 && (
+                        <img
+                          src={`data:${inc.photoMime};base64,${inc.photoBase64}`}
+                          alt="Foto"
+                          className="w-12 h-12 object-cover rounded-lg border border-border mt-2"
+                        />
+                      )}
+
+                      {(inc as any).responseMessage && (
+                        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <MessageSquareReply className="w-3.5 h-3.5 text-blue-600" />
+                            <p className="text-xs font-semibold text-blue-700">
+                              Resposta oficial da VivaFrutaz
+                              {(inc as any).respondedByName && <span className="font-normal text-blue-600"> — {(inc as any).respondedByName}</span>}
+                            </p>
+                          </div>
+                          <p className="text-sm text-blue-900">{(inc as any).responseMessage}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(inc.createdAt).toLocaleDateString('pt-BR')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        #{inc.id.toString().padStart(4, '0')}
+                      </p>
+                    </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(inc.createdAt).toLocaleDateString('pt-BR')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      #{inc.id.toString().padStart(4, '0')}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Registrar Ocorrência</DialogTitle>
           </DialogHeader>

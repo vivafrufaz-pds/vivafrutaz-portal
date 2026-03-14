@@ -632,7 +632,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ─── Ocorrências de Clientes ──────────────────────────────────
-  async createClientIncident(data: { companyId: number; companyName: string; type: string; description: string; contactPhone?: string; contactEmail?: string; photoBase64?: string; photoMime?: string }): Promise<ClientIncident> {
+  async createClientIncident(data: { companyId: number; companyName: string; type: string; description: string; contactPhone?: string; contactEmail?: string; photoBase64?: string; photoMime?: string; photosJson?: string }): Promise<ClientIncident> {
     const [inc] = await db.insert(clientIncidents).values({ ...data, status: 'OPEN' }).returning();
     return inc;
   }

@@ -1257,9 +1257,9 @@ export async function registerRoutes(
   app.post('/api/client-incidents', async (req, res) => {
     if (!req.session?.companyId && !req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     try {
-      const { companyId, companyName, type, description, contactPhone, contactEmail, photoBase64, photoMime } = req.body;
-      if (!companyId || !type || !description) return res.status(400).json({ message: 'Campos obrigatórios' });
-      const incident = await storage.createClientIncident({ companyId, companyName, type, description, contactPhone, contactEmail, photoBase64, photoMime });
+      const { companyId, companyName, type, description, contactPhone, contactEmail, photoBase64, photoMime, photosJson } = req.body;
+      if (!companyId || !type || !description) return res.status(400).json({ message: 'Campos obrigatórios: tipo e descrição são necessários.' });
+      const incident = await storage.createClientIncident({ companyId, companyName, type, description, contactPhone, contactEmail, photoBase64, photoMime, photosJson });
       await storage.createLog({ action: 'CLIENT_INCIDENT_CREATED', description: `Ocorrência de cliente criada: ${type} por empresa ${companyName}`, companyId, level: 'WARN' });
       res.json(incident);
     } catch (e) { res.status(500).json({ message: 'Error creating incident' }); }
@@ -1506,6 +1506,19 @@ export async function registerRoutes(
     const user = await storage.getUser(req.session.userId);
     if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try { await storage.deleteQuotation(parseInt(req.params.id)); res.json({ ok: true }); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+
+  // ─── LOGS: criar log (frontend/ErrorBoundary) ─────────────────
+  app.post('/api/logs', async (req, res) => {
+    try {
+      const { action, description, level } = req.body;
+      if (!action || !description) return res.status(400).json({ message: 'Campos obrigatórios.' });
+      const userId = req.session?.userId;
+      const companyId = req.session?.companyId;
+      const safeLevel = ['INFO', 'WARN', 'ERROR'].includes(level) ? level : 'INFO';
+      await storage.createLog({ action: action.slice(0, 100), description: description.slice(0, 1000), userId, companyId, level: safeLevel });
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ message: 'Erro ao registrar log' }); }
   });
 
   // ─── LOGS: limpar todos ───────────────────────────────────────

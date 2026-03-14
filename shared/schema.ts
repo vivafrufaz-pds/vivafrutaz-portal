@@ -200,8 +200,9 @@ export const clientIncidents = pgTable("client_incidents", {
   description: text("description").notNull(),
   contactPhone: text("contact_phone"),
   contactEmail: text("contact_email"),
-  photoBase64: text("photo_base64"), // base64 encoded image
+  photoBase64: text("photo_base64"), // base64 encoded image (legacy single)
   photoMime: text("photo_mime"),
+  photosJson: text("photos_json"), // JSON array of {base64, mime, name} for multiple photos
   status: text("status").notNull().default("OPEN"), // OPEN, ANALYZING, RESPONDED, RESOLVED
   adminNote: text("admin_note"),
   responseMessage: text("response_message"),   // official response visible to client

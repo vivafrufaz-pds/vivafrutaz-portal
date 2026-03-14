@@ -13,6 +13,18 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ErrorBoundary] Erro capturado:', error, info);
+    try {
+      fetch('/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action: 'FRONTEND_ERROR',
+          description: `[ErrorBoundary] ${error?.message || 'Erro desconhecido'} | Componente: ${info?.componentStack?.split('\n')?.[1]?.trim() || '?'}`,
+          level: 'ERROR',
+        }),
+      }).catch(() => {});
+    } catch {}
   }
 
   render() {
@@ -25,7 +37,9 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             <div>
               <h2 className="text-xl font-bold text-foreground mb-2">Ocorreu um erro inesperado</h2>
-              <p className="text-muted-foreground text-sm">Tente novamente. Se o problema persistir, entre em contato com o suporte.</p>
+              <p className="text-muted-foreground text-sm">
+                Tente novamente. Se o problema persistir, entre em contato com o suporte pelo WhatsApp: 11 99411-3911
+              </p>
             </div>
             <button
               onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
