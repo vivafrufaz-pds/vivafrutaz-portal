@@ -1100,8 +1100,15 @@ export async function registerRoutes(
 
   // System Settings
   app.get('/api/settings/:key', async (req, res) => {
-    const value = await storage.getSetting(req.params.key);
-    res.json({ key: req.params.key, value });
+    const key = req.params.key;
+    const value = await storage.getSetting(key);
+    // For boolean-mode keys, always return {enabled} so toggles work correctly
+    if (key === 'maintenance' || key === 'test-mode') {
+      const dbKey = key === 'maintenance' ? 'maintenance_mode' : 'test_mode';
+      const modeVal = await storage.getSetting(dbKey);
+      return res.json({ enabled: modeVal === 'true' });
+    }
+    res.json({ key, value });
   });
 
   app.put('/api/settings/:key', async (req, res) => {
