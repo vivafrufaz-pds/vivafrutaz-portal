@@ -143,6 +143,13 @@ function Router() {
     <Switch>
       <Route path="/" component={HomeRoute} />
       <Route path="/login" component={Login} />
+      <Route path="/auth" component={Login} />
+
+      {/* Legacy OS module redirects → Tarefas */}
+      <Route path="/os">{() => <Redirect to="/admin/tasks" />}</Route>
+      <Route path="/os/:rest*">{() => <Redirect to="/admin/tasks" />}</Route>
+      <Route path="/ordem-servico">{() => <Redirect to="/admin/tasks" />}</Route>
+      <Route path="/ordem-servico/:rest*">{() => <Redirect to="/admin/tasks" />}</Route>
 
       {/* Admin Routes */}
       <Route path="/admin">
