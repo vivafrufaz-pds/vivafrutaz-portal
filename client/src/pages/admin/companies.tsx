@@ -120,7 +120,12 @@ const getBillingFormatLabel = (f: string | null) => {
 const WEEK_DAYS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
 
 // ─── Contract Scope Manager ──────────────────────────────────────
-function ContractScopeManager({ company, contractModel }: { company: any | null; contractModel: string }) {
+function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
+  company: any | null;
+  contractModel: string;
+  hiddenIds: number[];
+  onDelete: (id: number) => void;
+}) {
   const { data: products } = useProducts();
   const queryClient = useQueryClient();
   const [newItem, setNewItem] = useState({ dayOfWeek: "", weekNumber: "", productId: "", quantity: "1" });
@@ -162,13 +167,6 @@ function ContractScopeManager({ company, contractModel }: { company: any | null;
     }
   };
 
-  const removeScope = async (scopeId: number) => {
-    await fetch(`/api/companies/${company.id}/contract-scopes/${scopeId}`, {
-      method: 'DELETE', credentials: 'include',
-    });
-    queryClient.invalidateQueries({ queryKey: ['/api/companies', company.id, 'contract-scopes'] });
-  };
-
   if (!company) {
     return (
       <div className="py-8 text-center text-muted-foreground text-sm">
@@ -178,8 +176,9 @@ function ContractScopeManager({ company, contractModel }: { company: any | null;
     );
   }
 
-  // Group scopes by dayOfWeek (and weekNumber for alternated/rotacao4)
-  const grouped = (scopes || []).reduce((acc: any, s: any) => {
+  // Group scopes by dayOfWeek — filtering out locally staged deletes
+  const visibleScopes = (scopes || []).filter((s: any) => !hiddenIds.includes(s.id));
+  const grouped = visibleScopes.reduce((acc: any, s: any) => {
     const key = (contractModel === 'alternado' || contractModel === 'rotacao4') ? `${s.dayOfWeek}__week${s.weekNumber || 0}` : s.dayOfWeek;
     if (!acc[key]) acc[key] = [];
     acc[key].push(s);
@@ -280,7 +279,7 @@ function ContractScopeManager({ company, contractModel }: { company: any | null;
                           <span className="w-7 h-7 bg-primary/10 text-primary text-xs font-bold rounded-lg flex items-center justify-center">{s.quantity}x</span>
                           <p className="text-sm font-medium text-foreground">{product?.name || `Produto #${s.productId}`}</p>
                         </div>
-                        <button data-testid={`button-remove-scope-${s.id}`} onClick={() => removeScope(s.id)}
+                        <button type="button" data-testid={`button-remove-scope-${s.id}`} onClick={() => onDelete(s.id)}
                           className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -311,6 +310,7 @@ export default function CompaniesPage() {
   const [lookingUpCep, setLookingUpCep] = useState(false);
   const [cepFilled, setCepFilled] = useState(false);
   const [viaCepUF, setViaCepUF] = useState("");
+  const [pendingDeletes, setPendingDeletes] = useState<number[]>([]);
   const { toast } = useToast();
 
   const openCreate = () => {
@@ -319,6 +319,7 @@ export default function CompaniesPage() {
     setActiveTab("basico");
     setCepFilled(false);
     setViaCepUF("");
+    setPendingDeletes([]);
     setIsModalOpen(true);
   };
 
@@ -328,12 +329,14 @@ export default function CompaniesPage() {
     setActiveTab("basico");
     setCepFilled(false);
     setViaCepUF("");
+    setPendingDeletes([]);
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingCompany(null);
+    setPendingDeletes([]);
   };
 
   const toggleDay = (day: string) => {
@@ -448,6 +451,12 @@ export default function CompaniesPage() {
     if (editingCompany) {
       if (formData.password) payload.password = formData.password;
       await updateCompany.mutateAsync({ id: editingCompany.id, data: payload });
+      // Flush staged scope deletions
+      if (pendingDeletes.length > 0) {
+        await Promise.all(pendingDeletes.map(id =>
+          fetch(`/api/companies/${editingCompany.id}/contract-scopes/${id}`, { method: 'DELETE', credentials: 'include' })
+        ));
+      }
     } else {
       payload.password = formData.password;
       await createCompany.mutateAsync(payload);
@@ -587,13 +596,28 @@ export default function CompaniesPage() {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      {company.deliveryTime ? (
-                        <span className="flex items-center gap-1 text-sm font-bold text-foreground">
-                          <Clock className="w-4 h-4 text-primary" /> {company.deliveryTime}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">—</span>
-                      )}
+                      {(() => {
+                        try {
+                          const cfg = typeof (company as any).deliveryConfigJson === 'string'
+                            ? JSON.parse((company as any).deliveryConfigJson)
+                            : (company as any).deliveryConfigJson;
+                          if (!cfg) return <span className="text-muted-foreground text-sm">—</span>;
+                          const enabled = Object.values(cfg as Record<string, any>).filter((d: any) => d.enabled);
+                          if (enabled.length === 0) return <span className="text-muted-foreground text-sm">—</span>;
+                          const starts = enabled.map((d: any) => d.startTime).filter(Boolean).sort();
+                          const ends = enabled.map((d: any) => d.endTime).filter(Boolean).sort();
+                          const minStart = starts[0];
+                          const maxEnd = ends[ends.length - 1];
+                          if (!minStart || !maxEnd) return <span className="text-muted-foreground text-sm">—</span>;
+                          return (
+                            <span className="flex items-center gap-1 text-sm font-bold text-foreground">
+                              <Clock className="w-4 h-4 text-primary" /> {minStart} – {maxEnd}
+                            </span>
+                          );
+                        } catch {
+                          return <span className="text-muted-foreground text-sm">—</span>;
+                        }
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${company.clientType === 'pontual' ? 'bg-orange-100 text-orange-700' : company.clientType === 'semanal' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
@@ -1120,6 +1144,8 @@ export default function CompaniesPage() {
             <ContractScopeManager
               company={editingCompany}
               contractModel={formData.contractModel}
+              hiddenIds={pendingDeletes}
+              onDelete={(id) => setPendingDeletes(prev => [...prev, id])}
             />
           )}
 
