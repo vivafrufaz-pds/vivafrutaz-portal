@@ -9,8 +9,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Eye, ImageIcon, MessageSquareReply, Send, Building2 } from 'lucide-react';
+import { AlertTriangle, Eye, ImageIcon, MessageSquareReply, Send, Building2, Download, Trash2 } from 'lucide-react';
 import type { ClientIncident, IncidentMessage } from '@shared/schema';
+import { downloadIncidentPdf } from '@/lib/incident-pdf-generator';
 
 const TYPE_LABELS: Record<string, string> = {
   DELIVERY_PROBLEM: 'Problema de entrega',
@@ -39,6 +40,7 @@ function IncidentDetail({ incident, onClose }: { incident: ClientIncident; onClo
   const [status, setStatus] = useState(incident.status);
   const [adminNote, setAdminNote] = useState(incident.adminNote || '');
   const [newMsg, setNewMsg] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Parse photos
   let parsedPhotos: Array<{ base64: string; mime: string; name: string }> = [];
@@ -60,6 +62,20 @@ function IncidentDetail({ incident, onClose }: { incident: ClientIncident; onClo
       toast({ title: 'Ocorrência atualizada!' });
     },
     onError: () => toast({ title: 'Erro ao atualizar', variant: 'destructive' }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/client-incidents/${incident.id}`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) throw new Error('Erro ao excluir');
+      return res;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/client-incidents'] });
+      toast({ title: 'Ocorrência excluída com sucesso!' });
+      onClose();
+    },
+    onError: (err: any) => toast({ title: 'Erro', description: err.message, variant: 'destructive' }),
   });
 
   const sendMut = useMutation({
@@ -210,16 +226,66 @@ function IncidentDetail({ incident, onClose }: { incident: ClientIncident; onClo
         </div>
       </div>
 
-      <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Fechar</Button>
-        <Button
-          data-testid="button-save-incident"
-          onClick={() => updateMut.mutate({ status, adminNote, resolvedAt: status === 'RESOLVED' ? new Date().toISOString() : undefined })}
-          disabled={updateMut.isPending}
-        >
-          {updateMut.isPending ? 'Salvando...' : 'Salvar'}
-        </Button>
+      <DialogFooter className="flex justify-between">
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => downloadIncidentPdf({
+              id: incident.id,
+              companyName: incident.companyName,
+              type: incident.type,
+              status: incident.status,
+              description: incident.description,
+              createdAt: incident.createdAt,
+              responseMessage: incident.responseMessage,
+              respondedByName: incident.respondedByName,
+              respondedAt: incident.respondedAt,
+              adminNote: incident.adminNote
+            })}
+            data-testid="button-download-incident-pdf"
+          >
+            <Download className="w-4 h-4 mr-1" /> PDF
+          </Button>
+          {user?.role && ['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role) && (
+            <Button 
+              variant="destructive" 
+              size="sm"
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleteMut.isPending}
+              data-testid="button-delete-incident"
+            >
+              <Trash2 className="w-4 h-4 mr-1" /> Excluir
+            </Button>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+          <Button
+            data-testid="button-save-incident"
+            onClick={() => updateMut.mutate({ status, adminNote, resolvedAt: status === 'RESOLVED' ? new Date().toISOString() : undefined })}
+            disabled={updateMut.isPending}
+          >
+            {updateMut.isPending ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </div>
       </DialogFooter>
+
+      {/* Delete confirmation */}
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Excluir Ocorrência #{incident.id}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">Tem certeza que deseja excluir esta ocorrência? Esta ação é irreversível.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending} data-testid="button-confirm-delete">
+              {deleteMut.isPending ? 'Excluindo...' : 'Excluir Permanentemente'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1588,6 +1588,22 @@ export async function registerRoutes(
     } catch (e) { res.status(500).json({ message: 'Error updating incident' }); }
   });
 
+  app.delete('/api/client-incidents/:id', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+      return res.status(403).json({ message: 'Sem permissão - apenas administradores podem excluir ocorrências' });
+    }
+    try {
+      const id = parseInt(req.params.id);
+      const incident = await storage.getClientIncident(id);
+      if (!incident) return res.status(404).json({ message: 'Ocorrência não encontrada' });
+      await storage.deleteClientIncident(id);
+      await storage.createLog({ action: 'CLIENT_INCIDENT_DELETED', description: `Ocorrência #${id} (${incident.type}) foi excluída por ${user.name}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.status(204).end();
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   app.post('/api/client-incidents/:id/respond', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);

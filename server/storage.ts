@@ -679,6 +679,11 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(clientIncidents).orderBy(desc(clientIncidents.createdAt));
   }
 
+  async getClientIncident(id: number): Promise<ClientIncident | undefined> {
+    const [incident] = await db.select().from(clientIncidents).where(eq(clientIncidents.id, id));
+    return incident;
+  }
+
   async getClientIncidentsByCompany(companyId: number): Promise<ClientIncident[]> {
     return db.select().from(clientIncidents).where(eq(clientIncidents.companyId, companyId)).orderBy(desc(clientIncidents.createdAt));
   }
@@ -686,6 +691,10 @@ export class DatabaseStorage implements IStorage {
   async updateClientIncident(id: number, updates: { status?: string; adminNote?: string; resolvedAt?: Date | null }): Promise<ClientIncident> {
     const [updated] = await db.update(clientIncidents).set(updates as any).where(eq(clientIncidents.id, id)).returning();
     return updated;
+  }
+
+  async deleteClientIncident(id: number): Promise<void> {
+    await db.delete(clientIncidents).where(eq(clientIncidents.id, id));
   }
 
   async respondToClientIncident(id: number, responseMessage: string, respondedByName: string): Promise<ClientIncident> {
