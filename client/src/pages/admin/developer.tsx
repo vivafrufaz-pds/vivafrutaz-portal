@@ -158,7 +158,7 @@ export default function DeveloperPage() {
   const [userFilter, setUserFilter] = useState<string>("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<'logs' | 'audit' | 'ai' | 'health'>('logs');
+  const [activeTab, setActiveTab] = useState<'logs' | 'audit' | 'ai' | 'health' | 'sync'>('logs');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [selectedLogs, setSelectedLogs] = useState<Set<number>>(new Set());
   const [showDateCleanup, setShowDateCleanup] = useState(false);
@@ -178,11 +178,24 @@ export default function DeveloperPage() {
 
   const auditMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/audit', { credentials: 'include' });
+      const res = await fetch('/api/admin/audit', { credentials: 'include' });
       if (!res.ok) throw new Error('Falha na auditoria');
       return res.json();
     },
     onError: () => toast({ title: "Erro ao executar auditoria", variant: "destructive" }),
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/admin/system-sync', { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error('Falha na sincronização');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] });
+      toast({ title: 'Sincronização global concluída!' });
+    },
+    onError: () => toast({ title: 'Erro ao sincronizar sistema', variant: 'destructive' }),
   });
 
   const clearLogsMut = useMutation({
@@ -353,6 +366,7 @@ export default function DeveloperPage() {
           { id: 'audit', label: 'Auditoria', icon: Scan },
           { id: 'ai', label: 'Detector de Bugs', icon: Bug },
           { id: 'health', label: 'Saúde do Sistema', icon: Activity },
+          { id: 'sync', label: 'Sincronização Global', icon: RefreshCw },
         ].map(tab => {
           const Icon = tab.icon;
           return (
@@ -692,6 +706,123 @@ export default function DeveloperPage() {
 
       {/* Tab: Health */}
       {activeTab === 'health' && <HealthTab />}
+
+      {/* Tab: Sincronização Global */}
+      {activeTab === 'sync' && (
+        <div className="space-y-6">
+          <div className="bg-card rounded-2xl border border-border/50 p-6 premium-shadow">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center">
+                <RefreshCw className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-foreground text-lg">Sincronização Global do Sistema</h3>
+                <p className="text-sm text-muted-foreground">
+                  Verifica permissões, perfis, empresas, produtos e pedidos. Detecta inconsistências e corrige automaticamente quando possível.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+              {[
+                { icon: '👤', label: 'Usuários & Perfis', desc: 'Verifica roles e senhas de todos os usuários do sistema.' },
+                { icon: '🏢', label: 'Empresas Clientes', desc: 'Verifica grupos de preço e credenciais de todas as empresas.' },
+                { icon: '🍎', label: 'Produtos & Preços', desc: 'Verifica preços base e disponibilidade do catálogo.' },
+                { icon: '📦', label: 'Pedidos & Códigos VF', desc: 'Verifica integridade dos pedidos e status.' },
+                { icon: '📋', label: 'Logs & Erros', desc: 'Analisa taxa de erros e tentativas suspeitas de acesso.' },
+                { icon: '🔐', label: 'Permissões de Acesso', desc: 'Valida que ADMIN, DIRECTOR e DEVELOPER têm acesso total.' },
+              ].map(item => (
+                <div key={item.label} className="flex items-start gap-3 p-3 rounded-xl bg-muted/30 border border-border/40">
+                  <span className="text-xl">{item.icon}</span>
+                  <div>
+                    <p className="font-bold text-sm text-foreground">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              data-testid="button-run-sync"
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 shadow-lg shadow-blue-600/20"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+              {syncMutation.isPending ? 'Sincronizando sistema...' : 'Sincronizar Sistema Agora'}
+            </button>
+
+            {syncMutation.data && (
+              <div className="mt-6 space-y-4">
+                <div className={`flex items-center gap-3 p-4 rounded-xl border-2 font-bold ${
+                  syncMutation.data.overall === 'OK' ? 'border-green-300 bg-green-50 text-green-700'
+                  : syncMutation.data.overall === 'WARN' ? 'border-orange-300 bg-orange-50 text-orange-700'
+                  : 'border-red-300 bg-red-50 text-red-700'
+                }`}>
+                  {syncMutation.data.overall === 'OK'
+                    ? <CheckCircle className="w-6 h-6" />
+                    : syncMutation.data.overall === 'WARN'
+                    ? <AlertTriangle className="w-6 h-6" />
+                    : <AlertCircle className="w-6 h-6" />
+                  }
+                  <div>
+                    <p>
+                      Sistema: {syncMutation.data.overall === 'OK' ? 'SINCRONIZADO — Nenhum problema encontrado' : syncMutation.data.overall === 'WARN' ? 'SINCRONIZADO COM AVISOS — Verifique os itens abaixo' : 'ERROS DETECTADOS — Ação necessária'}
+                    </p>
+                    <p className="text-sm font-normal opacity-80">
+                      {syncMutation.data.checks.filter((c: any) => c.status === 'OK').length} verificações OK ·{' '}
+                      {syncMutation.data.checks.filter((c: any) => c.status === 'WARN').length} avisos ·{' '}
+                      {syncMutation.data.checks.filter((c: any) => c.status === 'ERROR').length} erros ·{' '}
+                      {syncMutation.data.autoFixed} item(ns) corrigido(s) automaticamente
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {syncMutation.data.checks.map((check: any) => {
+                    const statusStyles = {
+                      OK: { bg: 'border-green-200 bg-green-50', icon: <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />, label: 'text-green-700' },
+                      WARN: { bg: 'border-orange-200 bg-orange-50', icon: <AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0" />, label: 'text-orange-700' },
+                      ERROR: { bg: 'border-red-200 bg-red-50', icon: <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />, label: 'text-red-700' },
+                      FIXED: { bg: 'border-blue-200 bg-blue-50', icon: <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />, label: 'text-blue-700' },
+                    };
+                    const s = statusStyles[check.status as keyof typeof statusStyles] || statusStyles.OK;
+                    return (
+                      <div key={check.id} className={`flex items-start gap-3 p-4 rounded-xl border ${s.bg}`}>
+                        {s.icon}
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-bold text-sm ${s.label}`}>{check.label}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 break-words">{check.detail}</p>
+                        </div>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                          check.status === 'OK' ? 'bg-green-100 text-green-700'
+                          : check.status === 'WARN' ? 'bg-orange-100 text-orange-700'
+                          : check.status === 'FIXED' ? 'bg-blue-100 text-blue-700'
+                          : 'bg-red-100 text-red-700'
+                        }`}>
+                          {check.status === 'FIXED' ? 'CORRIGIDO' : check.status}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Sincronização executada em {new Date(syncMutation.data.syncedAt).toLocaleString('pt-BR')}. Registro salvo nos Logs do Sistema.
+                </p>
+              </div>
+            )}
+
+            {!syncMutation.data && !syncMutation.isPending && (
+              <div className="mt-6 text-center py-8 text-muted-foreground">
+                <RefreshCw className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Clique no botão acima para executar a sincronização global</p>
+                <p className="text-xs mt-1 opacity-70">A sincronização verifica todos os usuários, empresas, produtos, pedidos e permissões do sistema.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

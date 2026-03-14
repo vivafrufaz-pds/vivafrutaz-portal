@@ -18,7 +18,10 @@ Key features:
 - Automatic email system (nodemailer SMTP): order placed, status change, password reset, special orders; sendTestEmail function
 - Email status indicator on Backup page (shows if SMTP is configured) + "Testar SMTP" button
 - Full Brazilian Portuguese (PT-BR) interface
-- Developer area (/admin/developer): System Logs with advanced filters (event/user/date), row checkboxes + select all + bulk delete (DELETE /api/logs/selected), date range cleanup modal (DELETE /api/logs/by-date), export CSV (GET /api/logs/export), Auditoria, AI Bug Detector, Saúde do Sistema tabs; "Limpar Tudo" (DELETE /api/logs)
+- Developer area (/admin/developer): System Logs with advanced filters (event/user/date), row checkboxes + select all + bulk delete (DELETE /api/logs/selected), date range cleanup modal (DELETE /api/logs/by-date), export CSV (GET /api/logs/export), Auditoria, AI Bug Detector, Saúde do Sistema, **Sincronização Global** tabs; "Limpar Tudo" (DELETE /api/logs)
+- Sincronização Global (POST /api/admin/system-sync): verifies 10 system dimensions — user roles, user passwords, company price groups, company passwords, product prices, order VF codes, order statuses, error rate, login failure rate, permissions; returns overall OK/WARN/ERROR status per check; auto-logs sync event to system_logs; restricted to ADMIN/DIRECTOR/DEVELOPER
+- Auditoria tab fixed: URL corrected from /api/audit → /api/admin/audit; now returns summary object with totalUsers, activeUsers, totalCompanies, activeCompanies, errors, loginFails counts for KPI display
+- API cache control: all /api/* responses include Cache-Control: no-store, no-cache headers to prevent stale data
 - Auto-cleanup cron: logs older than 90 days auto-deleted daily at 03:00; backup cleanup API for logs older than 30 days
 - Módulo Logística (/admin/logistics): 4 tabs — Rotas (with driver/date filters + status update), Motoristas, Veículos, Manutenção; all with CSV/Excel export
 - Cotação de Empresas (/admin/quotations): full lifecycle management (PENDING→IN_ANALYSIS→APPROVED/REJECTED), price group assignment, logistics notes, CSV export
