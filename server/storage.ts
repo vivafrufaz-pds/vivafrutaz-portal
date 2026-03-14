@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -10,7 +10,8 @@ import {
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
   type PasswordResetRequest, type SystemLog, type TestOrder,
   type Task, type ClientIncident, type IncidentMessage, type InternalIncident,
-  type LogisticsDriver, type LogisticsVehicle, type LogisticsRoute, type LogisticsMaintenance, type CompanyQuotation
+  type LogisticsDriver, type LogisticsVehicle, type LogisticsRoute, type LogisticsMaintenance, type CompanyQuotation,
+  type ContractScope, type InsertContractScope
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -27,6 +28,11 @@ export interface IStorage {
   createCompany(company: InsertCompany): Promise<Company>;
   updateCompany(id: number, updates: Partial<InsertCompany>): Promise<Company>;
   deleteCompany(id: number): Promise<void>;
+
+  // Contract Scopes
+  getContractScopes(companyId: number): Promise<ContractScope[]>;
+  createContractScope(scope: InsertContractScope): Promise<ContractScope>;
+  deleteContractScope(id: number): Promise<void>;
 
   // Price Groups
   getPriceGroups(): Promise<PriceGroup[]>;
@@ -178,6 +184,19 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCompany(id: number): Promise<void> {
     await db.delete(companies).where(eq(companies.id, id));
+  }
+
+  async getContractScopes(companyId: number): Promise<ContractScope[]> {
+    return await db.select().from(contractScopes).where(eq(contractScopes.companyId, companyId));
+  }
+
+  async createContractScope(scope: InsertContractScope): Promise<ContractScope> {
+    const [newScope] = await db.insert(contractScopes).values(scope).returning();
+    return newScope;
+  }
+
+  async deleteContractScope(id: number): Promise<void> {
+    await db.delete(contractScopes).where(eq(contractScopes.id, id));
   }
 
   async getPriceGroups(): Promise<PriceGroup[]> {

@@ -39,6 +39,7 @@ export const companies = pgTable("companies", {
   // Configurações
   active: boolean("active").default(true).notNull(),
   clientType: text("client_type").default("mensal"),
+  contractModel: text("contract_model"), // "fixo" | "variavel" | "alternado" — only for clientType "contratual"
   minWeeklyBilling: numeric("min_weekly_billing", { precision: 10, scale: 2 }),
   deliveryTime: text("delivery_time"),
   // Taxa administrativa (%)
@@ -50,6 +51,17 @@ export const companies = pgTable("companies", {
   paymentDates: text("payment_dates"),
   financialNotes: text("financial_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Contract scopes: define the product list per day for contractual companies
+export const contractScopes = pgTable("contract_scopes", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  dayOfWeek: text("day_of_week").notNull(), // "Segunda-feira", "Terça-feira", etc.
+  weekNumber: integer("week_number"), // null = all weeks; 1 or 2 for "alternado" contracts
+  productId: integer("product_id").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  observation: text("observation"),
 });
 
 export const categories = pgTable("categories", {
@@ -361,6 +373,7 @@ export type InsertSystemLog = z.infer<typeof insertSystemLogSchema>;
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, orderCode: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
 export const insertSpecialOrderRequestSchema = createInsertSchema(specialOrderRequests).omit({ id: true, createdAt: true, resolvedAt: true });
+export const insertContractScopeSchema = createInsertSchema(contractScopes).omit({ id: true });
 export const insertPasswordResetRequestSchema = createInsertSchema(passwordResetRequests).omit({ id: true, createdAt: true, resolvedAt: true });
 
 // ─── Types ────────────────────────────────────────────────────
@@ -397,3 +410,5 @@ export type LogisticsVehicle = typeof logisticsVehicles.$inferSelect;
 export type LogisticsRoute = typeof logisticsRoutes.$inferSelect;
 export type LogisticsMaintenance = typeof logisticsMaintenance.$inferSelect;
 export type CompanyQuotation = typeof companyQuotations.$inferSelect;
+export type ContractScope = typeof contractScopes.$inferSelect;
+export type InsertContractScope = z.infer<typeof insertContractScopeSchema>;

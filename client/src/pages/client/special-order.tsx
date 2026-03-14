@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Star, Plus, Clock, CheckCircle, XCircle, Send, Calendar } from "lucide-react";
+import { Star, Plus, Clock, CheckCircle, XCircle, Send, Calendar, Filter, X, Info } from "lucide-react";
+
+const SIXTY_DAYS_AGO = subDays(new Date(), 60);
 
 const DAYS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
 
@@ -39,6 +41,9 @@ export default function SpecialOrderPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ requestedDay: "", requestedDate: "", description: "", quantity: "", observations: "" });
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ['/api/special-order-requests/company', company?.id],
@@ -67,6 +72,20 @@ export default function SpecialOrderPage() {
     },
     onError: () => toast({ title: "Erro ao enviar solicitação.", variant: "destructive" }),
   });
+
+  const hasDateFilter = filterDateFrom || filterDateTo;
+  const hasFilters = filterStatus || filterDateFrom || filterDateTo;
+
+  const filteredRequests = useMemo(() => {
+    return (requests || []).filter(req => {
+      const d = new Date(req.createdAt);
+      if (!hasDateFilter && d < SIXTY_DAYS_AGO) return false;
+      if (filterStatus && req.status !== filterStatus) return false;
+      if (filterDateFrom && d < new Date(filterDateFrom)) return false;
+      if (filterDateTo && d > new Date(filterDateTo + 'T23:59:59')) return false;
+      return true;
+    });
+  }, [requests, filterStatus, filterDateFrom, filterDateTo, hasDateFilter]);
 
   if (!authLoading && !company) return <CompanyMissing />;
 
@@ -169,6 +188,45 @@ export default function SpecialOrderPage() {
         </div>
       )}
 
+      {/* Filters */}
+      <div className="bg-card rounded-2xl border border-border/50 premium-shadow p-4 mb-6 space-y-3">
+        <div className="flex flex-wrap gap-3 items-center">
+          <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
+            <option value="">Todos os status</option>
+            <option value="PENDING">Aguardando aprovação</option>
+            <option value="APPROVED">Aprovado</option>
+            <option value="REJECTED">Recusado</option>
+          </select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Calendar className="w-4 h-4 text-muted-foreground" />
+            <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+              className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none" />
+            <span className="text-muted-foreground text-sm">até</span>
+            <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+              className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none" />
+          </div>
+          <div className="flex items-center gap-3 ml-auto">
+            {hasFilters && (
+              <button onClick={() => { setFilterStatus(""); setFilterDateFrom(""); setFilterDateTo(""); }}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium">
+                <X className="w-3 h-3" /> Limpar
+              </button>
+            )}
+            <span className="text-xs text-muted-foreground font-medium">
+              {filteredRequests.length} solicitaç{filteredRequests.length !== 1 ? 'ões' : 'ão'}
+            </span>
+          </div>
+        </div>
+        {!hasDateFilter && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-100">
+            <Info className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+            <p className="text-xs text-blue-700">Exibindo solicitações dos últimos 60 dias. Use o filtro de datas para ver registros mais antigos.</p>
+          </div>
+        )}
+      </div>
+
       {/* Requests list */}
       <div className="space-y-4">
         {isLoading ? (
@@ -182,8 +240,14 @@ export default function SpecialOrderPage() {
               Fazer primeira solicitação
             </button>
           </div>
+        ) : filteredRequests.length === 0 ? (
+          <div className="bg-card rounded-2xl p-8 text-center border border-border/50">
+            <p className="text-muted-foreground">Nenhuma solicitação no período selecionado.</p>
+            <button onClick={() => { setFilterStatus(""); setFilterDateFrom(""); setFilterDateTo(""); }}
+              className="text-primary font-bold text-sm hover:underline mt-2">Limpar filtros</button>
+          </div>
         ) : (
-          requests.map(req => {
+          filteredRequests.map(req => {
             const status = STATUS_MAP[req.status] || { label: req.status, color: 'bg-muted text-muted-foreground', icon: Clock };
             const StatusIcon = status.icon;
             return (

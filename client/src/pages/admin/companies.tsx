@@ -5,18 +5,21 @@ import { Modal } from "@/components/Modal";
 import {
   Plus, Building2, Mail, Hash, Phone, Clock, Edit2,
   CheckCircle, XCircle, CalendarDays, CreditCard, DollarSign,
-  FileText, Settings, User, Percent, Search, Filter, X
+  FileText, Settings, User, Percent, Search, Filter, X, Package, Trash2, Save
 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useProducts } from "@/hooks/use-catalog";
 import type { Company } from "@shared/schema";
 
 const DAYS_OPTIONS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
 
-type TabKey = "basico" | "config" | "financeiro";
+type TabKey = "basico" | "config" | "financeiro" | "contrato";
 
 const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: "basico", label: "Dados Básicos", icon: User },
   { key: "config", label: "Configurações", icon: Settings },
   { key: "financeiro", label: "Financeiro", icon: CreditCard },
+  { key: "contrato", label: "Escopo Contratual", icon: Package },
 ];
 
 const emptyForm = {
@@ -36,6 +39,7 @@ const emptyForm = {
   allowedOrderDays: [] as string[],
   active: true,
   clientType: "mensal",
+  contractModel: "",
   minWeeklyBilling: "",
   deliveryTime: "",
   adminFee: "0",
@@ -65,6 +69,7 @@ function companyToForm(c: Company): typeof emptyForm {
     allowedOrderDays: Array.isArray(c.allowedOrderDays) ? (c.allowedOrderDays as any[]).map(String) : [],
     active: c.active,
     clientType: c.clientType || "mensal",
+    contractModel: (c as any).contractModel || "",
     minWeeklyBilling: c.minWeeklyBilling ? String(c.minWeeklyBilling) : "",
     deliveryTime: c.deliveryTime || "",
     adminFee: c.adminFee ? String(c.adminFee) : "0",
@@ -84,6 +89,171 @@ const getBillingFormatLabel = (f: string | null) => {
   const map: Record<string, string> = { diario: "Diário", semanal: "Semanal", mensal: "Mensal" };
   return f ? (map[f] || f) : "—";
 };
+
+const WEEK_DAYS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
+
+// ─── Contract Scope Manager ──────────────────────────────────────
+function ContractScopeManager({ company, contractModel }: { company: any | null; contractModel: string }) {
+  const { data: products } = useProducts();
+  const queryClient = useQueryClient();
+  const [newItem, setNewItem] = useState({ dayOfWeek: "", weekNumber: "", productId: "", quantity: "1" });
+  const [saving, setSaving] = useState(false);
+
+  const { data: scopes, isLoading } = useQuery<any[]>({
+    queryKey: ['/api/companies', company?.id, 'contract-scopes'],
+    queryFn: async () => {
+      if (!company?.id) return [];
+      const res = await fetch(`/api/companies/${company.id}/contract-scopes`, { credentials: 'include' });
+      return res.json();
+    },
+    enabled: !!company?.id,
+  });
+
+  const addScope = async () => {
+    if (!company?.id || !newItem.dayOfWeek || !newItem.productId || !newItem.quantity) return;
+    setSaving(true);
+    try {
+      const body: any = {
+        companyId: company.id,
+        dayOfWeek: newItem.dayOfWeek,
+        productId: Number(newItem.productId),
+        quantity: Number(newItem.quantity),
+      };
+      if (contractModel === 'alternado' && newItem.weekNumber) {
+        body.weekNumber = Number(newItem.weekNumber);
+      }
+      const res = await fetch(`/api/companies/${company.id}/contract-scopes`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Erro ao adicionar item');
+      queryClient.invalidateQueries({ queryKey: ['/api/companies', company.id, 'contract-scopes'] });
+      setNewItem({ dayOfWeek: "", weekNumber: "", productId: "", quantity: "1" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeScope = async (scopeId: number) => {
+    await fetch(`/api/companies/${company.id}/contract-scopes/${scopeId}`, {
+      method: 'DELETE', credentials: 'include',
+    });
+    queryClient.invalidateQueries({ queryKey: ['/api/companies', company.id, 'contract-scopes'] });
+  };
+
+  if (!company) {
+    return (
+      <div className="py-8 text-center text-muted-foreground text-sm">
+        <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
+        Salve a empresa primeiro para gerenciar o escopo contratual.
+      </div>
+    );
+  }
+
+  // Group scopes by dayOfWeek (and weekNumber for alternated)
+  const grouped = (scopes || []).reduce((acc: any, s: any) => {
+    const key = contractModel === 'alternado' ? `${s.dayOfWeek}__week${s.weekNumber || 0}` : s.dayOfWeek;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(s);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  const isAlternado = contractModel === 'alternado';
+
+  return (
+    <div className="space-y-4">
+      {/* Model badge */}
+      <div className="flex items-center gap-2 p-3 bg-secondary/5 rounded-xl border border-secondary/20">
+        <Package className="w-4 h-4 text-secondary" />
+        <p className="text-sm font-bold text-secondary">
+          {contractModel === 'fixo' ? 'Contrato Fixo — Escopo imutável por semana'
+           : contractModel === 'variavel' ? 'Contrato Variável — Escopo base com ajustes permitidos'
+           : contractModel === 'alternado' ? 'Contrato Alternado — Rotação quinzenal (Semana 1 / Semana 2)'
+           : 'Defina o modelo de contrato na aba Configurações'}
+        </p>
+      </div>
+
+      {/* Add item form */}
+      <div className="p-4 bg-muted/20 rounded-xl border border-border space-y-3">
+        <p className="text-sm font-bold text-foreground">Adicionar item ao escopo</p>
+        <div className="flex flex-wrap gap-3">
+          <select data-testid="select-scope-day" value={newItem.dayOfWeek} onChange={e => setNewItem(p => ({ ...p, dayOfWeek: e.target.value }))}
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none min-w-[160px]">
+            <option value="">Dia da semana...</option>
+            {WEEK_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          {isAlternado && (
+            <select data-testid="select-scope-week" value={newItem.weekNumber} onChange={e => setNewItem(p => ({ ...p, weekNumber: e.target.value }))}
+              className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
+              <option value="">Semana...</option>
+              <option value="1">Semana 1 (Lista A)</option>
+              <option value="2">Semana 2 (Lista B)</option>
+            </select>
+          )}
+          <select data-testid="select-scope-product" value={newItem.productId} onChange={e => setNewItem(p => ({ ...p, productId: e.target.value }))}
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none min-w-[180px]">
+            <option value="">Produto...</option>
+            {(products || []).filter((p: any) => p.active).map((p: any) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <input data-testid="input-scope-quantity" type="number" min="1" value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))}
+            placeholder="Qtd"
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none w-20" />
+          <button data-testid="button-add-scope" onClick={addScope} disabled={saving || !newItem.dayOfWeek || !newItem.productId}
+            className="px-4 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5 text-sm">
+            <Save className="w-3.5 h-3.5" /> Adicionar
+          </button>
+        </div>
+      </div>
+
+      {/* Current scopes */}
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Carregando escopo...</p>
+      ) : (scopes || []).length === 0 ? (
+        <div className="py-8 text-center text-muted-foreground border border-dashed border-border rounded-xl">
+          <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">Nenhum produto no escopo. Adicione itens acima.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {Object.entries(grouped).map(([key, items]: [string, any]) => {
+            const [day, weekLabel] = key.includes('__') ? key.split('__') : [key, ''];
+            return (
+              <div key={key} className="border border-border/50 rounded-xl overflow-hidden">
+                <div className="px-4 py-2.5 bg-primary/5 border-b border-border/50 flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4 text-primary" />
+                  <p className="font-bold text-sm text-foreground">{day}</p>
+                  {weekLabel && <span className="px-2 py-0.5 bg-secondary/20 text-secondary text-xs font-bold rounded-full">
+                    {weekLabel === 'week1' ? 'Semana 1 (Lista A)' : weekLabel === 'week2' ? 'Semana 2 (Lista B)' : 'Todas as semanas'}
+                  </span>}
+                </div>
+                <div className="divide-y divide-border/50">
+                  {items.map((s: any) => {
+                    const product = (products || []).find((p: any) => p.id === Number(s.productId));
+                    return (
+                      <div key={s.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-muted/20">
+                        <div className="flex items-center gap-3">
+                          <span className="w-7 h-7 bg-primary/10 text-primary text-xs font-bold rounded-lg flex items-center justify-center">{s.quantity}x</span>
+                          <p className="text-sm font-medium text-foreground">{product?.name || `Produto #${s.productId}`}</p>
+                        </div>
+                        <button data-testid={`button-remove-scope-${s.id}`} onClick={() => removeScope(s.id)}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CompaniesPage() {
   const { data: companies, isLoading } = useCompanies();
@@ -145,6 +315,7 @@ export default function CompaniesPage() {
       addressCity: formData.addressCity || null,
       addressZip: formData.addressZip || null,
       clientType: formData.clientType || null,
+      contractModel: formData.contractModel || null,
       minWeeklyBilling: formData.minWeeklyBilling ? String(formData.minWeeklyBilling) : null,
       deliveryTime: formData.deliveryTime || null,
       adminFee: formData.adminFee ? String(formData.adminFee) : "0",
@@ -379,11 +550,13 @@ export default function CompaniesPage() {
                 <div>
                   <label className="block text-sm font-semibold mb-1">Nome da Empresa *</label>
                   <input required value={formData.companyName} onChange={e => set("companyName", e.target.value)}
+                    data-testid="input-company-name"
                     className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1">Contato Responsável *</label>
                   <input required value={formData.contactName} onChange={e => set("contactName", e.target.value)}
+                    data-testid="input-company-contact"
                     className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" />
                 </div>
               </div>
@@ -425,6 +598,7 @@ export default function CompaniesPage() {
                   </label>
                   <input type="password" value={formData.password} onChange={e => set("password", e.target.value)}
                     required={!editingCompany}
+                    data-testid="input-company-password"
                     className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" />
                 </div>
                 <div>
@@ -512,21 +686,44 @@ export default function CompaniesPage() {
 
               {/* Tipo de cliente */}
               <div className="p-4 rounded-xl border-2 border-border bg-muted/20">
-                <p className="text-sm font-semibold mb-1 text-foreground">Tipo de Cliente</p>
+                <p className="text-sm font-semibold mb-1 text-foreground">Tipo de Empresa</p>
                 <p className="text-xs text-muted-foreground mb-3">Define o perfil e frequência de pedidos do cliente.</p>
                 <div className="flex gap-3 flex-wrap">
                   {[
-                    { value: "semanal", label: "Semanal", desc: "Pedidos todas as semanas" },
+                    { value: "semanal", label: "Cliente Semanal", desc: "Pedidos manuais toda semana" },
                     { value: "mensal", label: "Mensal", desc: "Programação mensal de pedidos" },
                     { value: "pontual", label: "Pontual", desc: "Esporádico, sem notificações" },
+                    { value: "contratual", label: "Cliente Contratual", desc: "Escopo fixo definido em contrato" },
                   ].map(opt => (
-                    <button key={opt.value} type="button" onClick={() => set("clientType", opt.value)}
+                    <button key={opt.value} type="button"
+                      data-testid={`button-clienttype-${opt.value}`}
+                      onClick={() => { set("clientType", opt.value); if (opt.value !== 'contratual') set("contractModel", ""); }}
                       className={`flex-1 min-w-[100px] px-4 py-3 rounded-xl font-bold text-sm border-2 transition-all text-left ${formData.clientType === opt.value ? 'bg-primary text-white border-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
                       <p>{opt.label}</p>
                       <p className={`text-xs font-normal mt-0.5 ${formData.clientType === opt.value ? 'text-white/80' : 'text-muted-foreground'}`}>{opt.desc}</p>
                     </button>
                   ))}
                 </div>
+                {/* Modelo de contrato — only for "contratual" */}
+                {formData.clientType === 'contratual' && (
+                  <div className="mt-4 pt-4 border-t border-border/50">
+                    <p className="text-sm font-semibold mb-1 text-foreground">Modelo de Contrato</p>
+                    <p className="text-xs text-muted-foreground mb-3">Define como o escopo de produtos é gerenciado.</p>
+                    <div className="flex gap-3 flex-wrap">
+                      {[
+                        { value: "fixo", label: "Contrato Fixo", desc: "Escopo fixo, pedidos automáticos" },
+                        { value: "variavel", label: "Contrato Variável", desc: "Escopo base com ajustes permitidos" },
+                        { value: "alternado", label: "Contrato Alternado", desc: "Rotação quinzenal (Lista A / Lista B)" },
+                      ].map(opt => (
+                        <button key={opt.value} type="button" data-testid={`button-contractmodel-${opt.value}`} onClick={() => set("contractModel", opt.value)}
+                          className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold text-sm border-2 transition-all text-left ${formData.contractModel === opt.value ? 'bg-secondary text-secondary-foreground border-secondary' : 'border-border text-muted-foreground hover:border-secondary/50'}`}>
+                          <p>{opt.label}</p>
+                          <p className={`text-xs font-normal mt-0.5 ${formData.contractModel === opt.value ? 'text-secondary-foreground/80' : 'text-muted-foreground'}`}>{opt.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -683,6 +880,14 @@ export default function CompaniesPage() {
                   className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none resize-none" />
               </div>
             </div>
+          )}
+
+          {/* ─── Escopo Contratual Tab ─── */}
+          {activeTab === "contrato" && (
+            <ContractScopeManager
+              company={editingCompany}
+              contractModel={formData.contractModel}
+            />
           )}
 
           {/* Footer */}

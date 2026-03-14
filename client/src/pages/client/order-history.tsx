@@ -5,11 +5,13 @@ import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { format, getYear } from "date-fns";
+import { format, getYear, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Receipt, Calendar, Plus, Filter, X, Clock, Lock, Unlock, ClipboardEdit, Pencil, AlertCircle } from "lucide-react";
+import { Receipt, Calendar, Plus, Filter, X, Clock, Lock, Unlock, ClipboardEdit, Pencil, AlertCircle, Search, Info } from "lucide-react";
 import { Link } from "wouter";
 import { api } from "@shared/routes";
+
+const SIXTY_DAYS_AGO = subDays(new Date(), 60);
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   ACTIVE: { label: "Ativo", color: "bg-green-100 text-green-700" },
@@ -138,6 +140,8 @@ export default function OrderHistoryPage() {
   const [filterYear, setFilterYear] = useState<string>("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("");
+  const [filterCode, setFilterCode] = useState("");
   const [reopenOrder, setReopenOrder] = useState<any | null>(null);
 
   const years = useMemo(() => {
@@ -147,20 +151,30 @@ export default function OrderHistoryPage() {
     return Array.from(yrs).sort((a, b) => b - a);
   }, [orders]);
 
+  // Clients see only the last 60 days by default; custom date filters override this
+  const hasDateFilter = filterDateFrom || filterDateTo || filterYear || filterMonth;
+
   const filtered = useMemo(() => {
     const sorted = [...(orders || [])].sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
     return sorted.filter(o => {
       const d = new Date(o.orderDate);
+      // 60-day limit unless user set a custom date filter
+      if (!hasDateFilter && d < SIXTY_DAYS_AGO) return false;
       if (filterYear && getYear(d) !== Number(filterYear)) return false;
       if (filterMonth && d.getMonth() !== Number(filterMonth)) return false;
       if (filterDateFrom && d < new Date(filterDateFrom)) return false;
       if (filterDateTo && d > new Date(filterDateTo + 'T23:59:59')) return false;
+      if (filterStatus && o.status !== filterStatus) return false;
+      if (filterCode && !(o.orderCode || '').toLowerCase().includes(filterCode.toLowerCase())) return false;
       return true;
     });
-  }, [orders, filterYear, filterMonth, filterDateFrom, filterDateTo]);
+  }, [orders, filterYear, filterMonth, filterDateFrom, filterDateTo, filterStatus, filterCode, hasDateFilter]);
 
-  const clearFilters = () => { setFilterMonth(""); setFilterYear(""); setFilterDateFrom(""); setFilterDateTo(""); };
-  const hasFilters = filterMonth || filterYear || filterDateFrom || filterDateTo;
+  const clearFilters = () => {
+    setFilterMonth(""); setFilterYear(""); setFilterDateFrom(""); setFilterDateTo("");
+    setFilterStatus(""); setFilterCode("");
+  };
+  const hasFilters = filterMonth || filterYear || filterDateFrom || filterDateTo || filterStatus || filterCode;
 
   if (!authLoading && !company) return <CompanyMissing />;
 
@@ -180,34 +194,69 @@ export default function OrderHistoryPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-card rounded-2xl border border-border/50 premium-shadow p-4 mb-6 flex flex-wrap gap-3 items-center">
-        <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-        <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
-          className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
-          <option value="">Todos os anos</option>
-          {years.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
-          className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
-          <option value="">Todos os meses</option>
-          {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-        </select>
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-muted-foreground" />
-          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
-            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none" />
-          <span className="text-muted-foreground text-sm">até</span>
-          <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
-            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none" />
+      <div className="bg-card rounded-2xl border border-border/50 premium-shadow p-4 mb-4 space-y-3">
+        <div className="flex flex-wrap gap-3 items-center">
+          <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          {/* Code search */}
+          <div className="relative flex-1 min-w-[160px] max-w-[220px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <input
+              data-testid="input-filter-code"
+              type="text" value={filterCode} onChange={e => setFilterCode(e.target.value)}
+              placeholder="Nº do pedido (VF-...)"
+              className="w-full pl-8 pr-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none" />
+          </div>
+          {/* Status filter */}
+          <select
+            data-testid="select-filter-status"
+            value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
+            <option value="">Todos os status</option>
+            <option value="CONFIRMED">Pedido Confirmado</option>
+            <option value="ACTIVE">Ativo</option>
+            <option value="REOPEN_REQUESTED">Solicitação de Alteração</option>
+            <option value="OPEN_FOR_EDITING">Em Edição</option>
+            <option value="DELIVERED">Entregue</option>
+            <option value="CANCELLED">Cancelado</option>
+          </select>
+          {/* Year / Month */}
+          <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
+            <option value="">Todos os anos</option>
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
+            <option value="">Todos os meses</option>
+            {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+          </select>
+          {/* Date range */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Calendar className="w-4 h-4 text-muted-foreground" />
+            <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+              className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none" />
+            <span className="text-muted-foreground text-sm">até</span>
+            <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+              className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none" />
+          </div>
+          <div className="flex items-center gap-3 ml-auto">
+            {hasFilters && (
+              <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium">
+                <X className="w-3 h-3" /> Limpar
+              </button>
+            )}
+            <span className="text-xs text-muted-foreground font-medium">
+              {filtered.length} pedido{filtered.length !== 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
-        {hasFilters && (
-          <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium ml-auto">
-            <X className="w-3 h-3" /> Limpar filtros
-          </button>
+        {/* 60-day info notice */}
+        {!hasDateFilter && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-100">
+            <Info className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+            <p className="text-xs text-blue-700">Exibindo pedidos dos últimos 60 dias. Use o filtro de datas para ver pedidos mais antigos.</p>
+          </div>
         )}
-        <span className="text-xs text-muted-foreground font-medium ml-auto">
-          {filtered.length} pedido{filtered.length !== 1 ? 's' : ''}
-        </span>
       </div>
 
       <div className="grid gap-5">

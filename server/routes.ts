@@ -687,6 +687,38 @@ export async function registerRoutes(
     res.status(204).end();
   });
 
+  // ─── Contract Scopes ─────────────────────────────────────────
+  app.get('/api/companies/:id/contract-scopes', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const scopes = await storage.getContractScopes(Number(req.params.id));
+      res.json(scopes);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post('/api/companies/:id/contract-scopes', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const scope = await storage.createContractScope({
+        companyId: Number(req.params.id),
+        dayOfWeek: req.body.dayOfWeek,
+        weekNumber: req.body.weekNumber ?? null,
+        productId: Number(req.body.productId),
+        quantity: Number(req.body.quantity) || 1,
+        observation: req.body.observation ?? null,
+      });
+      res.status(201).json(scope);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete('/api/companies/:id/contract-scopes/:scopeId', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      await storage.deleteContractScope(Number(req.params.scopeId));
+      res.status(204).end();
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // Company validation endpoint — checks all companies for missing required fields
   app.get('/api/admin/companies/validate', async (req, res) => {
     try {
