@@ -25,6 +25,9 @@ Key features:
 - Duplicate order protection (in-memory, 60-second window per companyId:deliveryDate:orderWindowId)
 - System logs table with level (INFO/WARN/ERROR), action, user, IP tracking
 - Developer user auto-seeded: dev@vivafrutaz.com / dev
+- Cart auto-save/recovery: localStorage (key vf_cart_{companyId}_{windowId}); toast on restore; cleared on submit
+- Role-based route protection: per-route allowedRoles in ProtectedRoute; unauthorized access logs + redirect to /admin
+- Maintenance mode: stored in systemSettings (key: maintenance_mode); toggle in admin dashboard; blocks all client routes; ADMIN/DIRECTOR/DEVELOPER bypass
 
 ## User Preferences
 

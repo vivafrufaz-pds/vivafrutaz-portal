@@ -878,6 +878,64 @@ export async function registerRoutes(
     });
   });
 
+  // --- Maintenance Mode ---
+  app.get('/api/settings/maintenance', async (req, res) => {
+    try {
+      const val = await storage.getSetting('maintenance_mode');
+      res.json({ enabled: val === 'true' });
+    } catch {
+      res.json({ enabled: false });
+    }
+  });
+
+  app.post('/api/settings/maintenance', async (req, res) => {
+    try {
+      const sess = req.session as any;
+      const userId = sess?.userId;
+      const user = userId ? await storage.getUser(userId) : null;
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+        return res.status(403).json({ message: 'Sem permissão' });
+      }
+      const { enabled } = req.body;
+      await storage.setSetting('maintenance_mode', enabled ? 'true' : 'false');
+      await storage.createLog({
+        action: enabled ? 'MAINTENANCE_ON' : 'MAINTENANCE_OFF',
+        description: `Modo manutenção ${enabled ? 'ativado' : 'desativado'} por ${user.email}`,
+        userId: user.id,
+        userEmail: user.email,
+        userRole: user.role,
+        ip: req.ip || '',
+        level: 'WARN',
+      });
+      res.json({ enabled });
+    } catch (err) {
+      console.error('Maintenance toggle error:', err);
+      res.status(500).json({ message: 'Erro interno' });
+    }
+  });
+
+  // --- Log Unauthorized Route Access ---
+  app.post('/api/auth/log-unauthorized', async (req, res) => {
+    try {
+      const sess = req.session as any;
+      const userId = sess?.userId;
+      const user = userId ? await storage.getUser(userId) : null;
+      const { route } = req.body;
+      await storage.createLog({
+        action: 'UNAUTHORIZED_ACCESS',
+        description: `Tentativa de acesso não autorizado à rota: ${route || '?'}`,
+        userId: user?.id || null,
+        userEmail: user?.email || '(desconhecido)',
+        userRole: user?.role || '(desconhecido)',
+        ip: req.ip || '',
+        level: 'WARN',
+      });
+      res.json({ ok: true });
+    } catch {
+      res.json({ ok: false });
+    }
+  });
+
   // Seed DB Function
   await seedDatabase();
 

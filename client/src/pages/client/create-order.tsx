@@ -1,11 +1,12 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useActiveOrderWindow, useCreateOrder, useCompanyOrders, useOrderDetail } from "@/hooks/use-ordering";
 import { useProducts } from "@/hooks/use-catalog";
 import { Layout } from "@/components/Layout";
+import { useToast } from "@/hooks/use-toast";
 import {
   ShoppingCart, CheckCircle2, AlertCircle, RotateCcw, Package,
-  Minus, Plus, Trash2, FileText, Clock, PartyPopper, X, Search, AlertTriangle, Lock
+  Minus, Plus, Trash2, FileText, Clock, PartyPopper, X, Search, AlertTriangle, Lock, RefreshCcw
 } from "lucide-react";
 
 const DAY_OPTIONS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
@@ -55,6 +56,7 @@ export default function CreateOrderPage() {
   const { data: products } = useProducts();
   const createOrder = useCreateOrder();
   const { data: companyOrders } = useCompanyOrders(company?.id);
+  const { toast } = useToast();
 
   const urlDay = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('day') || '';
 
@@ -67,6 +69,45 @@ export default function CreateOrderPage() {
   const [successOrder, setSuccessOrder] = useState<{ orderCode: string; total: number } | null>(null);
   const [filterCategory, setFilterCategory] = useState("ALL");
   const [search, setSearch] = useState("");
+
+  // Cart auto-save key (scoped to company + order window)
+  const cartKey = company && activeWindow
+    ? `vf_cart_${company.id}_${activeWindow.id}`
+    : null;
+
+  // Restore cart from localStorage once company + window are loaded
+  const cartRestored = useRef(false);
+  useEffect(() => {
+    if (!cartKey || cartRestored.current) return;
+    cartRestored.current = true;
+    try {
+      const saved = localStorage.getItem(cartKey);
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      const hasItems = Object.keys(parsed.cart || {}).length > 0;
+      if (!hasItems) return;
+      setCart(parsed.cart || {});
+      if (parsed.selectedDay) setSelectedDay(parsed.selectedDay);
+      if (parsed.orderNote) setOrderNote(parsed.orderNote);
+      toast({
+        title: '🛒 Pedido recuperado',
+        description: 'Seu pedido anterior foi recuperado automaticamente.',
+      });
+    } catch {
+      // ignore parse errors
+    }
+  }, [cartKey]);
+
+  // Auto-save cart to localStorage on every change
+  useEffect(() => {
+    if (!cartKey) return;
+    const hasItems = Object.keys(cart).length > 0;
+    if (hasItems || orderNote) {
+      localStorage.setItem(cartKey, JSON.stringify({ cart, selectedDay, orderNote }));
+    } else {
+      localStorage.removeItem(cartKey);
+    }
+  }, [cart, selectedDay, orderNote, cartKey]);
 
   useEffect(() => { if (urlDay && !selectedDay) setSelectedDay(urlDay); }, [urlDay]);
 
@@ -199,6 +240,9 @@ export default function CreateOrderPage() {
         items,
       });
 
+      // Clear saved cart after successful submission
+      if (cartKey) localStorage.removeItem(cartKey);
+
       setSuccessOrder({
         orderCode: result.orderCode || `VF-${new Date().getFullYear()}-${String(result.id).padStart(6, '0')}`,
         total: cartTotal,
@@ -233,7 +277,7 @@ export default function CreateOrderPage() {
             <a href="/client/history" className="px-6 py-3 bg-primary text-white font-bold rounded-xl hover:-translate-y-0.5 transition-transform">
               Ver Meus Pedidos
             </a>
-            <button onClick={() => { setSuccessOrder(null); setCart({}); setOrderNote(""); }}
+            <button onClick={() => { setSuccessOrder(null); setCart({}); setOrderNote(""); if (cartKey) localStorage.removeItem(cartKey); }}
               className="px-6 py-3 border-2 border-border font-bold rounded-xl text-muted-foreground hover:bg-muted transition-colors">
               Novo Pedido
             </button>
