@@ -49,6 +49,7 @@ import AdminExecutiveDashboard from "@/pages/admin/executive-dashboard";
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
 import ClientOrderHistory from "@/pages/client/order-history";
+import ClientEditOrder from "@/pages/client/edit-order";
 import ClientSpecialOrder from "@/pages/client/special-order";
 import ClientIncidents from "@/pages/client/incidents";
 import ClientQuotations from "@/pages/client/quotations";
@@ -249,6 +250,9 @@ function Router() {
       {/* Client Routes */}
       <Route path="/client">
         {() => <ProtectedRoute component={ClientDashboard} role="client" />}
+      </Route>
+      <Route path="/client/order/edit/:id">
+        {() => <ProtectedRoute component={ClientEditOrder} role="client" />}
       </Route>
       <Route path="/client/order">
         {() => <ProtectedRoute component={ClientCreateOrder} role="client" />}

@@ -58,6 +58,8 @@ Preferred communication style: Simple, everyday language.
 - **Virtual Assistant (`Assistente Virtual`)**: Floating chat widget with FAQ-based answers.
 - **Incident Management**: Client incidents (`Ocorrências de Clientes`) and internal incidents (`Ocorrências Internas`) with workflows and status tracking.
 - **Maintenance/Test Modes**: System-wide toggles with bypass for privileged roles.
+- **Tab-Level Permissions**: `tabPermissions jsonb` on users; admin UI checkboxes per-role; `Layout.tsx` filters sidebar; `ProtectedRoute` enforces per-tab access. ADMIN/DIRECTOR/DEVELOPER can configure.
+- **Order Date-Lock & Reopen Workflow**: New orders start as `CONFIRMED` (locked). Clients request reopening from history page; admins (ADMIN/DIRECTOR/OPERATIONS_MANAGER/LOGISTICS) approve/deny from `/admin/orders`; approved orders enter `OPEN_FOR_EDITING` state, client edits via `/client/order/edit/:id`, and finalizes back to `CONFIRMED`. Status flow: `CONFIRMED → REOPEN_REQUESTED → OPEN_FOR_EDITING → CONFIRMED`. Date-lock blocks duplicate delivery date orders on create page.
 
 ## External Dependencies
 

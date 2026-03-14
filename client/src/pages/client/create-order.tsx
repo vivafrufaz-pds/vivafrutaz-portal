@@ -130,6 +130,16 @@ export default function CreateOrderPage() {
     return getDeliveryDate(selectedDay, activeWindow.deliveryStartDate as unknown as string, activeWindow.deliveryEndDate as unknown as string);
   }, [activeWindow, selectedDay]);
 
+  // Check if an order already exists for the selected delivery date (date-lock)
+  const existingOrderForDate = useMemo(() => {
+    if (!deliveryDate || !companyOrders) return null;
+    return companyOrders.find(o => {
+      if (o.status === 'CANCELLED') return false;
+      const d = new Date(o.deliveryDate).toISOString().split('T')[0];
+      return d === deliveryDate;
+    }) || null;
+  }, [deliveryDate, companyOrders]);
+
   const lastOrder = companyOrders?.[0];
   const { data: lastOrderDetail } = useOrderDetail(lastOrder?.id);
 
@@ -561,14 +571,35 @@ export default function CreateOrderPage() {
                   <p className="font-bold text-foreground">Total</p>
                   <p className="text-2xl font-display font-bold text-primary">R$ {fmtBRL(cartTotal)}</p>
                 </div>
-                <button data-testid="button-submit-order" onClick={handleSubmit}
-                  disabled={!selectedDay || !deliveryDate || cartItems.length === 0 || createOrder.isPending || submitting}
-                  className="w-full py-3.5 bg-secondary text-secondary-foreground font-bold rounded-xl shadow-lg shadow-secondary/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none flex justify-center items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5" />
-                  {submitting || createOrder.isPending ? "Processando pedido..." : "Confirmar Pedido"}
-                </button>
-                {!selectedDay && cartItems.length > 0 && (
-                  <p className="text-red-500 text-xs font-medium text-center">Selecione um dia de entrega.</p>
+
+                {/* Date-lock: block submission if order already exists for this delivery date */}
+                {existingOrderForDate && existingOrderForDate.status !== 'OPEN_FOR_EDITING' ? (
+                  <div className="rounded-xl border-2 border-orange-200 bg-orange-50 p-4 text-center space-y-3">
+                    <div className="flex items-center justify-center gap-2 text-orange-700">
+                      <Lock className="w-5 h-5 flex-shrink-0" />
+                      <p className="font-bold text-sm">Você já possui um pedido registrado para essa data de entrega.</p>
+                    </div>
+                    <p className="text-orange-600 text-xs">
+                      Pedido <span className="font-mono font-bold">{existingOrderForDate.orderCode || `#${existingOrderForDate.id}`}</span> — status: <span className="font-bold">{existingOrderForDate.status === 'CONFIRMED' ? 'Pedido Confirmado' : existingOrderForDate.status === 'REOPEN_REQUESTED' ? 'Solicitação de Alteração' : existingOrderForDate.status}</span>
+                    </p>
+                    <a href="/client/history"
+                      data-testid="button-view-existing-order"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white font-bold rounded-xl text-sm hover:bg-orange-600 transition-colors">
+                      Ver meu pedido
+                    </a>
+                  </div>
+                ) : (
+                  <>
+                    <button data-testid="button-submit-order" onClick={handleSubmit}
+                      disabled={!selectedDay || !deliveryDate || cartItems.length === 0 || createOrder.isPending || submitting || !!existingOrderForDate}
+                      className="w-full py-3.5 bg-secondary text-secondary-foreground font-bold rounded-xl shadow-lg shadow-secondary/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none flex justify-center items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5" />
+                      {submitting || createOrder.isPending ? "Processando pedido..." : "Confirmar Pedido"}
+                    </button>
+                    {!selectedDay && cartItems.length > 0 && (
+                      <p className="text-red-500 text-xs font-medium text-center">Selecione um dia de entrega.</p>
+                    )}
+                  </>
                 )}
               </div>
             </div>

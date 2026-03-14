@@ -109,6 +109,7 @@ export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   orderCode: text("order_code").unique(),
   status: text("status").default("ACTIVE").notNull(),
+  // status values: ACTIVE (legacy), CONFIRMED, REOPEN_REQUESTED, OPEN_FOR_EDITING, CANCELLED, DELIVERED
   adminNote: text("admin_note"),
   companyId: integer("company_id").references(() => companies.id).notNull(),
   orderDate: timestamp("order_date").defaultNow().notNull(),
@@ -118,6 +119,8 @@ export const orders = pgTable("orders", {
   orderNote: text("order_note"),
   allowReplication: boolean("allow_replication").default(false).notNull(),
   nimbiExpiration: date("nimbi_expiration"),
+  reopenReason: text("reopen_reason"),
+  reopenRequestedAt: timestamp("reopen_requested_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

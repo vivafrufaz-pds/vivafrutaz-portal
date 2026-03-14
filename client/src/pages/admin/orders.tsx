@@ -10,7 +10,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Receipt, Search, ChevronDown, ChevronUp, MessageSquare, Package, FileText,
-  XCircle, Edit3, AlertTriangle, CheckCircle, StickyNote, Save, Trash2, Calendar
+  XCircle, Edit3, AlertTriangle, CheckCircle, StickyNote, Save, Trash2, Calendar,
+  Lock, Unlock, ThumbsUp, ThumbsDown, ClipboardEdit
 } from "lucide-react";
 import { api } from "@shared/routes";
 
@@ -18,12 +19,20 @@ type Order = any;
 
 const STATUS_BADGE: Record<string, string> = {
   ACTIVE: "bg-green-100 text-green-700",
+  CONFIRMED: "bg-blue-100 text-blue-700",
+  REOPEN_REQUESTED: "bg-orange-100 text-orange-700",
+  OPEN_FOR_EDITING: "bg-yellow-100 text-yellow-700",
   CANCELLED: "bg-red-100 text-red-700",
+  DELIVERED: "bg-emerald-100 text-emerald-700",
 };
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Ativo",
+  CONFIRMED: "Confirmado",
+  REOPEN_REQUESTED: "Solicitação de Alteração",
+  OPEN_FOR_EDITING: "Em Edição",
   CANCELLED: "Cancelado",
+  DELIVERED: "Entregue",
 };
 
 // ─── Admin Note Modal ─────────────────────────────────────────
@@ -203,7 +212,7 @@ function CancelModal({ order, onClose, onConfirm }: { order: Order; onClose: () 
 
 // ─── Order Row ────────────────────────────────────────────────
 function OrderRow({
-  order, companyName, products, onNoteEdit, onEdit, onCancel, onRestore, onPatchNimbi
+  order, companyName, products, onNoteEdit, onEdit, onCancel, onRestore, onPatchNimbi, onApproveReopen, onDenyReopen
 }: {
   order: Order;
   companyName: string;
@@ -213,12 +222,15 @@ function OrderRow({
   onCancel: (order: Order) => void;
   onRestore: (order: Order) => void;
   onPatchNimbi: (id: number, date: string) => Promise<void>;
+  onApproveReopen: (order: Order) => void;
+  onDenyReopen: (order: Order) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [nimbiDate, setNimbiDate] = useState(order.nimbiExpiration || '');
   const [savingNimbi, setSavingNimbi] = useState(false);
   const { data: detail } = useOrderDetail(expanded ? order.id : undefined);
   const isCancelled = order.status === 'CANCELLED';
+  const isReopenRequested = order.status === 'REOPEN_REQUESTED';
 
   const handleSaveNimbi = async () => {
     setSavingNimbi(true);
@@ -276,7 +288,26 @@ function OrderRow({
         <td className="px-5 py-4">
           {/* Action buttons */}
           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-            {!isCancelled ? (
+            {isReopenRequested ? (
+              <>
+                <button
+                  data-testid={`button-approve-reopen-${order.id}`}
+                  onClick={() => onApproveReopen(order)}
+                  title="Aprovar reabertura"
+                  className="p-1.5 text-muted-foreground hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                >
+                  <ThumbsUp className="w-4 h-4" />
+                </button>
+                <button
+                  data-testid={`button-deny-reopen-${order.id}`}
+                  onClick={() => onDenyReopen(order)}
+                  title="Negar reabertura"
+                  className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <ThumbsDown className="w-4 h-4" />
+                </button>
+              </>
+            ) : !isCancelled ? (
               <>
                 <button
                   data-testid={`button-note-${order.id}`}
@@ -342,6 +373,32 @@ function OrderRow({
                   Limpar
                 </button>}
               </div>
+              {order.reopenReason && (
+                <div className="flex items-start gap-2 p-3 bg-orange-50 rounded-xl border border-orange-200">
+                  <ClipboardEdit className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-orange-700 uppercase tracking-wider mb-0.5">Motivo da solicitação de alteração</p>
+                    <p className="text-sm text-orange-900 font-medium">{order.reopenReason}</p>
+                    {order.reopenRequestedAt && (
+                      <p className="text-xs text-orange-600 mt-0.5">{format(new Date(order.reopenRequestedAt), "d MMM yyyy 'às' HH:mm", { locale: ptBR })}</p>
+                    )}
+                    {isReopenRequested && (
+                      <div className="flex gap-2 mt-2">
+                        <button onClick={() => onApproveReopen(order)}
+                          data-testid={`button-approve-expanded-${order.id}`}
+                          className="px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-lg hover:bg-green-600 transition-colors flex items-center gap-1">
+                          <ThumbsUp className="w-3.5 h-3.5" /> Aprovar Reabertura
+                        </button>
+                        <button onClick={() => onDenyReopen(order)}
+                          data-testid={`button-deny-expanded-${order.id}`}
+                          className="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1">
+                          <ThumbsDown className="w-3.5 h-3.5" /> Negar Reabertura
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {order.orderNote && (
                 <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-xl border border-blue-100">
                   <MessageSquare className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
@@ -448,6 +505,28 @@ export default function OrdersPage() {
     toast({ title: "Pedido restaurado!" });
   };
 
+  const approveReopen = async (order: Order) => {
+    try {
+      const res = await fetch(`/api/orders/${order.id}/approve-reopen`, {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
+      queryClient.invalidateQueries({ queryKey: [api.orders.list.path] });
+      toast({ title: "Reabertura aprovada! Pedido em edição pelo cliente." });
+    } catch (e: any) { toast({ title: e.message || "Erro", variant: "destructive" }); }
+  };
+
+  const denyReopen = async (order: Order) => {
+    try {
+      const res = await fetch(`/api/orders/${order.id}/deny-reopen`, {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
+      queryClient.invalidateQueries({ queryKey: [api.orders.list.path] });
+      toast({ title: "Reabertura negada. Pedido confirmado." });
+    } catch (e: any) { toast({ title: e.message || "Erro", variant: "destructive" }); }
+  };
+
   const saveItems = async (items: any[]) => {
     const res = await fetch(`/api/orders/${editOrder!.id}/items`, {
       method: 'PUT',
@@ -463,8 +542,9 @@ export default function OrdersPage() {
 
   const counts = {
     all: orders?.length || 0,
-    active: orders?.filter(o => o.status !== 'CANCELLED').length || 0,
+    active: orders?.filter(o => !['CANCELLED'].includes(o.status)).length || 0,
     cancelled: orders?.filter(o => o.status === 'CANCELLED').length || 0,
+    reopenRequested: orders?.filter(o => o.status === 'REOPEN_REQUESTED').length || 0,
   };
 
   return (
@@ -474,8 +554,9 @@ export default function OrdersPage() {
           <h1 className="text-3xl font-display font-bold text-foreground">Gestão de Pedidos</h1>
           <p className="text-muted-foreground mt-1">Altere, cancele e anote observações nos pedidos das empresas.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <div className="px-3 py-1.5 bg-green-100 text-green-700 rounded-xl text-sm font-bold">{counts.active} ativos</div>
+          {counts.reopenRequested > 0 && <div className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-xl text-sm font-bold">{counts.reopenRequested} solicitações</div>}
           {counts.cancelled > 0 && <div className="px-3 py-1.5 bg-red-100 text-red-700 rounded-xl text-sm font-bold">{counts.cancelled} cancelados</div>}
         </div>
       </div>
@@ -492,16 +573,16 @@ export default function OrdersPage() {
               className="w-full pl-9 pr-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none text-sm"
             />
           </div>
-          <div className="flex gap-2">
-            {['ALL', 'ACTIVE', 'CANCELLED'].map(s => (
+          <div className="flex gap-2 flex-wrap">
+            {(['ALL', 'ACTIVE', 'CONFIRMED', 'REOPEN_REQUESTED', 'OPEN_FOR_EDITING', 'CANCELLED'] as const).map(s => (
               <button key={s}
                 onClick={() => setFilterStatus(s)}
-                className={`px-4 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+                className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
                   filterStatus === s
                     ? 'bg-primary text-white border-primary'
                     : 'border-border text-muted-foreground hover:border-primary/50'
                 }`}>
-                {s === 'ALL' ? 'Todos' : s === 'ACTIVE' ? 'Ativos' : 'Cancelados'}
+                {s === 'ALL' ? 'Todos' : STATUS_LABEL[s] || s}
               </button>
             ))}
           </div>
@@ -540,6 +621,8 @@ export default function OrdersPage() {
                       onCancel={setCancelOrder}
                       onRestore={restoreOrder}
                       onPatchNimbi={saveNimbi}
+                      onApproveReopen={approveReopen}
+                      onDenyReopen={denyReopen}
                     />
                   );
                 })

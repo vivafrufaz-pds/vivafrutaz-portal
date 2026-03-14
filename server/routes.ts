@@ -308,7 +308,7 @@ export async function registerRoutes(
         } else {
           checks.push({ id: 'orders_code', label: 'Códigos de Pedidos (VF)', status: 'OK', detail: `Todos os ${orders.length} pedido(s) possuem código VF.` });
         }
-        const validStatuses = ['ACTIVE', 'PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED', 'IN_PROGRESS', 'DONE'];
+        const validStatuses = ['ACTIVE', 'PENDING', 'CONFIRMED', 'DELIVERED', 'CANCELLED', 'IN_PROGRESS', 'DONE', 'REOPEN_REQUESTED', 'OPEN_FOR_EDITING'];
         const badStatus = orders.filter((o: any) => !validStatuses.includes(o.status));
         if (badStatus.length > 0) {
           checks.push({ id: 'orders_status', label: 'Status dos Pedidos', status: 'WARN', detail: `${badStatus.length} pedido(s) com status inválido detectado(s).` });
@@ -962,7 +962,24 @@ export async function registerRoutes(
       }
       recentOrders.set(dupKey, Date.now());
 
-      const newOrder = await storage.createOrder(order, items);
+      // Date-lock: check if a non-cancelled order already exists for this company + delivery date
+      const requestedDate = new Date(order.deliveryDate);
+      const requestedDateStr = requestedDate.toISOString().split('T')[0];
+      const companyOrders = await storage.getOrdersByCompanyId(order.companyId);
+      const existingForDate = companyOrders.find(o => {
+        if (['CANCELLED'].includes(o.status)) return false;
+        const d = new Date(o.deliveryDate).toISOString().split('T')[0];
+        return d === requestedDateStr;
+      });
+      if (existingForDate) {
+        return res.status(409).json({
+          message: "Você já possui um pedido registrado para essa data de entrega.",
+          existingOrderId: existingForDate.id,
+          existingOrderCode: existingForDate.orderCode,
+        });
+      }
+
+      const newOrder = await storage.createOrder({ ...order, status: 'CONFIRMED' }, items);
       res.status(201).json(newOrder);
 
       // Log order creation
@@ -1049,6 +1066,114 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Update order error:", err);
       res.status(400).json({ message: "Bad request" });
+    }
+  });
+
+  // Client requests reopening of a confirmed/locked order
+  app.post('/api/orders/:id/request-reopen', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const companyId = req.session?.companyId;
+      if (!companyId) return res.status(401).json({ message: 'Não autenticado' });
+      const data = await storage.getOrder(id);
+      if (!data) return res.status(404).json({ message: 'Pedido não encontrado' });
+      if (data.order.companyId !== companyId) return res.status(403).json({ message: 'Sem permissão' });
+      if (!['CONFIRMED', 'ACTIVE'].includes(data.order.status)) {
+        return res.status(400).json({ message: 'Pedido não pode ser reaberto neste status.' });
+      }
+      const { reason } = req.body;
+      if (!reason || String(reason).trim().length < 3) {
+        return res.status(400).json({ message: 'Informe o motivo da alteração.' });
+      }
+      const updated = await storage.updateOrder(id, {
+        status: 'REOPEN_REQUESTED',
+        reopenReason: String(reason).trim(),
+        reopenRequestedAt: new Date(),
+      });
+      await storage.createLog({ action: 'ORDER_REOPEN_REQUESTED', description: `Pedido ${data.order.orderCode} — solicitação de alteração: ${reason}`, companyId, userRole: 'CLIENT', level: 'INFO' });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || 'Erro interno' });
+    }
+  });
+
+  // Admin approves reopening → OPEN_FOR_EDITING
+  app.post('/api/orders/:id/approve-reopen', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const userId = req.session?.userId;
+      if (!userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(userId);
+      const REOPEN_ROLES = ['ADMIN', 'DIRECTOR', 'OPERATIONS_MANAGER', 'LOGISTICS'];
+      if (!user || !REOPEN_ROLES.includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const data = await storage.getOrder(id);
+      if (!data) return res.status(404).json({ message: 'Pedido não encontrado' });
+      if (data.order.status !== 'REOPEN_REQUESTED') {
+        return res.status(400).json({ message: 'Pedido não está em solicitação de alteração.' });
+      }
+      const updated = await storage.updateOrder(id, { status: 'OPEN_FOR_EDITING' });
+      await storage.createLog({ action: 'ORDER_REOPEN_APPROVED', description: `Pedido ${data.order.orderCode} aprovado para edição por ${user.email}`, userRole: user.role, level: 'INFO' });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || 'Erro interno' });
+    }
+  });
+
+  // Admin denies reopening → back to CONFIRMED
+  app.post('/api/orders/:id/deny-reopen', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const userId = req.session?.userId;
+      if (!userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(userId);
+      const REOPEN_ROLES = ['ADMIN', 'DIRECTOR', 'OPERATIONS_MANAGER', 'LOGISTICS'];
+      if (!user || !REOPEN_ROLES.includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const data = await storage.getOrder(id);
+      if (!data) return res.status(404).json({ message: 'Pedido não encontrado' });
+      if (data.order.status !== 'REOPEN_REQUESTED') {
+        return res.status(400).json({ message: 'Pedido não está em solicitação de alteração.' });
+      }
+      const updated = await storage.updateOrder(id, { status: 'CONFIRMED', reopenReason: null, reopenRequestedAt: null });
+      await storage.createLog({ action: 'ORDER_REOPEN_DENIED', description: `Pedido ${data.order.orderCode} negado por ${user.email}`, userRole: user.role, level: 'INFO' });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || 'Erro interno' });
+    }
+  });
+
+  // Client re-finalizes an open-for-editing order → back to CONFIRMED
+  app.post('/api/orders/:id/finalize-edit', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const companyId = req.session?.companyId;
+      if (!companyId) return res.status(401).json({ message: 'Não autenticado' });
+      const data = await storage.getOrder(id);
+      if (!data) return res.status(404).json({ message: 'Pedido não encontrado' });
+      if (data.order.companyId !== companyId) return res.status(403).json({ message: 'Sem permissão' });
+      if (data.order.status !== 'OPEN_FOR_EDITING') {
+        return res.status(400).json({ message: 'Pedido não está em modo de edição.' });
+      }
+      const { items } = req.body;
+      if (Array.isArray(items) && items.length > 0) {
+        await storage.updateOrderItems(id, items);
+      }
+      const updated = await storage.updateOrder(id, { status: 'CONFIRMED', reopenReason: null, reopenRequestedAt: null });
+      await storage.createLog({ action: 'ORDER_EDIT_FINALIZED', description: `Pedido ${data.order.orderCode} re-finalizado pelo cliente`, companyId, userRole: 'CLIENT', level: 'INFO' });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || 'Erro interno' });
+    }
+  });
+
+  // Admin endpoint to check orders with REOPEN_REQUESTED status
+  app.get('/api/orders/reopen-requests', async (req, res) => {
+    try {
+      const userId = req.session?.userId;
+      if (!userId) return res.status(401).json({ message: 'Não autenticado' });
+      const allOrders = await storage.getOrders();
+      res.json(allOrders.filter(o => o.status === 'REOPEN_REQUESTED'));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || 'Erro interno' });
     }
   });
 
