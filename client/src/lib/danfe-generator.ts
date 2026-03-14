@@ -188,7 +188,7 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   doc.text("DESTINATÁRIO (Cliente)", colRx + 3, y + 4.2);
   y += 6;
 
-  const infoBoxH = 28;
+  const infoBoxH = 36;
   doc.setFillColor(...LIGHT_GRAY);
   doc.rect(margin, y, halfW, infoBoxH, "F");
   doc.rect(colRx, y, halfW, infoBoxH, "F");
@@ -196,14 +196,17 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   doc.setTextColor(...DARK);
   doc.setFontSize(7.5);
   doc.setFont("helvetica", "bold");
-  doc.text("VivaFrutaz", margin + 3, y + 6);
+  doc.text(data.vivaFrutaz.companyName || "VivaFrutaz", margin + 3, y + 6);
   doc.setFont("helvetica", "normal");
   if (data.vivaFrutaz.cnpj) doc.text(`CNPJ: ${data.vivaFrutaz.cnpj}`, margin + 3, y + 11);
   if (data.vivaFrutaz.address) {
     const lines = doc.splitTextToSize(data.vivaFrutaz.address, halfW - 6);
     doc.text(lines, margin + 3, y + 16);
   }
+  const cityState = [data.vivaFrutaz.city, data.vivaFrutaz.state].filter(Boolean).join(" – ");
+  if (cityState) doc.text(cityState, margin + 3, y + 21);
   if (data.vivaFrutaz.phone) doc.text(`Tel: ${data.vivaFrutaz.phone}`, margin + 3, y + 24);
+  if (data.vivaFrutaz.email) doc.text(`Email: ${data.vivaFrutaz.email}`, margin + 3, y + 28);
 
   doc.setFont("helvetica", "bold");
   doc.text(data.company.companyName, colRx + 3, y + 6);

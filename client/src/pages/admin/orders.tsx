@@ -229,7 +229,10 @@ function DanfePanel({ order, company, products }: { order: Order; company: any; 
   });
 
   const buildDanfeData = async (): Promise<DanfeData> => {
-    const detail = await fetch(`/api/orders/${order.id}`, { credentials: "include" }).then(r => r.json());
+    const [detail, configRes] = await Promise.all([
+      fetch(`/api/orders/${order.id}`, { credentials: "include" }).then(r => r.json()),
+      fetch("/api/company-config", { credentials: "include" }).then(r => r.ok ? r.json() : {}),
+    ]);
     const items = (detail.items || []).map((item: any) => {
       const product = products.find((p: any) => p.id === Number(item.productId));
       return {
@@ -267,9 +270,13 @@ function DanfePanel({ order, company, products }: { order: Order; company: any; 
         addressZip: company?.addressZip,
       },
       vivaFrutaz: {
-        cnpj: null,
-        address: null,
-        phone: null,
+        companyName: configRes?.companyName || "VivaFrutaz",
+        cnpj: configRes?.cnpj || null,
+        address: configRes?.address || null,
+        city: configRes?.city || null,
+        state: configRes?.state || null,
+        phone: configRes?.phone || null,
+        email: configRes?.email || null,
       },
     };
   };
