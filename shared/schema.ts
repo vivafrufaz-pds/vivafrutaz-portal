@@ -223,6 +223,86 @@ export const internalIncidents = pgTable("internal_incidents", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ─── Logística ────────────────────────────────────────────────
+export const logisticsDrivers = pgTable("logistics_drivers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  cpf: text("cpf"),
+  phone: text("phone"),
+  email: text("email"),
+  licenseNumber: text("license_number"),
+  active: boolean("active").notNull().default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const logisticsVehicles = pgTable("logistics_vehicles", {
+  id: serial("id").primaryKey(),
+  plate: text("plate").notNull().unique(),
+  model: text("model").notNull(),
+  brand: text("brand").notNull(),
+  year: integer("year"),
+  type: text("type").notNull().default("VAN"), // VAN, TRUCK, MOTORCYCLE, CAR
+  capacity: text("capacity"),
+  active: boolean("active").notNull().default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const logisticsRoutes = pgTable("logistics_routes", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  driverId: integer("driver_id").references(() => logisticsDrivers.id),
+  driverName: text("driver_name"),
+  vehicleId: integer("vehicle_id").references(() => logisticsVehicles.id),
+  vehiclePlate: text("vehicle_plate"),
+  deliveryDate: date("delivery_date"),
+  status: text("status").notNull().default("SCHEDULED"), // SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED
+  companyIds: jsonb("company_ids").default([]),
+  companyNames: text("company_names"),
+  notes: text("notes"),
+  startTime: text("start_time"),
+  endTime: text("end_time"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const logisticsMaintenance = pgTable("logistics_maintenance", {
+  id: serial("id").primaryKey(),
+  vehicleId: integer("vehicle_id").references(() => logisticsVehicles.id),
+  vehiclePlate: text("vehicle_plate"),
+  type: text("type").notNull(), // PREVENTIVE, CORRECTIVE, INSPECTION
+  description: text("description").notNull(),
+  cost: numeric("cost", { precision: 10, scale: 2 }),
+  scheduledDate: date("scheduled_date"),
+  completedDate: date("completed_date"),
+  status: text("status").notNull().default("SCHEDULED"), // SCHEDULED, IN_PROGRESS, COMPLETED
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ─── Cotação de Empresas ───────────────────────────────────────
+export const companyQuotations = pgTable("company_quotations", {
+  id: serial("id").primaryKey(),
+  companyName: text("company_name").notNull(),
+  contactName: text("contact_name").notNull(),
+  contactPhone: text("contact_phone"),
+  email: text("email"),
+  cnpj: text("cnpj"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  estimatedVolume: text("estimated_volume"),
+  productInterest: text("product_interest"),
+  logisticsNote: text("logistics_note"),
+  orderWindowIds: jsonb("order_window_ids").default([]),
+  priceGroupId: integer("price_group_id").references(() => priceGroups.id),
+  priceGroupName: text("price_group_name"),
+  status: text("status").notNull().default("PENDING"), // PENDING, IN_ANALYSIS, APPROVED, REJECTED
+  adminNote: text("admin_note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // ─── Insert Schemas ───────────────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertPriceGroupSchema = createInsertSchema(priceGroups).omit({ id: true });
@@ -284,3 +364,8 @@ export type TestOrder = typeof testOrders.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type ClientIncident = typeof clientIncidents.$inferSelect;
 export type InternalIncident = typeof internalIncidents.$inferSelect;
+export type LogisticsDriver = typeof logisticsDrivers.$inferSelect;
+export type LogisticsVehicle = typeof logisticsVehicles.$inferSelect;
+export type LogisticsRoute = typeof logisticsRoutes.$inferSelect;
+export type LogisticsMaintenance = typeof logisticsMaintenance.$inferSelect;
+export type CompanyQuotation = typeof companyQuotations.$inferSelect;

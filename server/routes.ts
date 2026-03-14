@@ -1197,6 +1197,247 @@ export async function registerRoutes(
     } catch (e) { res.status(500).json({ message: 'Error deleting internal incident' }); }
   });
 
+  // ─── LOGÍSTICA ────────────────────────────────────────────────
+  const logAuth = async (req: any, res: any) => {
+    if (!req.session?.userId) { res.status(401).json({ message: 'Not authenticated' }); return null; }
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) {
+      res.status(403).json({ message: 'Sem permissão' }); return null;
+    }
+    return user;
+  };
+
+  // Motoristas
+  app.get('/api/logistics/drivers', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { res.json(await storage.getDrivers()); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+  app.post('/api/logistics/drivers', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try {
+      const { name, cpf, phone, email, licenseNumber, notes } = req.body;
+      if (!name) return res.status(400).json({ message: 'Nome obrigatório' });
+      const d = await storage.createDriver({ name, cpf, phone, email, licenseNumber, notes, active: true });
+      await storage.createLog({ action: 'DRIVER_CREATED', description: `Motorista criado: ${name}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(d);
+    } catch (e: any) { res.status(500).json({ message: e?.message || 'Erro' }); }
+  });
+  app.patch('/api/logistics/drivers/:id', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { res.json(await storage.updateDriver(parseInt(req.params.id), req.body)); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+  app.delete('/api/logistics/drivers/:id', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { await storage.deleteDriver(parseInt(req.params.id)); res.json({ ok: true }); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+
+  // Veículos
+  app.get('/api/logistics/vehicles', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { res.json(await storage.getVehicles()); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+  app.post('/api/logistics/vehicles', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try {
+      const { plate, model, brand, year, type, capacity, notes } = req.body;
+      if (!plate || !model || !brand) return res.status(400).json({ message: 'Placa, modelo e marca obrigatórios' });
+      const v = await storage.createVehicle({ plate: plate.toUpperCase(), model, brand, year: year ? parseInt(year) : undefined, type, capacity, notes, active: true });
+      await storage.createLog({ action: 'VEHICLE_CREATED', description: `Veículo criado: ${plate}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(v);
+    } catch (e: any) { res.status(500).json({ message: e?.message || 'Erro' }); }
+  });
+  app.patch('/api/logistics/vehicles/:id', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { res.json(await storage.updateVehicle(parseInt(req.params.id), req.body)); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+  app.delete('/api/logistics/vehicles/:id', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { await storage.deleteVehicle(parseInt(req.params.id)); res.json({ ok: true }); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+
+  // Rotas
+  app.get('/api/logistics/routes', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { res.json(await storage.getRoutes()); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+  app.post('/api/logistics/routes', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try {
+      const { name, driverId, driverName, vehicleId, vehiclePlate, deliveryDate, notes, companyNames, startTime, endTime } = req.body;
+      if (!name) return res.status(400).json({ message: 'Nome da rota obrigatório' });
+      const r = await storage.createRoute({ name, driverId: driverId || undefined, driverName, vehicleId: vehicleId || undefined, vehiclePlate, deliveryDate: deliveryDate || undefined, notes, companyNames, startTime, endTime });
+      await storage.createLog({ action: 'ROUTE_CREATED', description: `Rota criada: ${name}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(r);
+    } catch (e: any) { res.status(500).json({ message: e?.message || 'Erro' }); }
+  });
+  app.patch('/api/logistics/routes/:id', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { res.json(await storage.updateRoute(parseInt(req.params.id), req.body)); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+  app.delete('/api/logistics/routes/:id', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { await storage.deleteRoute(parseInt(req.params.id)); res.json({ ok: true }); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+
+  // Manutenção
+  app.get('/api/logistics/maintenance', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { res.json(await storage.getMaintenances()); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+  app.post('/api/logistics/maintenance', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try {
+      const { vehicleId, vehiclePlate, type, description, cost, scheduledDate, notes } = req.body;
+      if (!type || !description) return res.status(400).json({ message: 'Tipo e descrição obrigatórios' });
+      const m = await storage.createMaintenance({ vehicleId: vehicleId || undefined, vehiclePlate, type, description, cost: cost || undefined, scheduledDate: scheduledDate || undefined, notes });
+      await storage.createLog({ action: 'MAINTENANCE_CREATED', description: `Manutenção criada: ${type} — ${vehiclePlate}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(m);
+    } catch (e: any) { res.status(500).json({ message: e?.message || 'Erro' }); }
+  });
+  app.patch('/api/logistics/maintenance/:id', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { res.json(await storage.updateMaintenance(parseInt(req.params.id), req.body)); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+  app.delete('/api/logistics/maintenance/:id', async (req, res) => {
+    const user = await logAuth(req, res); if (!user) return;
+    try { await storage.deleteMaintenance(parseInt(req.params.id)); res.json({ ok: true }); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+
+  // ─── COTAÇÃO DE EMPRESAS ──────────────────────────────────────
+  app.get('/api/quotations', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    try { res.json(await storage.getQuotations()); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+  app.post('/api/quotations', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    try {
+      const { companyName, contactName, contactPhone, email, cnpj, address, city, state, estimatedVolume, productInterest, logisticsNote, priceGroupId, priceGroupName } = req.body;
+      if (!companyName || !contactName) return res.status(400).json({ message: 'Empresa e contato obrigatórios' });
+      const q = await storage.createQuotation({ companyName, contactName, contactPhone, email, cnpj, address, city, state, estimatedVolume, productInterest, logisticsNote, priceGroupId: priceGroupId || undefined, priceGroupName });
+      await storage.createLog({ action: 'QUOTATION_CREATED', description: `Cotação criada: ${companyName}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(q);
+    } catch (e: any) { res.status(500).json({ message: e?.message || 'Erro' }); }
+  });
+  app.patch('/api/quotations/:id', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    try {
+      const q = await storage.updateQuotation(parseInt(req.params.id), req.body);
+      await storage.createLog({ action: 'QUOTATION_UPDATED', description: `Cotação #${req.params.id} atualizada`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(q);
+    } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+  app.delete('/api/quotations/:id', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    try { await storage.deleteQuotation(parseInt(req.params.id)); res.json({ ok: true }); } catch (e) { res.status(500).json({ message: 'Erro' }); }
+  });
+
+  // ─── LOGS: limpar ─────────────────────────────────────────────
+  app.delete('/api/logs', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    try {
+      await storage.clearLogs();
+      await storage.createLog({ action: 'LOGS_CLEARED', description: 'Histórico de logs limpo', userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN' });
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ message: 'Erro ao limpar logs' }); }
+  });
+
+  // ─── SAÚDE DO SISTEMA ─────────────────────────────────────────
+  app.get('/api/health', async (req, res) => {
+    const start = Date.now();
+    const report: any = { timestamp: new Date().toISOString(), checks: {} };
+    // DB check
+    try {
+      await storage.getLogs(1);
+      report.checks.database = { status: 'OK', message: 'Banco de dados conectado' };
+    } catch (e: any) {
+      report.checks.database = { status: 'ERROR', message: e?.message };
+    }
+    // Auth check
+    try {
+      const users = await storage.getUsers();
+      report.checks.auth = { status: 'OK', message: `${users.length} usuários cadastrados` };
+    } catch (e: any) {
+      report.checks.auth = { status: 'ERROR', message: e?.message };
+    }
+    // Orders check
+    try {
+      const recent = await storage.getLogs(5);
+      report.checks.logs = { status: 'OK', message: `${recent.length} logs recentes` };
+    } catch (e: any) {
+      report.checks.logs = { status: 'ERROR', message: e?.message };
+    }
+    // Server
+    report.checks.server = { status: 'OK', message: `Servidor respondendo — ${Date.now() - start}ms` };
+    // Session
+    report.checks.session = {
+      status: req.session?.userId || req.session?.companyId ? 'OK' : 'WARN',
+      message: req.session?.userId ? `Usuário #${req.session.userId} autenticado` : req.session?.companyId ? `Empresa #${req.session.companyId}` : 'Sem sessão ativa nesta requisição'
+    };
+    // Maintenance mode
+    try {
+      const maintenance = await storage.getSetting('maintenance_mode');
+      report.checks.maintenance = { status: maintenance === 'true' ? 'WARN' : 'OK', message: maintenance === 'true' ? 'MANUTENÇÃO ATIVA' : 'Sistema operacional' };
+    } catch (e) {
+      report.checks.maintenance = { status: 'WARN', message: 'Não verificado' };
+    }
+    // Test mode
+    try {
+      const testMode = await storage.getSetting('test_mode');
+      report.checks.testMode = { status: testMode === 'true' ? 'WARN' : 'OK', message: testMode === 'true' ? 'MODO TESTE ATIVO' : 'Modo produção' };
+    } catch (e) {
+      report.checks.testMode = { status: 'WARN', message: 'Não verificado' };
+    }
+    report.overall = Object.values(report.checks).every((c: any) => c.status !== 'ERROR') ? 'HEALTHY' : 'DEGRADED';
+    report.responseMs = Date.now() - start;
+    res.json(report);
+  });
+
+  // ─── AUDITORIA DO SISTEMA ─────────────────────────────────────
+  app.get('/api/audit', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    try {
+      const allUsers = await storage.getUsers();
+      const allCompanies = await storage.getCompanies();
+      const logs = await storage.getLogs(500);
+      const recentErrors = logs.filter((l: any) => l.level === 'ERROR');
+      const recentWarns = logs.filter((l: any) => l.level === 'WARN');
+      const loginFails = logs.filter((l: any) => l.action === 'LOGIN_FAILED');
+      const unauthorized = logs.filter((l: any) => l.action === 'UNAUTHORIZED_ACCESS');
+      res.json({
+        summary: {
+          totalUsers: allUsers.length,
+          activeUsers: allUsers.filter((u: any) => u.active).length,
+          totalCompanies: allCompanies.length,
+          activeCompanies: allCompanies.filter((c: any) => c.active).length,
+          totalLogs: logs.length,
+          errors: recentErrors.length,
+          warnings: recentWarns.length,
+          loginFails: loginFails.length,
+          unauthorizedAccess: unauthorized.length,
+        },
+        issues: [
+          ...(recentErrors.length > 0 ? [{ severity: 'ERROR', message: `${recentErrors.length} erros nos logs recentes` }] : []),
+          ...(loginFails.length > 5 ? [{ severity: 'WARN', message: `${loginFails.length} tentativas de login falhas` }] : []),
+          ...(unauthorized.length > 0 ? [{ severity: 'WARN', message: `${unauthorized.length} acessos não autorizados detectados` }] : []),
+        ],
+        recentErrors: recentErrors.slice(0, 10),
+        recentWarnings: recentWarns.slice(0, 10),
+      });
+    } catch (e: any) { res.status(500).json({ message: e?.message }); }
+  });
+
   // Seed DB Function
   await seedDatabase();
 

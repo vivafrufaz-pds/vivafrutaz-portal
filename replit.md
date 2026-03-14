@@ -18,7 +18,9 @@ Key features:
 - Automatic email system (nodemailer SMTP): order placed, status change, password reset, special orders
 - Email status indicator on Backup page (shows if SMTP is configured)
 - Full Brazilian Portuguese (PT-BR) interface
-- Developer area (/admin/developer): System Logs, Audit system, AI Bug Detector tabs
+- Developer area (/admin/developer): System Logs (with advanced filters: event type/user/date range), Auditoria (GET /api/audit), AI Bug Detector, Saúde do Sistema (GET /api/health) tabs; "Limpar Histórico" button (DELETE /api/logs)
+- Módulo Logística (/admin/logistics): 4 tabs — Rotas (with driver/date filters + status update), Motoristas, Veículos, Manutenção; all with CSV/Excel export
+- Cotação de Empresas (/admin/quotations): full lifecycle management (PENDING→IN_ANALYSIS→APPROVED/REJECTED), price group assignment, logistics notes, CSV export
 - Financial panel with date filters (Hoje/Esta Semana/Este Mês/Período Personalizado) + Nimbi expiration filter
 - NimbiExpiration date field on orders (editable inline in admin orders expanded detail)
 - Double-click protection on order submission

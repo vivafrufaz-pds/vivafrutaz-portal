@@ -6,7 +6,7 @@ import {
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
-  ClipboardList, AlertTriangle, Building2
+  ClipboardList, AlertTriangle, Building2, Truck, FileText
 } from 'lucide-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -40,6 +40,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/tasks', label: 'Tarefas', icon: ClipboardList, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO'] },
     { href: '/admin/client-incidents', label: 'Ocorrências de Clientes', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
     { href: '/admin/internal-incidents', label: 'Ocorrências Internas', icon: AlertTriangle, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
+    { href: '/admin/logistics', label: 'Logística', icon: Truck, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
+    { href: '/admin/quotations', label: 'Cotação de Empresas', icon: FileText, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
   ];
 
   const clientLinks = [

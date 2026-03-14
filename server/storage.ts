@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, internalIncidents,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -9,7 +9,8 @@ import {
   type OrderException, type InsertOrderException,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
   type PasswordResetRequest, type SystemLog, type TestOrder,
-  type Task, type ClientIncident, type InternalIncident
+  type Task, type ClientIncident, type InternalIncident,
+  type LogisticsDriver, type LogisticsVehicle, type LogisticsRoute, type LogisticsMaintenance, type CompanyQuotation
 } from "@shared/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 
@@ -106,6 +107,29 @@ export interface IStorage {
   // System Logs
   createLog(log: { action: string; description: string; userId?: number; companyId?: number; userEmail?: string; userRole?: string; ip?: string; level?: string }): Promise<void>;
   getLogs(limit?: number): Promise<SystemLog[]>;
+  clearLogs(): Promise<void>;
+  // Logistics
+  getDrivers(): Promise<LogisticsDriver[]>;
+  createDriver(data: Partial<LogisticsDriver>): Promise<LogisticsDriver>;
+  updateDriver(id: number, data: Partial<LogisticsDriver>): Promise<LogisticsDriver>;
+  deleteDriver(id: number): Promise<void>;
+  getVehicles(): Promise<LogisticsVehicle[]>;
+  createVehicle(data: Partial<LogisticsVehicle>): Promise<LogisticsVehicle>;
+  updateVehicle(id: number, data: Partial<LogisticsVehicle>): Promise<LogisticsVehicle>;
+  deleteVehicle(id: number): Promise<void>;
+  getRoutes(): Promise<LogisticsRoute[]>;
+  createRoute(data: Partial<LogisticsRoute>): Promise<LogisticsRoute>;
+  updateRoute(id: number, data: Partial<LogisticsRoute>): Promise<LogisticsRoute>;
+  deleteRoute(id: number): Promise<void>;
+  getMaintenances(): Promise<LogisticsMaintenance[]>;
+  createMaintenance(data: Partial<LogisticsMaintenance>): Promise<LogisticsMaintenance>;
+  updateMaintenance(id: number, data: Partial<LogisticsMaintenance>): Promise<LogisticsMaintenance>;
+  deleteMaintenance(id: number): Promise<void>;
+  // Quotations
+  getQuotations(): Promise<CompanyQuotation[]>;
+  createQuotation(data: Partial<CompanyQuotation>): Promise<CompanyQuotation>;
+  updateQuotation(id: number, data: Partial<CompanyQuotation>): Promise<CompanyQuotation>;
+  deleteQuotation(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -640,6 +664,91 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInternalIncident(id: number): Promise<void> {
     await db.delete(internalIncidents).where(eq(internalIncidents.id, id));
+  }
+
+  // ─── Logística: Motoristas ────────────────────────────────────
+  async getDrivers(): Promise<LogisticsDriver[]> {
+    return db.select().from(logisticsDrivers).orderBy(logisticsDrivers.name);
+  }
+  async createDriver(data: Partial<LogisticsDriver>): Promise<LogisticsDriver> {
+    const [d] = await db.insert(logisticsDrivers).values(data as any).returning();
+    return d;
+  }
+  async updateDriver(id: number, data: Partial<LogisticsDriver>): Promise<LogisticsDriver> {
+    const [d] = await db.update(logisticsDrivers).set(data as any).where(eq(logisticsDrivers.id, id)).returning();
+    return d;
+  }
+  async deleteDriver(id: number): Promise<void> {
+    await db.delete(logisticsDrivers).where(eq(logisticsDrivers.id, id));
+  }
+
+  // ─── Logística: Veículos ──────────────────────────────────────
+  async getVehicles(): Promise<LogisticsVehicle[]> {
+    return db.select().from(logisticsVehicles).orderBy(logisticsVehicles.plate);
+  }
+  async createVehicle(data: Partial<LogisticsVehicle>): Promise<LogisticsVehicle> {
+    const [v] = await db.insert(logisticsVehicles).values(data as any).returning();
+    return v;
+  }
+  async updateVehicle(id: number, data: Partial<LogisticsVehicle>): Promise<LogisticsVehicle> {
+    const [v] = await db.update(logisticsVehicles).set(data as any).where(eq(logisticsVehicles.id, id)).returning();
+    return v;
+  }
+  async deleteVehicle(id: number): Promise<void> {
+    await db.delete(logisticsVehicles).where(eq(logisticsVehicles.id, id));
+  }
+
+  // ─── Logística: Rotas ─────────────────────────────────────────
+  async getRoutes(): Promise<LogisticsRoute[]> {
+    return db.select().from(logisticsRoutes).orderBy(desc(logisticsRoutes.createdAt));
+  }
+  async createRoute(data: Partial<LogisticsRoute>): Promise<LogisticsRoute> {
+    const [r] = await db.insert(logisticsRoutes).values(data as any).returning();
+    return r;
+  }
+  async updateRoute(id: number, data: Partial<LogisticsRoute>): Promise<LogisticsRoute> {
+    const [r] = await db.update(logisticsRoutes).set(data as any).where(eq(logisticsRoutes.id, id)).returning();
+    return r;
+  }
+  async deleteRoute(id: number): Promise<void> {
+    await db.delete(logisticsRoutes).where(eq(logisticsRoutes.id, id));
+  }
+
+  // ─── Logística: Manutenção ────────────────────────────────────
+  async getMaintenances(): Promise<LogisticsMaintenance[]> {
+    return db.select().from(logisticsMaintenance).orderBy(desc(logisticsMaintenance.createdAt));
+  }
+  async createMaintenance(data: Partial<LogisticsMaintenance>): Promise<LogisticsMaintenance> {
+    const [m] = await db.insert(logisticsMaintenance).values(data as any).returning();
+    return m;
+  }
+  async updateMaintenance(id: number, data: Partial<LogisticsMaintenance>): Promise<LogisticsMaintenance> {
+    const [m] = await db.update(logisticsMaintenance).set(data as any).where(eq(logisticsMaintenance.id, id)).returning();
+    return m;
+  }
+  async deleteMaintenance(id: number): Promise<void> {
+    await db.delete(logisticsMaintenance).where(eq(logisticsMaintenance.id, id));
+  }
+
+  // ─── Cotação de Empresas ──────────────────────────────────────
+  async getQuotations(): Promise<CompanyQuotation[]> {
+    return db.select().from(companyQuotations).orderBy(desc(companyQuotations.createdAt));
+  }
+  async createQuotation(data: Partial<CompanyQuotation>): Promise<CompanyQuotation> {
+    const [q] = await db.insert(companyQuotations).values({ ...data, status: 'PENDING' } as any).returning();
+    return q;
+  }
+  async updateQuotation(id: number, data: Partial<CompanyQuotation>): Promise<CompanyQuotation> {
+    const [q] = await db.update(companyQuotations).set({ ...data, updatedAt: new Date() } as any).where(eq(companyQuotations.id, id)).returning();
+    return q;
+  }
+  async deleteQuotation(id: number): Promise<void> {
+    await db.delete(companyQuotations).where(eq(companyQuotations.id, id));
+  }
+
+  // ─── Logs: delete all ─────────────────────────────────────────
+  async clearLogs(): Promise<void> {
+    await db.delete(systemLogs);
   }
 }
 
