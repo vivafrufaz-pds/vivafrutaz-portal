@@ -11,8 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Pencil, Trash2, Truck, User, Wrench, MapPin, Download, CheckCircle2, Clock, XCircle } from 'lucide-react';
-import type { LogisticsDriver, LogisticsVehicle, LogisticsRoute, LogisticsMaintenance } from '@shared/schema';
+import { Plus, Pencil, Trash2, Truck, User, Wrench, MapPin, Download, CheckCircle2, Clock, XCircle, FileText, Search, Phone, Mail, Building2, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import type { LogisticsDriver, LogisticsVehicle, LogisticsRoute, LogisticsMaintenance, CompanyQuotation } from '@shared/schema';
 
 const STATUS_COLOR: Record<string, string> = {
   SCHEDULED: 'bg-blue-100 text-blue-800',
@@ -508,27 +509,231 @@ function MaintenanceTab() {
   );
 }
 
+// ─── Cotações Tab ────────────────────────────────────────────────────────────
+const QUOT_STATUS_COLOR: Record<string, string> = {
+  PENDING: 'bg-gray-100 text-gray-700',
+  IN_ANALYSIS: 'bg-blue-100 text-blue-800',
+  APPROVED: 'bg-green-100 text-green-800',
+  REJECTED: 'bg-red-100 text-red-800',
+};
+const QUOT_STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Pendente',
+  IN_ANALYSIS: 'Em análise',
+  APPROVED: 'Aprovado',
+  REJECTED: 'Rejeitado',
+};
+
+function CotacoesTab() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState<CompanyQuotation | null>(null);
+  const [updateModal, setUpdateModal] = useState<CompanyQuotation | null>(null);
+  const [updateStatus, setUpdateStatus] = useState('');
+  const [updateNote, setUpdateNote] = useState('');
+  const [form, setForm] = useState({ companyName: '', contactName: '', contactPhone: '', email: '', cnpj: '', city: '', state: '', estimatedVolume: '', productInterest: '', logisticsNote: '' });
+
+  const { data: quotations = [], isLoading } = useQuery<CompanyQuotation[]>({ queryKey: ['/api/quotations'] });
+
+  const canDelete = ['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user?.role || '');
+
+  const createMut = useMutation({
+    mutationFn: (data: typeof form) => apiRequest('POST', '/api/quotations', data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/quotations'] }); toast({ title: 'Cotação registrada!' }); setShowForm(false); setForm({ companyName: '', contactName: '', contactPhone: '', email: '', cnpj: '', city: '', state: '', estimatedVolume: '', productInterest: '', logisticsNote: '' }); },
+    onError: () => toast({ title: 'Erro ao registrar cotação', variant: 'destructive' }),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest('PATCH', `/api/quotations/${id}`, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/quotations'] }); toast({ title: 'Cotação atualizada!' }); setUpdateModal(null); setEditItem(null); },
+    onError: () => toast({ title: 'Erro ao atualizar', variant: 'destructive' }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => apiRequest('DELETE', `/api/quotations/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/quotations'] }); toast({ title: 'Cotação excluída' }); },
+    onError: () => toast({ title: 'Erro ao excluir', variant: 'destructive' }),
+  });
+
+  const openUpdate = (q: CompanyQuotation) => {
+    setUpdateModal(q);
+    setUpdateStatus(q.status);
+    setUpdateNote(q.logisticsNote || '');
+  };
+
+  const filtered = quotations.filter(q => {
+    const matchSearch = !search || q.companyName.toLowerCase().includes(search.toLowerCase()) || q.contactName.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === 'ALL' || q.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="flex gap-2 flex-1">
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute left-2 top-2.5 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Buscar empresa ou contato..." className="pl-8" value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-quotation" />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-36" data-testid="select-status-filter"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos</SelectItem>
+              <SelectItem value="PENDING">Pendente</SelectItem>
+              <SelectItem value="IN_ANALYSIS">Em análise</SelectItem>
+              <SelectItem value="APPROVED">Aprovado</SelectItem>
+              <SelectItem value="REJECTED">Rejeitado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => exportToCSV(filtered.map(q => ({ Empresa: q.companyName, Contato: q.contactName, Telefone: q.contactPhone || '', Email: q.email || '', Cidade: q.city || '', Estado: q.state || '', Produtos: q.productInterest || '', Volume: q.estimatedVolume || '', Status: QUOT_STATUS_LABEL[q.status] || q.status, 'Nota Logística': q.logisticsNote || '' })), 'cotacoes.csv')} data-testid="button-export-quotations">
+            <Download className="w-4 h-4 mr-1" />Exportar
+          </Button>
+          <Button size="sm" onClick={() => { setShowForm(true); setEditItem(null); }} data-testid="button-new-quotation">
+            <Plus className="w-4 h-4 mr-1" />Nova Cotação
+          </Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Carregando...</p>
+      ) : filtered.length === 0 ? (
+        <Card className="premium-shadow"><CardContent className="p-8 text-center text-muted-foreground">Nenhuma cotação encontrada.</CardContent></Card>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(q => (
+            <Card key={q.id} className="premium-shadow" data-testid={`card-quotation-${q.id}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm" data-testid={`text-quotation-company-${q.id}`}>{q.companyName}</span>
+                      <Badge className={`text-xs ${QUOT_STATUS_COLOR[q.status]}`} data-testid={`badge-quotation-status-${q.id}`}>{QUOT_STATUS_LABEL[q.status] || q.status}</Badge>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><User className="w-3 h-3" />{q.contactName}</span>
+                      {q.contactPhone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{q.contactPhone}</span>}
+                      {q.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{q.email}</span>}
+                      {(q.city || q.state) && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{[q.city, q.state].filter(Boolean).join(' – ')}</span>}
+                    </div>
+                    {q.productInterest && <p className="mt-1 text-xs text-muted-foreground"><span className="font-medium">Produtos:</span> {q.productInterest}</p>}
+                    {q.estimatedVolume && <p className="text-xs text-muted-foreground"><span className="font-medium">Volume estimado:</span> {q.estimatedVolume}</p>}
+                    {q.logisticsNote && <p className="text-xs mt-1 p-2 bg-muted rounded"><span className="font-medium">Nota logística:</span> {q.logisticsNote}</p>}
+                    <p className="text-xs text-muted-foreground mt-1">Registrado em {new Date(q.createdAt).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openUpdate(q)} data-testid={`button-update-quotation-${q.id}`} title="Atualizar status"><RefreshCw className="w-3.5 h-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditItem(q); setForm({ companyName: q.companyName, contactName: q.contactName, contactPhone: q.contactPhone || '', email: q.email || '', cnpj: q.cnpj || '', city: q.city || '', state: q.state || '', estimatedVolume: q.estimatedVolume || '', productInterest: q.productInterest || '', logisticsNote: q.logisticsNote || '' }); setShowForm(true); }} data-testid={`button-edit-quotation-${q.id}`} title="Editar"><Pencil className="w-3.5 h-3.5" /></Button>
+                    {canDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => { if (confirm('Excluir esta cotação?')) deleteMut.mutate(q.id); }} data-testid={`button-delete-quotation-${q.id}`} title="Excluir"><Trash2 className="w-3.5 h-3.5" /></Button>}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Create / Edit Form Dialog */}
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{editItem ? 'Editar Cotação' : 'Nova Cotação'}</DialogTitle></DialogHeader>
+          <div className="grid gap-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Empresa *</Label><Input value={form.companyName} onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))} data-testid="input-quotation-company" /></div>
+              <div><Label>Contato *</Label><Input value={form.contactName} onChange={e => setForm(f => ({ ...f, contactName: e.target.value }))} data-testid="input-quotation-contact" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Telefone</Label><Input value={form.contactPhone} onChange={e => setForm(f => ({ ...f, contactPhone: e.target.value }))} data-testid="input-quotation-phone" /></div>
+              <div><Label>E-mail</Label><Input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} data-testid="input-quotation-email" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>CNPJ</Label><Input value={form.cnpj} onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))} data-testid="input-quotation-cnpj" /></div>
+              <div><Label>Cidade</Label><Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} data-testid="input-quotation-city" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Estado</Label><Input value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} data-testid="input-quotation-state" /></div>
+              <div><Label>Volume Estimado</Label><Input value={form.estimatedVolume} onChange={e => setForm(f => ({ ...f, estimatedVolume: e.target.value }))} placeholder="ex: 200kg/semana" data-testid="input-quotation-volume" /></div>
+            </div>
+            <div><Label>Produtos de Interesse</Label><Textarea rows={2} value={form.productInterest} onChange={e => setForm(f => ({ ...f, productInterest: e.target.value }))} data-testid="input-quotation-products" /></div>
+            <div><Label>Nota de Logística</Label><Textarea rows={2} value={form.logisticsNote} onChange={e => setForm(f => ({ ...f, logisticsNote: e.target.value }))} placeholder="Informações de entrega, horários, observações..." data-testid="input-quotation-note" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowForm(false); setEditItem(null); }}>Cancelar</Button>
+            <Button data-testid="button-save-quotation" disabled={createMut.isPending || updateMut.isPending} onClick={() => {
+              if (!form.companyName.trim() || !form.contactName.trim()) { toast({ title: 'Empresa e contato são obrigatórios', variant: 'destructive' }); return; }
+              if (editItem) { updateMut.mutate({ id: editItem.id, data: form }); } else { createMut.mutate(form); }
+            }}>
+              {(createMut.isPending || updateMut.isPending) ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Status Dialog */}
+      <Dialog open={!!updateModal} onOpenChange={() => setUpdateModal(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Atualizar Status</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label>Empresa</Label>
+              <p className="text-sm font-medium">{updateModal?.companyName}</p>
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select value={updateStatus} onValueChange={setUpdateStatus}>
+                <SelectTrigger data-testid="select-update-status"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">Pendente</SelectItem>
+                  <SelectItem value="IN_ANALYSIS">Em análise</SelectItem>
+                  <SelectItem value="APPROVED">Aprovado</SelectItem>
+                  <SelectItem value="REJECTED">Rejeitado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Nota de Logística</Label>
+              <Textarea rows={3} value={updateNote} onChange={e => setUpdateNote(e.target.value)} placeholder="Registre retorno de fornecedor, observações..." data-testid="input-update-note" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUpdateModal(null)}>Cancelar</Button>
+            <Button data-testid="button-confirm-update" disabled={updateMut.isPending} onClick={() => { if (updateModal) updateMut.mutate({ id: updateModal.id, data: { status: updateStatus, logisticsNote: updateNote } }); }}>
+              {updateMut.isPending ? 'Salvando...' : 'Atualizar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 export default function LogisticsPage() {
   const { data: drivers = [] } = useQuery<LogisticsDriver[]>({ queryKey: ['/api/logistics/drivers'] });
   const { data: vehicles = [] } = useQuery<LogisticsVehicle[]>({ queryKey: ['/api/logistics/vehicles'] });
   const { data: routes = [] } = useQuery<LogisticsRoute[]>({ queryKey: ['/api/logistics/routes'] });
+  const { data: quotations = [] } = useQuery<CompanyQuotation[]>({ queryKey: ['/api/quotations'] });
 
   const activeRoutes = routes.filter(r => r.status === 'IN_PROGRESS').length;
+  const pendingQuotations = quotations.filter(q => q.status === 'PENDING' || q.status === 'IN_ANALYSIS').length;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Logística</h1>
-        <p className="text-sm text-muted-foreground mt-1">Gerencie motoristas, veículos, rotas e manutenção</p>
+        <p className="text-sm text-muted-foreground mt-1">Gerencie motoristas, veículos, rotas, manutenção e cotações</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: 'Motoristas', value: drivers.filter(d => d.active).length, icon: User, color: 'text-blue-600' },
           { label: 'Veículos Ativos', value: vehicles.filter(v => v.active).length, icon: Truck, color: 'text-green-600' },
           { label: 'Rotas Hoje', value: routes.length, icon: MapPin, color: 'text-orange-600' },
           { label: 'Em Andamento', value: activeRoutes, icon: Clock, color: 'text-purple-600' },
+          { label: 'Cotações Abertas', value: pendingQuotations, icon: FileText, color: 'text-indigo-600' },
         ].map(({ label, value, icon: Icon, color }) => (
           <Card key={label} className="premium-shadow">
             <CardContent className="p-4 flex items-center gap-3">
@@ -543,16 +748,18 @@ export default function LogisticsPage() {
       </div>
 
       <Tabs defaultValue="routes">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="routes" data-testid="tab-routes">Rotas</TabsTrigger>
           <TabsTrigger value="drivers" data-testid="tab-drivers">Motoristas</TabsTrigger>
           <TabsTrigger value="vehicles" data-testid="tab-vehicles">Veículos</TabsTrigger>
           <TabsTrigger value="maintenance" data-testid="tab-maintenance">Manutenção</TabsTrigger>
+          <TabsTrigger value="quotations" data-testid="tab-quotations">Cotações</TabsTrigger>
         </TabsList>
         <TabsContent value="routes" className="mt-4"><RoutesTab /></TabsContent>
         <TabsContent value="drivers" className="mt-4"><DriversTab /></TabsContent>
         <TabsContent value="vehicles" className="mt-4"><VehiclesTab /></TabsContent>
         <TabsContent value="maintenance" className="mt-4"><MaintenanceTab /></TabsContent>
+        <TabsContent value="quotations" className="mt-4"><CotacoesTab /></TabsContent>
       </Tabs>
     </div>
   );

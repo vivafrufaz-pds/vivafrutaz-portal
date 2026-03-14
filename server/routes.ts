@@ -1658,13 +1658,13 @@ export async function registerRoutes(
   app.get('/api/quotations', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try { res.json(await storage.getQuotations()); } catch (e) { res.status(500).json({ message: 'Erro' }); }
   });
   app.post('/api/quotations', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
       const { companyName, contactName, contactPhone, email, cnpj, address, city, state, estimatedVolume, productInterest, logisticsNote, priceGroupId, priceGroupName } = req.body;
       if (!companyName || !contactName) return res.status(400).json({ message: 'Empresa e contato obrigatórios' });
@@ -1676,7 +1676,7 @@ export async function registerRoutes(
   app.patch('/api/quotations/:id', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
       const q = await storage.updateQuotation(parseInt(req.params.id), req.body);
       await storage.createLog({ action: 'QUOTATION_UPDATED', description: `Cotação #${req.params.id} atualizada`, userId: user.id, userEmail: user.email, userRole: user.role });

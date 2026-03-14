@@ -23,7 +23,9 @@ Key features:
 - Auditoria tab fixed: URL corrected from /api/audit → /api/admin/audit; now returns summary object with totalUsers, activeUsers, totalCompanies, activeCompanies, errors, loginFails counts for KPI display
 - API cache control: all /api/* responses include Cache-Control: no-store, no-cache headers to prevent stale data
 - Auto-cleanup cron: logs older than 90 days auto-deleted daily at 03:00; backup cleanup API for logs older than 30 days
-- Módulo Logística (/admin/logistics): 4 tabs — Rotas (with driver/date filters + status update), Motoristas, Veículos, Manutenção; all with CSV/Excel export
+- Módulo Logística (/admin/logistics): 5 tabs — Rotas (with driver/date filters + status update), Motoristas, Veículos, Manutenção, Cotações; all with CSV/Excel export; KPI cards include Cotações Abertas count
+- Cotações tab in Logistics: embedded quotations view (LOGISTICS role can access); list/search/filter by status; create new quotations; update status (PENDING→IN_ANALYSIS→APPROVED/REJECTED) + logistics note; export CSV; delete for ADMIN/DIRECTOR/DEVELOPER only
+- Login page redirect: authenticated users attempting to access /login are redirected to /admin (staff) or /client (company) automatically
 - Cotação de Empresas (/admin/quotations): full lifecycle management (PENDING→IN_ANALYSIS→APPROVED/REJECTED), price group assignment, logistics notes, CSV export
 - Dashboard Executivo (/admin/executive): KPI cards (day/week/month revenue, avg ticket, order counts), recharts (LineChart revenue 30d, BarChart orders by weekday), Top Empresas + Top Produtos progress bars, Clientes Inativos list, Previsão de Compra table, auto-generated alerts; access: ADMIN, DIRECTOR, FINANCEIRO, DEVELOPER
 - Assistente Virtual: floating chat widget (bottom-right) available to all logged users; FAQ-based answers in PT-BR for 15+ topics (pedidos, cancelamento, logística, cotações, exportações, etc.); quick question buttons; bot replies with 400ms delay

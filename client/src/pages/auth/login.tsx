@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { Redirect } from "wouter";
 import { Leaf, Building2, UserCircle, KeyRound, ArrowLeft, CheckCircle2 } from "lucide-react";
 
 const DOMAIN = "@vivafrutaz.com";
@@ -15,7 +16,7 @@ function usernameFromEmail(email: string): string {
 }
 
 export default function Login() {
-  const { login, isLoggingIn } = useAuth();
+  const { login, isLoggingIn, isAuthenticated, isStaff, isClient } = useAuth();
   const [type, setType] = useState<'admin' | 'company'>('company');
 
   // Both tabs use username only — @vivafrutaz.com is added automatically
@@ -27,6 +28,11 @@ export default function Login() {
   const [forgotUsername, setForgotUsername] = useState("");
   const [forgotStatus, setForgotStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [forgotMessage, setForgotMessage] = useState("");
+
+  if (isAuthenticated) {
+    if (isStaff) return <Redirect to="/admin" />;
+    if (isClient) return <Redirect to="/client" />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
