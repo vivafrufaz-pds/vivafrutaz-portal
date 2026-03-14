@@ -515,13 +515,21 @@ const QUOT_STATUS_COLOR: Record<string, string> = {
   IN_ANALYSIS: 'bg-blue-100 text-blue-800',
   APPROVED: 'bg-green-100 text-green-800',
   REJECTED: 'bg-red-100 text-red-800',
+  HORARIOS_DISPONIVEIS: 'bg-purple-100 text-purple-800',
 };
 const QUOT_STATUS_LABEL: Record<string, string> = {
   PENDING: 'Pendente',
   IN_ANALYSIS: 'Em análise',
   APPROVED: 'Aprovado',
   REJECTED: 'Rejeitado',
+  HORARIOS_DISPONIVEIS: 'Horários Disponíveis',
 };
+
+type DeliveryWindow = { startTime: string; endTime: string };
+
+function parseWindows(json: string | null | undefined): DeliveryWindow[] {
+  try { return json ? JSON.parse(json) : []; } catch { return []; }
+}
 
 function CotacoesTab() {
   const { toast } = useToast();
@@ -533,21 +541,25 @@ function CotacoesTab() {
   const [updateModal, setUpdateModal] = useState<CompanyQuotation | null>(null);
   const [updateStatus, setUpdateStatus] = useState('');
   const [updateNote, setUpdateNote] = useState('');
+  const [deliveryWindows, setDeliveryWindows] = useState<DeliveryWindow[]>([]);
   const [form, setForm] = useState({ companyName: '', contactName: '', contactPhone: '', email: '', cnpj: '', city: '', state: '', estimatedVolume: '', productInterest: '', logisticsNote: '' });
 
   const { data: quotations = [], isLoading } = useQuery<CompanyQuotation[]>({ queryKey: ['/api/quotations'] });
 
   const canDelete = ['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user?.role || '');
+  const canEditWindows = ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'LOGISTICS'].includes(user?.role || '');
+
+  const resetForm = () => setForm({ companyName: '', contactName: '', contactPhone: '', email: '', cnpj: '', city: '', state: '', estimatedVolume: '', productInterest: '', logisticsNote: '' });
 
   const createMut = useMutation({
-    mutationFn: (data: typeof form) => apiRequest('POST', '/api/quotations', data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/quotations'] }); toast({ title: 'Cotação registrada!' }); setShowForm(false); setForm({ companyName: '', contactName: '', contactPhone: '', email: '', cnpj: '', city: '', state: '', estimatedVolume: '', productInterest: '', logisticsNote: '' }); },
+    mutationFn: (data: any) => apiRequest('POST', '/api/quotations', data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/quotations'] }); toast({ title: 'Cotação registrada!' }); setShowForm(false); resetForm(); setDeliveryWindows([]); },
     onError: () => toast({ title: 'Erro ao registrar cotação', variant: 'destructive' }),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest('PATCH', `/api/quotations/${id}`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/quotations'] }); toast({ title: 'Cotação atualizada!' }); setUpdateModal(null); setEditItem(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/quotations'] }); toast({ title: 'Cotação atualizada!' }); setUpdateModal(null); setEditItem(null); setDeliveryWindows([]); },
     onError: () => toast({ title: 'Erro ao atualizar', variant: 'destructive' }),
   });
 
@@ -561,7 +573,20 @@ function CotacoesTab() {
     setUpdateModal(q);
     setUpdateStatus(q.status);
     setUpdateNote(q.logisticsNote || '');
+    setDeliveryWindows(parseWindows(q.deliveryWindowsJson));
   };
+
+  const openEdit = (q: CompanyQuotation) => {
+    setEditItem(q);
+    setForm({ companyName: q.companyName, contactName: q.contactName, contactPhone: q.contactPhone || '', email: q.email || '', cnpj: q.cnpj || '', city: q.city || '', state: q.state || '', estimatedVolume: q.estimatedVolume || '', productInterest: q.productInterest || '', logisticsNote: q.logisticsNote || '' });
+    setDeliveryWindows(parseWindows(q.deliveryWindowsJson));
+    setShowForm(true);
+  };
+
+  const addWindow = () => setDeliveryWindows(w => [...w, { startTime: '08:00', endTime: '08:30' }]);
+  const removeWindow = (i: number) => setDeliveryWindows(w => w.filter((_, idx) => idx !== i));
+  const updateWindow = (i: number, field: 'startTime' | 'endTime', value: string) =>
+    setDeliveryWindows(w => w.map((win, idx) => idx === i ? { ...win, [field]: value } : win));
 
   const filtered = quotations.filter(q => {
     const matchSearch = !search || q.companyName.toLowerCase().includes(search.toLowerCase()) || q.contactName.toLowerCase().includes(search.toLowerCase());
@@ -572,27 +597,28 @@ function CotacoesTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex gap-2 flex-1">
-          <div className="relative flex-1 max-w-xs">
+        <div className="flex gap-2 flex-1 flex-wrap">
+          <div className="relative flex-1 min-w-48">
             <Search className="absolute left-2 top-2.5 w-4 h-4 text-muted-foreground" />
             <Input placeholder="Buscar empresa ou contato..." className="pl-8" value={search} onChange={e => setSearch(e.target.value)} data-testid="input-search-quotation" />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-36" data-testid="select-status-filter"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-44" data-testid="select-status-filter"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Todos</SelectItem>
               <SelectItem value="PENDING">Pendente</SelectItem>
               <SelectItem value="IN_ANALYSIS">Em análise</SelectItem>
+              <SelectItem value="HORARIOS_DISPONIVEIS">Horários Disponíveis</SelectItem>
               <SelectItem value="APPROVED">Aprovado</SelectItem>
               <SelectItem value="REJECTED">Rejeitado</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => exportToCSV(filtered.map(q => ({ Empresa: q.companyName, Contato: q.contactName, Telefone: q.contactPhone || '', Email: q.email || '', Cidade: q.city || '', Estado: q.state || '', Produtos: q.productInterest || '', Volume: q.estimatedVolume || '', Status: QUOT_STATUS_LABEL[q.status] || q.status, 'Nota Logística': q.logisticsNote || '' })), 'cotacoes.csv')} data-testid="button-export-quotations">
+          <Button size="sm" variant="outline" onClick={() => exportToCSV(filtered.map(q => ({ Empresa: q.companyName, Contato: q.contactName, Telefone: q.contactPhone || '', Email: q.email || '', Cidade: q.city || '', Estado: q.state || '', Produtos: q.productInterest || '', Volume: q.estimatedVolume || '', Status: QUOT_STATUS_LABEL[q.status] || q.status, 'Nota Logística': q.logisticsNote || '', 'Janelas de Entrega': parseWindows(q.deliveryWindowsJson).map(w => `${w.startTime}–${w.endTime}`).join(' | ') })), 'cotacoes.csv')} data-testid="button-export-quotations">
             <Download className="w-4 h-4 mr-1" />Exportar
           </Button>
-          <Button size="sm" onClick={() => { setShowForm(true); setEditItem(null); }} data-testid="button-new-quotation">
+          <Button size="sm" onClick={() => { setShowForm(true); setEditItem(null); resetForm(); setDeliveryWindows([]); }} data-testid="button-new-quotation">
             <Plus className="w-4 h-4 mr-1" />Nova Cotação
           </Button>
         </div>
@@ -604,43 +630,66 @@ function CotacoesTab() {
         <Card className="premium-shadow"><CardContent className="p-8 text-center text-muted-foreground">Nenhuma cotação encontrada.</CardContent></Card>
       ) : (
         <div className="space-y-3">
-          {filtered.map(q => (
-            <Card key={q.id} className="premium-shadow" data-testid={`card-quotation-${q.id}`}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm" data-testid={`text-quotation-company-${q.id}`}>{q.companyName}</span>
-                      <Badge className={`text-xs ${QUOT_STATUS_COLOR[q.status]}`} data-testid={`badge-quotation-status-${q.id}`}>{QUOT_STATUS_LABEL[q.status] || q.status}</Badge>
+          {filtered.map(q => {
+            const windows = parseWindows(q.deliveryWindowsJson);
+            return (
+              <Card key={q.id} className="premium-shadow" data-testid={`card-quotation-${q.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm" data-testid={`text-quotation-company-${q.id}`}>{q.companyName}</span>
+                        <Badge className={`text-xs ${QUOT_STATUS_COLOR[q.status] || 'bg-gray-100 text-gray-700'}`} data-testid={`badge-quotation-status-${q.id}`}>{QUOT_STATUS_LABEL[q.status] || q.status}</Badge>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><User className="w-3 h-3" />{q.contactName}</span>
+                        {q.contactPhone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{q.contactPhone}</span>}
+                        {q.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{q.email}</span>}
+                        {(q.city || q.state) && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{[q.city, q.state].filter(Boolean).join(' – ')}</span>}
+                      </div>
+                      {q.productInterest && <p className="mt-1 text-xs text-muted-foreground"><span className="font-medium">Produtos:</span> {q.productInterest}</p>}
+                      {q.estimatedVolume && <p className="text-xs text-muted-foreground"><span className="font-medium">Volume estimado:</span> {q.estimatedVolume}</p>}
+                      {q.logisticsNote && <p className="text-xs mt-1 p-2 bg-muted rounded"><span className="font-medium">Nota logística:</span> {q.logisticsNote}</p>}
+                      {windows.length > 0 && (
+                        <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-950/30 rounded border border-purple-200 dark:border-purple-800">
+                          <p className="text-xs font-medium text-purple-800 dark:text-purple-300 mb-1 flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Janelas de Entrega
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {windows.map((w, i) => (
+                              <span key={i} className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-2 py-0.5 rounded-full" data-testid={`window-badge-${q.id}-${i}`}>
+                                {w.startTime} – {w.endTime}
+                              </span>
+                            ))}
+                          </div>
+                          {q.deliveryWindowsRespondedBy && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Definido por {q.deliveryWindowsRespondedBy}
+                              {q.deliveryWindowsRespondedAt ? ` em ${new Date(q.deliveryWindowsRespondedAt).toLocaleDateString('pt-BR')}` : ''}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">Registrado em {new Date(q.createdAt).toLocaleDateString('pt-BR')}</p>
                     </div>
-                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><User className="w-3 h-3" />{q.contactName}</span>
-                      {q.contactPhone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{q.contactPhone}</span>}
-                      {q.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{q.email}</span>}
-                      {(q.city || q.state) && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{[q.city, q.state].filter(Boolean).join(' – ')}</span>}
+                    <div className="flex gap-1 shrink-0">
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openUpdate(q)} data-testid={`button-update-quotation-${q.id}`} title="Atualizar status"><RefreshCw className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(q)} data-testid={`button-edit-quotation-${q.id}`} title="Editar"><Pencil className="w-3.5 h-3.5" /></Button>
+                      {canDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => { if (confirm('Excluir esta cotação?')) deleteMut.mutate(q.id); }} data-testid={`button-delete-quotation-${q.id}`} title="Excluir"><Trash2 className="w-3.5 h-3.5" /></Button>}
                     </div>
-                    {q.productInterest && <p className="mt-1 text-xs text-muted-foreground"><span className="font-medium">Produtos:</span> {q.productInterest}</p>}
-                    {q.estimatedVolume && <p className="text-xs text-muted-foreground"><span className="font-medium">Volume estimado:</span> {q.estimatedVolume}</p>}
-                    {q.logisticsNote && <p className="text-xs mt-1 p-2 bg-muted rounded"><span className="font-medium">Nota logística:</span> {q.logisticsNote}</p>}
-                    <p className="text-xs text-muted-foreground mt-1">Registrado em {new Date(q.createdAt).toLocaleDateString('pt-BR')}</p>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openUpdate(q)} data-testid={`button-update-quotation-${q.id}`} title="Atualizar status"><RefreshCw className="w-3.5 h-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditItem(q); setForm({ companyName: q.companyName, contactName: q.contactName, contactPhone: q.contactPhone || '', email: q.email || '', cnpj: q.cnpj || '', city: q.city || '', state: q.state || '', estimatedVolume: q.estimatedVolume || '', productInterest: q.productInterest || '', logisticsNote: q.logisticsNote || '' }); setShowForm(true); }} data-testid={`button-edit-quotation-${q.id}`} title="Editar"><Pencil className="w-3.5 h-3.5" /></Button>
-                    {canDelete && <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => { if (confirm('Excluir esta cotação?')) deleteMut.mutate(q.id); }} data-testid={`button-delete-quotation-${q.id}`} title="Excluir"><Trash2 className="w-3.5 h-3.5" /></Button>}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
       {/* Create / Edit Form Dialog */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog open={showForm} onOpenChange={v => { setShowForm(v); if (!v) { setEditItem(null); setDeliveryWindows([]); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editItem ? 'Editar Cotação' : 'Nova Cotação'}</DialogTitle></DialogHeader>
-          <div className="grid gap-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="grid gap-3 py-2 max-h-[65vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Empresa *</Label><Input value={form.companyName} onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))} data-testid="input-quotation-company" /></div>
               <div><Label>Contato *</Label><Input value={form.contactName} onChange={e => setForm(f => ({ ...f, contactName: e.target.value }))} data-testid="input-quotation-contact" /></div>
@@ -659,12 +708,58 @@ function CotacoesTab() {
             </div>
             <div><Label>Produtos de Interesse</Label><Textarea rows={2} value={form.productInterest} onChange={e => setForm(f => ({ ...f, productInterest: e.target.value }))} data-testid="input-quotation-products" /></div>
             <div><Label>Nota de Logística</Label><Textarea rows={2} value={form.logisticsNote} onChange={e => setForm(f => ({ ...f, logisticsNote: e.target.value }))} placeholder="Informações de entrega, horários, observações..." data-testid="input-quotation-note" /></div>
+
+            {/* Delivery Windows Section */}
+            {(canEditWindows || deliveryWindows.length > 0) && (
+              <div className="border-t pt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold flex items-center gap-1"><Clock className="w-4 h-4 text-purple-600" />Janelas de Entrega da Logística</Label>
+                  {canEditWindows && (
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={addWindow} data-testid="button-add-window">
+                      <Plus className="w-3 h-3 mr-1" />Adicionar janela
+                    </Button>
+                  )}
+                </div>
+                {deliveryWindows.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma janela definida ainda.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {deliveryWindows.map((w, i) => (
+                      <div key={i} className="flex items-center gap-2 p-2 bg-purple-50 dark:bg-purple-950/30 rounded border border-purple-200 dark:border-purple-800" data-testid={`window-row-${i}`}>
+                        <span className="text-xs font-medium text-purple-700 dark:text-purple-300 w-16 shrink-0">Janela {i + 1}</span>
+                        {canEditWindows ? (
+                          <>
+                            <Input type="time" value={w.startTime} onChange={e => updateWindow(i, 'startTime', e.target.value)} className="h-7 text-xs flex-1" data-testid={`input-window-start-${i}`} />
+                            <span className="text-xs text-muted-foreground">até</span>
+                            <Input type="time" value={w.endTime} onChange={e => updateWindow(i, 'endTime', e.target.value)} className="h-7 text-xs flex-1" data-testid={`input-window-end-${i}`} />
+                            <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-red-500 hover:text-red-700 shrink-0" onClick={() => removeWindow(i)} data-testid={`button-remove-window-${i}`}><XCircle className="w-3.5 h-3.5" /></Button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-purple-800 dark:text-purple-200">{w.startTime} – {w.endTime}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowForm(false); setEditItem(null); }}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setShowForm(false); setEditItem(null); setDeliveryWindows([]); }}>Cancelar</Button>
             <Button data-testid="button-save-quotation" disabled={createMut.isPending || updateMut.isPending} onClick={() => {
               if (!form.companyName.trim() || !form.contactName.trim()) { toast({ title: 'Empresa e contato são obrigatórios', variant: 'destructive' }); return; }
-              if (editItem) { updateMut.mutate({ id: editItem.id, data: form }); } else { createMut.mutate(form); }
+              const windowsJson = deliveryWindows.length > 0 ? JSON.stringify(deliveryWindows) : undefined;
+              const windowsPayload = canEditWindows && deliveryWindows.length > 0 ? {
+                deliveryWindowsJson: windowsJson,
+                deliveryWindowsRespondedBy: user?.name || '',
+                deliveryWindowsRespondedAt: new Date().toISOString(),
+                status: 'HORARIOS_DISPONIVEIS',
+              } : {};
+              if (editItem) {
+                updateMut.mutate({ id: editItem.id, data: { ...form, ...windowsPayload } });
+              } else {
+                createMut.mutate({ ...form, ...windowsPayload });
+              }
             }}>
               {(createMut.isPending || updateMut.isPending) ? 'Salvando...' : 'Salvar'}
             </Button>
@@ -673,10 +768,10 @@ function CotacoesTab() {
       </Dialog>
 
       {/* Update Status Dialog */}
-      <Dialog open={!!updateModal} onOpenChange={() => setUpdateModal(null)}>
+      <Dialog open={!!updateModal} onOpenChange={v => { if (!v) { setUpdateModal(null); setDeliveryWindows([]); } }}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Atualizar Status</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
+          <DialogHeader><DialogTitle>Atualizar Status — Cotação</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2 max-h-[70vh] overflow-y-auto">
             <div>
               <Label>Empresa</Label>
               <p className="text-sm font-medium">{updateModal?.companyName}</p>
@@ -688,6 +783,7 @@ function CotacoesTab() {
                 <SelectContent>
                   <SelectItem value="PENDING">Pendente</SelectItem>
                   <SelectItem value="IN_ANALYSIS">Em análise</SelectItem>
+                  <SelectItem value="HORARIOS_DISPONIVEIS">Horários Disponíveis</SelectItem>
                   <SelectItem value="APPROVED">Aprovado</SelectItem>
                   <SelectItem value="REJECTED">Rejeitado</SelectItem>
                 </SelectContent>
@@ -695,12 +791,56 @@ function CotacoesTab() {
             </div>
             <div>
               <Label>Nota de Logística</Label>
-              <Textarea rows={3} value={updateNote} onChange={e => setUpdateNote(e.target.value)} placeholder="Registre retorno de fornecedor, observações..." data-testid="input-update-note" />
+              <Textarea rows={2} value={updateNote} onChange={e => setUpdateNote(e.target.value)} placeholder="Registre retorno de fornecedor, observações..." data-testid="input-update-note" />
+            </div>
+
+            {/* Delivery Windows in Update Dialog */}
+            <div className="border-t pt-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold flex items-center gap-1"><Clock className="w-4 h-4 text-purple-600" />Janelas de Entrega</Label>
+                {canEditWindows && (
+                  <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={addWindow} data-testid="button-add-window-update">
+                    <Plus className="w-3 h-3 mr-1" />Adicionar
+                  </Button>
+                )}
+              </div>
+              {deliveryWindows.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhuma janela definida.</p>
+              ) : (
+                <div className="space-y-2">
+                  {deliveryWindows.map((w, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2 bg-purple-50 dark:bg-purple-950/30 rounded border border-purple-200 dark:border-purple-800" data-testid={`update-window-row-${i}`}>
+                      <span className="text-xs font-medium text-purple-700 dark:text-purple-300 w-16 shrink-0">Janela {i + 1}</span>
+                      {canEditWindows ? (
+                        <>
+                          <Input type="time" value={w.startTime} onChange={e => updateWindow(i, 'startTime', e.target.value)} className="h-7 text-xs flex-1" data-testid={`update-window-start-${i}`} />
+                          <span className="text-xs text-muted-foreground">até</span>
+                          <Input type="time" value={w.endTime} onChange={e => updateWindow(i, 'endTime', e.target.value)} className="h-7 text-xs flex-1" data-testid={`update-window-end-${i}`} />
+                          <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-red-500 hover:text-red-700 shrink-0" onClick={() => removeWindow(i)} data-testid={`button-remove-update-window-${i}`}><XCircle className="w-3.5 h-3.5" /></Button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-purple-800 dark:text-purple-200">{w.startTime} – {w.endTime}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setUpdateModal(null)}>Cancelar</Button>
-            <Button data-testid="button-confirm-update" disabled={updateMut.isPending} onClick={() => { if (updateModal) updateMut.mutate({ id: updateModal.id, data: { status: updateStatus, logisticsNote: updateNote } }); }}>
+            <Button variant="outline" onClick={() => { setUpdateModal(null); setDeliveryWindows([]); }}>Cancelar</Button>
+            <Button data-testid="button-confirm-update" disabled={updateMut.isPending} onClick={() => {
+              if (!updateModal) return;
+              const windowsPayload = canEditWindows && deliveryWindows.length > 0 ? {
+                deliveryWindowsJson: JSON.stringify(deliveryWindows),
+                deliveryWindowsRespondedBy: user?.name || '',
+                deliveryWindowsRespondedAt: new Date().toISOString(),
+              } : {};
+              const autoStatus = canEditWindows && deliveryWindows.length > 0 && updateStatus === (updateModal.status) && updateStatus !== 'HORARIOS_DISPONIVEIS'
+                ? 'HORARIOS_DISPONIVEIS'
+                : updateStatus;
+              updateMut.mutate({ id: updateModal.id, data: { status: autoStatus, logisticsNote: updateNote, ...windowsPayload } });
+            }}>
               {updateMut.isPending ? 'Salvando...' : 'Atualizar'}
             </Button>
           </DialogFooter>

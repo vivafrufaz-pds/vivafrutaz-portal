@@ -9,16 +9,22 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Plus, Eye, Pencil, Trash2, Building2, Download } from 'lucide-react';
+import { Plus, Eye, Pencil, Trash2, Building2, Download, Clock } from 'lucide-react';
 import type { CompanyQuotation, PriceGroup } from '@shared/schema';
 
-const STATUS_LABEL: Record<string, string> = { PENDING: 'Pendente', IN_ANALYSIS: 'Em análise', APPROVED: 'Aprovado', REJECTED: 'Rejeitado' };
+const STATUS_LABEL: Record<string, string> = { PENDING: 'Pendente', IN_ANALYSIS: 'Em análise', APPROVED: 'Aprovado', REJECTED: 'Rejeitado', HORARIOS_DISPONIVEIS: 'Horários Disponíveis' };
 const STATUS_COLOR: Record<string, string> = {
   PENDING: 'bg-yellow-100 text-yellow-800',
   IN_ANALYSIS: 'bg-blue-100 text-blue-800',
   APPROVED: 'bg-green-100 text-green-800',
   REJECTED: 'bg-red-100 text-red-800',
+  HORARIOS_DISPONIVEIS: 'bg-purple-100 text-purple-800',
 };
+
+type DeliveryWindow = { startTime: string; endTime: string };
+function parseWindows(json: string | null | undefined): DeliveryWindow[] {
+  try { return json ? JSON.parse(json) : []; } catch { return []; }
+}
 
 function exportToCSV(rows: any[], filename: string) {
   if (!rows.length) return;
@@ -136,6 +142,19 @@ function QuotationDetail({ quotation, onClose, priceGroups }: { quotation: Compa
         {quotation.estimatedVolume && <div><span className="font-medium text-muted-foreground">Volume:</span><p>{quotation.estimatedVolume}</p></div>}
         {quotation.productInterest && <div className="col-span-2"><span className="font-medium text-muted-foreground">Interesse:</span><p>{quotation.productInterest}</p></div>}
         {quotation.logisticsNote && <div className="col-span-2"><span className="font-medium text-muted-foreground">Logística:</span><p>{quotation.logisticsNote}</p></div>}
+        {parseWindows(quotation.deliveryWindowsJson).length > 0 && (
+          <div className="col-span-2">
+            <span className="font-medium text-muted-foreground flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-purple-600" />Janelas de Entrega:</span>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {parseWindows(quotation.deliveryWindowsJson).map((w, i) => (
+                <span key={i} className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">{w.startTime} – {w.endTime}</span>
+              ))}
+            </div>
+            {quotation.deliveryWindowsRespondedBy && (
+              <p className="text-xs text-muted-foreground mt-1">Definido por {quotation.deliveryWindowsRespondedBy}{quotation.deliveryWindowsRespondedAt ? ` em ${new Date(quotation.deliveryWindowsRespondedAt).toLocaleDateString('pt-BR')}` : ''}</p>
+            )}
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -248,6 +267,14 @@ export default function QuotationsPage() {
                       {q.city && <span>📍 {q.city}{q.state && `/${q.state}`}</span>}
                     </div>
                     {q.estimatedVolume && <p className="text-xs text-muted-foreground">Volume: {q.estimatedVolume}</p>}
+                    {parseWindows(q.deliveryWindowsJson).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        <span className="text-xs text-purple-700 font-medium flex items-center gap-0.5"><Clock className="w-3 h-3" />Janelas:</span>
+                        {parseWindows(q.deliveryWindowsJson).map((w, i) => (
+                          <span key={i} className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded-full">{w.startTime}–{w.endTime}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1 items-end shrink-0">
                     <p className="text-xs text-muted-foreground">{new Date(q.createdAt).toLocaleDateString('pt-BR')}</p>

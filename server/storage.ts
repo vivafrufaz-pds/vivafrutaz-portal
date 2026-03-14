@@ -779,7 +779,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(companyQuotations).orderBy(desc(companyQuotations.createdAt));
   }
   async createQuotation(data: Partial<CompanyQuotation>): Promise<CompanyQuotation> {
-    const [q] = await db.insert(companyQuotations).values({ ...data, status: 'PENDING' } as any).returning();
+    const [q] = await db.insert(companyQuotations).values({ status: 'PENDING', ...data } as any).returning();
     return q;
   }
   async updateQuotation(id: number, data: Partial<CompanyQuotation>): Promise<CompanyQuotation> {

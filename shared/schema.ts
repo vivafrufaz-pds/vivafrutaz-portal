@@ -318,8 +318,11 @@ export const companyQuotations = pgTable("company_quotations", {
   orderWindowIds: jsonb("order_window_ids").default([]),
   priceGroupId: integer("price_group_id").references(() => priceGroups.id),
   priceGroupName: text("price_group_name"),
-  status: text("status").notNull().default("PENDING"), // PENDING, IN_ANALYSIS, APPROVED, REJECTED
+  status: text("status").notNull().default("PENDING"), // PENDING, IN_ANALYSIS, APPROVED, REJECTED, HORARIOS_DISPONIVEIS
   adminNote: text("admin_note"),
+  deliveryWindowsJson: text("delivery_windows_json"), // JSON array of {startTime, endTime}
+  deliveryWindowsRespondedBy: text("delivery_windows_responded_by"),
+  deliveryWindowsRespondedAt: timestamp("delivery_windows_responded_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
