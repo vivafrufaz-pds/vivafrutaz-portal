@@ -5,10 +5,11 @@ import { Modal } from "@/components/Modal";
 import {
   Plus, Building2, Mail, Hash, Phone, Clock, Edit2,
   CheckCircle, XCircle, CalendarDays, CreditCard, DollarSign,
-  FileText, Settings, User, Percent, Search, Filter, X, Package, Trash2, Save
+  FileText, Settings, User, Percent, Search, Filter, X, Package, Trash2, Save, MapPin, Loader2
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProducts } from "@/hooks/use-catalog";
+import { useToast } from "@/hooks/use-toast";
 import type { Company } from "@shared/schema";
 
 const DAYS_OPTIONS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
@@ -306,6 +307,8 @@ export default function CompaniesPage() {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("basico");
   const [formData, setFormData] = useState(emptyForm);
+  const [geocoding, setGeocoding] = useState(false);
+  const { toast } = useToast();
 
   const openCreate = () => {
     setEditingCompany(null);
@@ -337,6 +340,48 @@ export default function CompaniesPage() {
 
   const set = (field: string, value: any) =>
     setFormData(prev => ({ ...prev, [field]: value }));
+
+  const buscarCoordenadas = async () => {
+    const parts = [
+      formData.addressStreet,
+      formData.addressNumber,
+      formData.addressNeighborhood,
+      formData.addressCity,
+      formData.addressZip,
+    ].filter(Boolean);
+
+    if (parts.length < 2) {
+      toast({ title: "Endereço incompleto", description: "Preencha pelo menos rua e cidade antes de buscar.", variant: "destructive" });
+      return;
+    }
+
+    const enderecoCompleto = parts.join(", ");
+    setGeocoding(true);
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(enderecoCompleto)}&format=json&limit=1&countrycodes=br`;
+      const res = await fetch(url, { headers: { "Accept-Language": "pt-BR", "User-Agent": "VivaFrutaz/1.0" } });
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0];
+        setFormData(prev => ({ ...prev, latitude: parseFloat(lat).toFixed(7), longitude: parseFloat(lon).toFixed(7) }));
+        toast({ title: "Coordenadas encontradas!", description: `Lat: ${parseFloat(lat).toFixed(5)}, Lon: ${parseFloat(lon).toFixed(5)}` });
+      } else {
+        toast({
+          title: "Endereço não localizado",
+          description: "Não foi possível localizar automaticamente o endereço. Verifique os dados ou informe manualmente.",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "Erro ao buscar coordenadas",
+        description: "Verifique sua conexão e tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setGeocoding(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -690,21 +735,31 @@ export default function CompaniesPage() {
                       className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div>
-                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Latitude (GPS)</label>
-                    <input type="number" step="0.0000001" value={formData.latitude} onChange={e => set("latitude", e.target.value)}
-                      placeholder="-23.5505"
-                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                <div className="mt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Coordenadas GPS</p>
+                    <button type="button" data-testid="button-buscar-coordenadas" onClick={buscarCoordenadas} disabled={geocoding}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 transition-all disabled:opacity-60">
+                      {geocoding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
+                      {geocoding ? "Buscando..." : "Buscar Coordenadas"}
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Longitude (GPS)</label>
-                    <input type="number" step="0.0000001" value={formData.longitude} onChange={e => set("longitude", e.target.value)}
-                      placeholder="-46.6333"
-                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-muted-foreground">Latitude</label>
+                      <input type="number" step="0.0000001" value={formData.latitude} onChange={e => set("latitude", e.target.value)}
+                        placeholder="-23.5505"
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-muted-foreground">Longitude</label>
+                      <input type="number" step="0.0000001" value={formData.longitude} onChange={e => set("longitude", e.target.value)}
+                        placeholder="-46.6333"
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                    </div>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">Preenchidas automaticamente pelo botão acima. Usadas pelo Assistente de Rota para agrupamento geográfico.</p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Coordenadas GPS usadas pelo Assistente de Rota para agrupamento geográfico.</p>
               </div>
 
               <div>

@@ -68,6 +68,11 @@ const STATUS_LABEL: Record<string, string> = {
   DELIVERED: "Entregue",
 };
 
+function safeText(val: unknown): string {
+  if (val === undefined || val === null) return "";
+  return String(val);
+}
+
 function formatMoney(val: string | number): string {
   const n = typeof val === "string" ? parseFloat(val) : val;
   return isNaN(n) ? "R$ 0,00" : `R$ ${n.toFixed(2).replace(".", ",").replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
@@ -78,7 +83,7 @@ function formatDate(d: string | Date): string {
     const dt = typeof d === "string" ? new Date(d) : d;
     return format(dt, "dd/MM/yyyy", { locale: ptBR });
   } catch {
-    return String(d);
+    return safeText(d);
   }
 }
 
@@ -126,12 +131,12 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   // VivaFrutaz brand block (right side of header)
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text("VivaFrutaz", pageW - margin - 2, 13, { align: "right" });
+  doc.text(safeText(data.vivaFrutaz.companyName) || "VivaFrutaz", pageW - margin - 2, 13, { align: "right" });
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  if (data.vivaFrutaz.cnpj) doc.text(`CNPJ: ${data.vivaFrutaz.cnpj}`, pageW - margin - 2, 18, { align: "right" });
-  if (data.vivaFrutaz.phone) doc.text(`Tel: ${data.vivaFrutaz.phone}`, pageW - margin - 2, 22, { align: "right" });
-  if (data.vivaFrutaz.address) doc.text(data.vivaFrutaz.address, pageW - margin - 2, 26, { align: "right" });
+  if (data.vivaFrutaz.cnpj) doc.text(`CNPJ: ${safeText(data.vivaFrutaz.cnpj)}`, pageW - margin - 2, 18, { align: "right" });
+  if (data.vivaFrutaz.phone) doc.text(`Tel: ${safeText(data.vivaFrutaz.phone)}`, pageW - margin - 2, 22, { align: "right" });
+  if (data.vivaFrutaz.address) doc.text(safeText(data.vivaFrutaz.address), pageW - margin - 2, 26, { align: "right" });
 
   y = 32;
 
@@ -149,7 +154,7 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   doc.setTextColor(...DARK);
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  doc.text(`Pedido: ${data.order.orderCode || `#${data.order.id}`}`, margin + 4, y + 7);
+  doc.text(`Pedido: ${safeText(data.order.orderCode) || `#${data.order.id}`}`, margin + 4, y + 7);
 
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
@@ -161,10 +166,10 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
 
   doc.text(`Data do pedido: ${formatDate(data.order.orderDate)}`, col1x, row1y);
   doc.text(`Data de entrega: ${formatDate(data.order.deliveryDate)}`, col2x, row1y);
-  doc.text(`Semana ref.: ${data.order.weekReference}`, col3x, row1y);
+  doc.text(`Semana ref.: ${safeText(data.order.weekReference)}`, col3x, row1y);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...GREEN);
-  doc.text(`Status: ${STATUS_LABEL[data.order.status] || data.order.status}`, col1x, row2y);
+  doc.text(`Status: ${safeText(STATUS_LABEL[data.order.status] || data.order.status)}`, col1x, row2y);
   doc.setTextColor(...DARK);
   doc.setFont("helvetica", "normal");
 
@@ -196,27 +201,27 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   doc.setTextColor(...DARK);
   doc.setFontSize(7.5);
   doc.setFont("helvetica", "bold");
-  doc.text(data.vivaFrutaz.companyName || "VivaFrutaz", margin + 3, y + 6);
+  doc.text(safeText(data.vivaFrutaz.companyName) || "VivaFrutaz", margin + 3, y + 6);
   doc.setFont("helvetica", "normal");
-  if (data.vivaFrutaz.cnpj) doc.text(`CNPJ: ${data.vivaFrutaz.cnpj}`, margin + 3, y + 11);
+  if (data.vivaFrutaz.cnpj) doc.text(`CNPJ: ${safeText(data.vivaFrutaz.cnpj)}`, margin + 3, y + 11);
   if (data.vivaFrutaz.address) {
-    const lines = doc.splitTextToSize(data.vivaFrutaz.address, halfW - 6);
+    const lines = doc.splitTextToSize(safeText(data.vivaFrutaz.address), halfW - 6);
     doc.text(lines, margin + 3, y + 16);
   }
   const cityState = [data.vivaFrutaz.city, data.vivaFrutaz.state].filter(Boolean).join(" – ");
-  if (cityState) doc.text(cityState, margin + 3, y + 21);
-  if (data.vivaFrutaz.phone) doc.text(`Tel: ${data.vivaFrutaz.phone}`, margin + 3, y + 24);
-  if (data.vivaFrutaz.email) doc.text(`Email: ${data.vivaFrutaz.email}`, margin + 3, y + 28);
+  if (cityState) doc.text(safeText(cityState), margin + 3, y + 21);
+  if (data.vivaFrutaz.phone) doc.text(`Tel: ${safeText(data.vivaFrutaz.phone)}`, margin + 3, y + 24);
+  if (data.vivaFrutaz.email) doc.text(`Email: ${safeText(data.vivaFrutaz.email)}`, margin + 3, y + 28);
 
   doc.setFont("helvetica", "bold");
-  doc.text(data.company.companyName, colRx + 3, y + 6);
+  doc.text(safeText(data.company.companyName), colRx + 3, y + 6);
   doc.setFont("helvetica", "normal");
-  if (data.company.cnpj) doc.text(`CNPJ: ${data.company.cnpj}`, colRx + 3, y + 11);
+  if (data.company.cnpj) doc.text(`CNPJ: ${safeText(data.company.cnpj)}`, colRx + 3, y + 11);
   const clientAddr = buildAddress(data.company);
   const addrLines = doc.splitTextToSize(clientAddr, halfW - 6);
   doc.text(addrLines, colRx + 3, y + 16);
-  if (data.company.contactName) doc.text(`Contato: ${data.company.contactName}`, colRx + 3, y + 24);
-  if (data.company.phone) doc.text(`Tel: ${data.company.phone}`, colRx + 3, y + 28);
+  if (data.company.contactName) doc.text(`Contato: ${safeText(data.company.contactName)}`, colRx + 3, y + 24);
+  if (data.company.phone) doc.text(`Tel: ${safeText(data.company.phone)}`, colRx + 3, y + 28);
 
   y += infoBoxH + 6;
 
@@ -234,9 +239,9 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
     margin: { left: margin, right: margin },
     head: [["Produto", "Qtd", "Un.", "Preço Unit.", "Subtotal"]],
     body: data.items.map(item => [
-      item.productName,
-      String(item.quantity),
-      item.unit || "un",
+      safeText(item.productName),
+      String(item.quantity ?? 0),
+      safeText(item.unit) || "un",
       formatMoney(item.unitPrice),
       formatMoney(item.totalPrice),
     ]),
@@ -262,7 +267,7 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   y = (doc as any).lastAutoTable.finalY + 4;
 
   // ── Totals ─────────────────────────────────────────────────
-  const totalItems = data.items.reduce((s, i) => s + i.quantity, 0);
+  const totalItems = data.items.reduce((s, i) => s + (i.quantity ?? 0), 0);
   const totalVal = parseFloat(data.order.totalValue) || 0;
   const totalsX = pageW - margin - 60;
 
@@ -298,9 +303,9 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
 
     const lx = margin + 4;
     const ly = y + 6;
-    if (logi.routeName) doc.text(`Rota: ${logi.routeName}`, lx, ly);
-    if (logi.driverName) doc.text(`Motorista: ${logi.driverName}`, lx + 60, ly);
-    if (logi.deliveryWindow) doc.text(`Janela de entrega: ${logi.deliveryWindow}`, lx, ly + 8);
+    if (logi.routeName) doc.text(`Rota: ${safeText(logi.routeName)}`, lx, ly);
+    if (logi.driverName) doc.text(`Motorista: ${safeText(logi.driverName)}`, lx + 60, ly);
+    if (logi.deliveryWindow) doc.text(`Janela de entrega: ${safeText(logi.deliveryWindow)}`, lx, ly + 8);
 
     y += 22;
   }
@@ -314,16 +319,16 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
     y += 5;
     doc.setFontSize(7.5);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor([80, 80, 90] as unknown as string);
+    doc.setTextColor(80, 80, 90);
     if (data.order.orderNote) {
-      const lines = doc.splitTextToSize(`Obs. do pedido: ${data.order.orderNote}`, pageW - margin * 2);
+      const lines = doc.splitTextToSize(`Obs. do pedido: ${safeText(data.order.orderNote)}`, pageW - margin * 2);
       doc.text(lines, margin, y);
       y += lines.length * 5;
     }
     if (data.order.adminNote) {
       doc.setFont("helvetica", "italic");
-      doc.setTextColor([180, 60, 60] as unknown as string);
-      const alines = doc.splitTextToSize(`Obs. administrativa: ${data.order.adminNote}`, pageW - margin * 2);
+      doc.setTextColor(180, 60, 60);
+      const alines = doc.splitTextToSize(`Obs. administrativa: ${safeText(data.order.adminNote)}`, pageW - margin * 2);
       doc.text(alines, margin, y);
       y += alines.length * 5;
     }
@@ -349,7 +354,7 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
 
 export async function downloadDanfe(data: DanfeData): Promise<void> {
   const doc = await generateDanfePdf(data);
-  const code = data.order.orderCode || `pedido-${data.order.id}`;
+  const code = safeText(data.order.orderCode) || `pedido-${data.order.id}`;
   doc.save(`DANFE-${code}.pdf`);
 }
 

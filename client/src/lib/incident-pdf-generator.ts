@@ -16,6 +16,11 @@ export interface IncidentPdfData {
   adminNote?: string;
 }
 
+function safeText(val: unknown): string {
+  if (val === undefined || val === null) return "";
+  return String(val);
+}
+
 export async function generateIncidentPdf(data: IncidentPdfData): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -45,7 +50,7 @@ export async function generateIncidentPdf(data: IncidentPdfData): Promise<jsPDF>
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.text(`Código: #${data.id}`, margin + 4, y + 6);
-  doc.text(`Empresa: ${data.companyName}`, margin + 4, y + 12);
+  doc.text(`Empresa: ${safeText(data.companyName)}`, margin + 4, y + 12);
 
   const TYPE_LABELS: Record<string, string> = {
     DELIVERY_PROBLEM: "Problema de Entrega",
@@ -65,10 +70,10 @@ export async function generateIncidentPdf(data: IncidentPdfData): Promise<jsPDF>
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text(`Tipo: ${TYPE_LABELS[data.type] || data.type}`, margin + 4, y + 18);
+  doc.text(`Tipo: ${safeText(TYPE_LABELS[data.type] || data.type)}`, margin + 4, y + 18);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor([220, 100, 50] as unknown as string);
-  doc.text(`Status: ${STATUS_LABELS[data.status] || data.status}`, margin + 4, y + 24);
+  doc.setTextColor(220, 100, 50);
+  doc.text(`Status: ${safeText(STATUS_LABELS[data.status] || data.status)}`, margin + 4, y + 24);
 
   y += 32;
 
@@ -76,10 +81,18 @@ export async function generateIncidentPdf(data: IncidentPdfData): Promise<jsPDF>
   doc.setTextColor(...DARK);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text(`Data da Ocorrência: ${format(new Date(data.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, margin, y);
+  try {
+    doc.text(`Data da Ocorrência: ${format(new Date(data.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, margin, y);
+  } catch {
+    doc.text(`Data da Ocorrência: ${safeText(data.createdAt)}`, margin, y);
+  }
   if (data.respondedAt) {
-    doc.text(`Respondida em: ${format(new Date(data.respondedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, margin, y + 6);
-    if (data.respondedByName) doc.text(`Por: ${data.respondedByName}`, margin, y + 12);
+    try {
+      doc.text(`Respondida em: ${format(new Date(data.respondedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, margin, y + 6);
+    } catch {
+      doc.text(`Respondida em: ${safeText(data.respondedAt)}`, margin, y + 6);
+    }
+    if (data.respondedByName) doc.text(`Por: ${safeText(data.respondedByName)}`, margin, y + 12);
   }
 
   y += 18;
@@ -96,7 +109,7 @@ export async function generateIncidentPdf(data: IncidentPdfData): Promise<jsPDF>
 
   doc.setTextColor(...DARK);
   doc.setFont("helvetica", "normal");
-  const descLines = doc.splitTextToSize(data.description, pageW - margin * 2 - 4);
+  const descLines = doc.splitTextToSize(safeText(data.description), pageW - margin * 2 - 4);
   doc.text(descLines, margin + 2, y + 2);
   y += (descLines.length * 3.5) + 4;
 
@@ -112,14 +125,14 @@ export async function generateIncidentPdf(data: IncidentPdfData): Promise<jsPDF>
     y += 6;
 
     doc.setFont("helvetica", "normal");
-    const respLines = doc.splitTextToSize(data.responseMessage, pageW - margin * 2 - 4);
+    const respLines = doc.splitTextToSize(safeText(data.responseMessage), pageW - margin * 2 - 4);
     doc.text(respLines, margin + 2, y + 2);
     y += (respLines.length * 3.5) + 4;
   }
 
   // Admin notes section (internal)
   if (data.adminNote) {
-    doc.setFillColor([255, 235, 205] as unknown as string);
+    doc.setFillColor(255, 235, 205);
     doc.rect(margin, y, pageW - margin * 2, 6, "F");
     doc.setTextColor(...DARK);
     doc.setFontSize(8);
@@ -129,7 +142,7 @@ export async function generateIncidentPdf(data: IncidentPdfData): Promise<jsPDF>
     y += 6;
 
     doc.setFont("helvetica", "italic");
-    const noteLines = doc.splitTextToSize(data.adminNote, pageW - margin * 2 - 4);
+    const noteLines = doc.splitTextToSize(safeText(data.adminNote), pageW - margin * 2 - 4);
     doc.text(noteLines, margin + 2, y + 2);
     y += (noteLines.length * 3.5) + 4;
   }
