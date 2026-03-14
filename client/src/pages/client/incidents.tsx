@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/use-auth';
+import { Layout } from '@/components/Layout';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -151,12 +152,24 @@ function IncidentForm({ onClose, companyId, companyName }: { onClose: () => void
 }
 
 export default function ClientIncidentsPage() {
-  const { company } = useAuth();
+  const { company, isLoading: authLoading } = useAuth();
   const [showForm, setShowForm] = useState(false);
 
   const { data: incidents = [], isLoading } = useQuery<ClientIncident[]>({
     queryKey: ['/api/client-incidents'],
   });
+
+  if (!authLoading && !company) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mb-4 mx-auto text-3xl">⚠️</div>
+          <h2 className="text-xl font-bold text-foreground mb-2">Dados da empresa não encontrados.</h2>
+          <p className="text-muted-foreground text-sm max-w-sm">Entre em contato com a equipe VivaFrutaz.</p>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <div className="space-y-6">

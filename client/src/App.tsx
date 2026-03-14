@@ -51,6 +51,8 @@ import ClientCreateOrder from "@/pages/client/create-order";
 import ClientOrderHistory from "@/pages/client/order-history";
 import ClientSpecialOrder from "@/pages/client/special-order";
 import ClientIncidents from "@/pages/client/incidents";
+import ClientQuotations from "@/pages/client/quotations";
+import ClientProfile from "@/pages/client/profile";
 
 // Maintenance screen for blocked clients
 function MaintenanceScreen() {
@@ -225,6 +227,12 @@ function Router() {
       </Route>
       <Route path="/client/incidents">
         {() => <ProtectedRoute component={ClientIncidents} role="client" />}
+      </Route>
+      <Route path="/client/quotations">
+        {() => <ProtectedRoute component={ClientQuotations} role="client" />}
+      </Route>
+      <Route path="/client/profile">
+        {() => <ProtectedRoute component={ClientProfile} role="client" />}
       </Route>
 
       <Route component={NotFound} />

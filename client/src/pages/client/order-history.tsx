@@ -19,8 +19,20 @@ const MONTHS = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
 ];
 
+function CompanyMissing() {
+  return (
+    <Layout>
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mb-4 mx-auto text-3xl">⚠️</div>
+        <h2 className="text-xl font-bold text-foreground mb-2">Dados da empresa não encontrados.</h2>
+        <p className="text-muted-foreground text-sm max-w-sm">Entre em contato com a equipe VivaFrutaz.</p>
+      </div>
+    </Layout>
+  );
+}
+
 export default function OrderHistoryPage() {
-  const { company } = useAuth();
+  const { company, isLoading: authLoading } = useAuth();
   const { data: orders, isLoading } = useCompanyOrders(company?.id);
 
   const today = new Date();
@@ -50,6 +62,8 @@ export default function OrderHistoryPage() {
 
   const clearFilters = () => { setFilterMonth(""); setFilterYear(""); setFilterDateFrom(""); setFilterDateTo(""); };
   const hasFilters = filterMonth || filterYear || filterDateFrom || filterDateTo;
+
+  if (!authLoading && !company) return <CompanyMissing />;
 
   return (
     <Layout>

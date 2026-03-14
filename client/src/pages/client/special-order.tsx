@@ -21,8 +21,20 @@ const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = 
   REJECTED: { label: "Recusado", color: "bg-red-100 text-red-700", icon: XCircle },
 };
 
+function CompanyMissing() {
+  return (
+    <Layout>
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mb-4 mx-auto text-3xl">⚠️</div>
+        <h2 className="text-xl font-bold text-foreground mb-2">Dados da empresa não encontrados.</h2>
+        <p className="text-muted-foreground text-sm max-w-sm">Entre em contato com a equipe VivaFrutaz.</p>
+      </div>
+    </Layout>
+  );
+}
+
 export default function SpecialOrderPage() {
-  const { company } = useAuth();
+  const { company, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -55,6 +67,8 @@ export default function SpecialOrderPage() {
     },
     onError: () => toast({ title: "Erro ao enviar solicitação.", variant: "destructive" }),
   });
+
+  if (!authLoading && !company) return <CompanyMissing />;
 
   return (
     <Layout>

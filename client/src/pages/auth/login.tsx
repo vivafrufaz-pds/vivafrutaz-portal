@@ -2,26 +2,37 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Leaf, Building2, UserCircle, KeyRound, ArrowLeft, CheckCircle2 } from "lucide-react";
 
+const DOMAIN = "@vivafrutaz.com";
+
+function normalizeToFullEmail(username: string): string {
+  const clean = username.trim().toLowerCase();
+  if (clean.endsWith(DOMAIN)) return clean;
+  return clean + DOMAIN;
+}
+
+function usernameFromEmail(email: string): string {
+  return email.trim().toLowerCase().replace(new RegExp(`${DOMAIN.replace(/\./g, "\\.")}$`, "i"), "");
+}
+
 export default function Login() {
   const { login, isLoggingIn } = useAuth();
   const [type, setType] = useState<'admin' | 'company'>('company');
 
-  // Company tab uses full email
-  const [companyEmail, setCompanyEmail] = useState("");
-  // Admin tab uses just the username (domain is @vivafrutaz.com)
+  // Both tabs use username only — @vivafrutaz.com is added automatically
+  const [companyUsername, setCompanyUsername] = useState("");
   const [adminUsername, setAdminUsername] = useState("");
 
   const [password, setPassword] = useState("");
   const [showForgot, setShowForgot] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotUsername, setForgotUsername] = useState("");
   const [forgotStatus, setForgotStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [forgotMessage, setForgotMessage] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const email = type === 'admin'
-      ? `${adminUsername.trim().toLowerCase()}@vivafrutaz.com`
-      : companyEmail.trim().toLowerCase();
+      ? normalizeToFullEmail(adminUsername)
+      : normalizeToFullEmail(companyUsername);
     await login({ email, password, type });
   };
 
@@ -29,10 +40,11 @@ export default function Login() {
     e.preventDefault();
     setForgotStatus('loading');
     try {
+      const email = normalizeToFullEmail(forgotUsername);
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: forgotEmail.toLowerCase() }),
+        body: JSON.stringify({ email }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -100,10 +112,20 @@ export default function Login() {
               ) : (
                 <form onSubmit={handleForgotPassword} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-semibold text-foreground mb-2">Email cadastrado</label>
-                    <input type="email" required value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
-                      placeholder="voce@empresa.com" />
+                    <label className="block text-sm font-semibold text-foreground mb-2">Usuário de acesso</label>
+                    <div className="flex items-center border-2 border-border rounded-xl overflow-hidden focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 transition-all bg-background">
+                      <input
+                        type="text"
+                        required
+                        value={forgotUsername}
+                        onChange={e => setForgotUsername(usernameFromEmail(e.target.value))}
+                        className="flex-1 px-4 py-3 bg-transparent text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+                        placeholder="empresa01"
+                      />
+                      <span className="px-3 py-3 text-sm font-semibold text-primary/80 bg-primary/5 border-l border-border/50 whitespace-nowrap select-none">
+                        @vivafrutaz.com
+                      </span>
+                    </div>
                   </div>
 
                   {forgotStatus === 'error' && (
@@ -157,7 +179,7 @@ export default function Login() {
                         type="text"
                         required
                         value={adminUsername}
-                        onChange={e => setAdminUsername(e.target.value)}
+                        onChange={e => setAdminUsername(usernameFromEmail(e.target.value))}
                         autoComplete="username"
                         className="flex-1 px-4 py-3 bg-transparent text-foreground placeholder:text-muted-foreground outline-none min-w-0"
                         placeholder="seu.nome"
@@ -172,16 +194,25 @@ export default function Login() {
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-sm font-semibold text-foreground mb-2">Email de acesso</label>
-                    <input
-                      data-testid="input-email"
-                      type="email"
-                      required
-                      value={companyEmail}
-                      onChange={e => setCompanyEmail(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
-                      placeholder="voce@empresa.com"
-                    />
+                    <label className="block text-sm font-semibold text-foreground mb-2">Usuário de acesso</label>
+                    <div className="flex items-center border-2 border-border rounded-xl overflow-hidden focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 transition-all bg-background">
+                      <input
+                        data-testid="input-email"
+                        type="text"
+                        required
+                        value={companyUsername}
+                        onChange={e => setCompanyUsername(usernameFromEmail(e.target.value))}
+                        autoComplete="username"
+                        className="flex-1 px-4 py-3 bg-transparent text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+                        placeholder="empresa01"
+                      />
+                      <span className="px-3 py-3 text-sm font-semibold text-primary/80 bg-primary/5 border-l border-border/50 whitespace-nowrap select-none">
+                        @vivafrutaz.com
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Digite apenas o nome de usuário — o domínio é adicionado automaticamente.
+                    </p>
                   </div>
                 )}
 
@@ -206,7 +237,7 @@ export default function Login() {
 
               {type === 'company' && (
                 <div className="mt-6 text-center">
-                  <button onClick={() => { setShowForgot(true); setForgotEmail(companyEmail); }}
+                  <button onClick={() => { setShowForgot(true); setForgotUsername(companyUsername); }}
                     className="text-sm text-muted-foreground hover:text-primary transition-colors font-medium flex items-center gap-1.5 mx-auto">
                     <KeyRound className="w-3.5 h-3.5" />
                     Esqueci minha senha

@@ -51,7 +51,7 @@ function fmtBRL(n: number) {
 const ORDER_NOTE_PLACEHOLDER = "Ex: Bananas mais verdes, solicito produto que não está na planilha (informar nome), entregar antes das 9h...";
 
 export default function CreateOrderPage() {
-  const { company } = useAuth();
+  const { company, isLoading: authLoading } = useAuth();
   const { data: activeWindow, isLoading: windowLoading } = useActiveOrderWindow();
   const { data: products } = useProducts();
   const createOrder = useCreateOrder();
@@ -69,6 +69,20 @@ export default function CreateOrderPage() {
   const [successOrder, setSuccessOrder] = useState<{ orderCode: string; total: number } | null>(null);
   const [filterCategory, setFilterCategory] = useState("ALL");
   const [search, setSearch] = useState("");
+
+  if (!authLoading && !company) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mb-4 mx-auto">
+            <span className="text-3xl">⚠️</span>
+          </div>
+          <h2 className="text-xl font-bold text-foreground mb-2">Dados da empresa não encontrados.</h2>
+          <p className="text-muted-foreground text-sm max-w-sm">Não foi possível carregar as informações da sua empresa. Entre em contato com a equipe VivaFrutaz.</p>
+        </div>
+      </Layout>
+    );
+  }
 
   // Cart auto-save key (scoped to company + order window)
   const cartKey = company && activeWindow

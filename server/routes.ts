@@ -283,12 +283,17 @@ export async function registerRoutes(
         return res.json({ user });
       } else {
         const company = await storage.getCompanyByEmail(normalizedEmail);
-        if (!company || company.password !== input.password) {
-          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login cliente falhou: ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
-          return res.status(401).json({ message: "Email ou senha incorretos." });
+        if (!company) {
+          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login cliente falhou (usuário não encontrado): ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
+          return res.status(401).json({ message: "Usuário não encontrado. Verifique o usuário e tente novamente." });
+        }
+        if (company.password !== input.password) {
+          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login cliente falhou (senha incorreta): ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
+          return res.status(401).json({ message: "Usuário ou senha incorretos." });
         }
         if (!company.active) {
-          return res.status(401).json({ message: "Esta conta está inativa. Entre em contato com a VivaFrutaz." });
+          await storage.createLog({ action: 'LOGIN_BLOCKED', description: `Login cliente bloqueado (conta inativa): ${normalizedEmail}`, companyId: company.id, userEmail: company.email, level: 'WARN', ip });
+          return res.status(401).json({ message: "Conta desativada. Entre em contato com a equipe VivaFrutaz para reativar seu acesso." });
         }
         (req.session as any).companyId = company.id;
         (req.session as any).userType = 'company';
@@ -545,6 +550,43 @@ export async function registerRoutes(
   app.delete(api.companies.delete.path, async (req, res) => {
     await storage.deleteCompany(Number(req.params.id));
     res.status(204).end();
+  });
+
+  // Company validation endpoint — checks all companies for missing required fields
+  app.get('/api/admin/companies/validate', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+
+      const companies = await storage.getCompanies();
+      const issues: { id: number; companyName: string; problems: string[] }[] = [];
+
+      for (const c of companies) {
+        const problems: string[] = [];
+        if (!c.companyName?.trim()) problems.push('Nome da empresa ausente');
+        if (!c.contactName?.trim()) problems.push('Nome do responsável ausente');
+        if (!c.email?.trim()) problems.push('Email ausente');
+        if (!c.password?.trim()) problems.push('Senha ausente');
+        if (!c.allowedOrderDays || !Array.isArray(c.allowedOrderDays) || (c.allowedOrderDays as any[]).length === 0) {
+          problems.push('Nenhum dia de entrega configurado');
+        }
+        if (!c.active) problems.push('Conta inativa');
+        if (problems.length > 0) issues.push({ id: c.id, companyName: c.companyName, problems });
+      }
+
+      res.json({
+        total: companies.length,
+        valid: companies.length - issues.length,
+        withIssues: issues.length,
+        issues,
+        summary: issues.length === 0
+          ? `Todos os ${companies.length} clientes estão com dados válidos.`
+          : `${issues.length} cliente(s) com dados incompletos encontrados.`,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || 'Erro na validação' });
+    }
   });
 
   // Price Groups

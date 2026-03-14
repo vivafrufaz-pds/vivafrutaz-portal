@@ -6,7 +6,7 @@ import {
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
-  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp
+  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle
 } from 'lucide-react';
 import { VirtualAssistant } from './VirtualAssistant';
 
@@ -49,9 +49,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const clientLinks = [
     { href: '/client', label: 'Início', icon: LayoutDashboard },
     { href: '/client/order', label: 'Novo Pedido', icon: ShoppingCart },
-    { href: '/client/history', label: 'Meus Pedidos', icon: Receipt },
+    { href: '/client/history', label: 'Histórico de Pedidos', icon: Receipt },
     { href: '/client/special-order', label: 'Pedidos Pontuais', icon: Star },
+    { href: '/client/quotations', label: 'Cotações', icon: FileText },
     { href: '/client/incidents', label: 'Ocorrências', icon: AlertTriangle },
+    { href: '/client/profile', label: 'Perfil da Empresa', icon: UserCircle },
   ];
 
   const links = isStaff 

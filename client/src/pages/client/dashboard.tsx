@@ -14,11 +14,27 @@ const DAY_MAP: Record<string, string> = {
   "Thursday": "Quinta-feira", "Friday": "Sexta-feira",
 };
 
+function CompanyMissing() {
+  return (
+    <Layout>
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-orange-100 flex items-center justify-center mb-4">
+          <AlertCircle className="w-8 h-8 text-orange-500" />
+        </div>
+        <h2 className="text-xl font-bold text-foreground mb-2">Dados da empresa não encontrados.</h2>
+        <p className="text-muted-foreground text-sm max-w-sm">Não foi possível carregar as informações da sua empresa. Entre em contato com a equipe VivaFrutaz.</p>
+      </div>
+    </Layout>
+  );
+}
+
 export default function ClientDashboard() {
-  const { company } = useAuth();
+  const { company, isLoading } = useAuth();
   const { data: activeWindow } = useActiveOrderWindow();
   const { data: orders } = useCompanyOrders(company?.id);
   const [, setLocation] = useLocation();
+
+  if (!isLoading && !company) return <CompanyMissing />;
 
   const isFirstOrder = !orders || orders.length === 0;
 
