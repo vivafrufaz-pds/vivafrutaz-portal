@@ -1009,9 +1009,15 @@ export async function registerRoutes(
       const { order, items } = req.body;
       if (!order || !items) return res.status(400).json({ message: "Missing order or items" });
 
-      // Check if test mode is active — intercept and save to test_orders table
+      // Check maintenance mode — block ALL client order creation
+      const maintenanceMode = await storage.getSetting('maintenance_mode');
+      if (maintenanceMode === 'true' && req.session?.companyId) {
+        return res.status(503).json({ message: 'Sistema em manutenção. Pedidos temporariamente desabilitados.' });
+      }
+
+      // Check if test mode is active — intercept and save to test_orders table (client sessions only)
       const testMode = await storage.getSetting('test_mode');
-      if (testMode === 'true') {
+      if (testMode === 'true' && req.session?.companyId) {
         const company = await storage.getCompany(order.companyId);
         const year = new Date().getFullYear();
         const testCode = `TESTE-${year}-${String(Date.now()).slice(-6)}`;

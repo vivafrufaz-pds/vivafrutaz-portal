@@ -4,9 +4,12 @@ import { useActiveOrderWindow, useCreateOrder, useCompanyOrders, useOrderDetail 
 import { useProducts } from "@/hooks/use-catalog";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import {
   ShoppingCart, CheckCircle2, AlertCircle, RotateCcw, Package,
-  Minus, Plus, Trash2, FileText, Clock, PartyPopper, X, Search, AlertTriangle, Lock, RefreshCcw
+  Minus, Plus, Trash2, FileText, Clock, PartyPopper, X, Search, AlertTriangle, Lock, RefreshCcw,
+  Wrench, FlaskConical, SendHorizonal
 } from "lucide-react";
 
 const DAY_OPTIONS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
@@ -57,6 +60,15 @@ export default function CreateOrderPage() {
   const createOrder = useCreateOrder();
   const { data: companyOrders } = useCompanyOrders(company?.id);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // System mode checks
+  const { data: testModeData } = useQuery<{ enabled: boolean }>({
+    queryKey: ['/api/settings/test-mode'],
+    staleTime: 0,
+    refetchOnMount: true,
+  });
+  const testModeActive = testModeData?.enabled === true;
 
   const urlDay = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('day') || '';
 
@@ -69,6 +81,27 @@ export default function CreateOrderPage() {
   const [successOrder, setSuccessOrder] = useState<{ orderCode: string; total: number } | null>(null);
   const [filterCategory, setFilterCategory] = useState("ALL");
   const [search, setSearch] = useState("");
+
+  // Reopen (SOLICITAR ALTERAÇÃO) state
+  const [showReopenModal, setShowReopenModal] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const [reopenTargetId, setReopenTargetId] = useState<number | null>(null);
+  const [reopenSuccess, setReopenSuccess] = useState(false);
+
+  const requestReopenMut = useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      apiRequest('POST', `/api/orders/${id}/request-reopen`, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/company-orders'] });
+      setShowReopenModal(false);
+      setReopenReason("");
+      setReopenTargetId(null);
+      setReopenSuccess(true);
+      toast({ title: 'Solicitação enviada!', description: 'O administrador irá analisar e liberar a edição do pedido.' });
+    },
+    onError: (e: any) => toast({ title: e?.message || 'Erro ao solicitar alteração', variant: 'destructive' }),
+  });
 
   if (!authLoading && !company) {
     return (
@@ -323,8 +356,77 @@ export default function CreateOrderPage() {
     );
   }
 
+  // Test mode blocking screen (maintenance is handled at router level in App.tsx)
+  if (testModeActive) {
+    return (
+      <Layout>
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-12 text-center max-w-2xl mx-auto mt-12">
+          <FlaskConical className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-display font-bold text-amber-800">Sistema em Modo Teste</h2>
+          <p className="text-amber-700 mt-3 text-base font-medium">
+            Criação de pedidos temporariamente bloqueada.
+          </p>
+          <p className="text-amber-600 mt-2 text-sm">
+            O sistema está em modo de testes. Pedidos não podem ser criados neste momento. Entre em contato com o administrador para mais informações.
+          </p>
+          <a href="/client/history"
+            className="inline-flex items-center gap-2 mt-6 px-6 py-3 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors">
+            Ver Meus Pedidos
+          </a>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
+      {/* Reopen (SOLICITAR ALTERAÇÃO) modal */}
+      {showReopenModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-2xl p-8 max-w-md w-full premium-shadow border border-border/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                <SendHorizonal className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Solicitar Alteração de Pedido</h3>
+                <p className="text-xs text-muted-foreground">O administrador irá analisar sua solicitação</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Informe o motivo da alteração. Após a aprovação, você poderá editar o pedido existente.
+            </p>
+            <textarea
+              value={reopenReason}
+              onChange={e => setReopenReason(e.target.value)}
+              placeholder="Ex: Preciso aumentar a quantidade de bananas, adicionar maçãs..."
+              rows={3}
+              data-testid="input-reopen-reason"
+              className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none resize-none text-sm mb-4"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => { setShowReopenModal(false); setReopenReason(""); }}
+                className="flex-1 py-2.5 border-2 border-border text-muted-foreground font-bold rounded-xl hover:bg-muted transition-colors text-sm">
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (!reopenTargetId || reopenReason.trim().length < 3) {
+                    toast({ title: 'Informe o motivo da alteração (mínimo 3 caracteres)', variant: 'destructive' });
+                    return;
+                  }
+                  requestReopenMut.mutate({ id: reopenTargetId, reason: reopenReason.trim() });
+                }}
+                disabled={requestReopenMut.isPending || reopenReason.trim().length < 3}
+                data-testid="button-confirm-reopen"
+                className="flex-1 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors text-sm disabled:opacity-50">
+                {requestReopenMut.isPending ? 'Enviando...' : 'Enviar Solicitação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Module 1: Day-switch warning modal */}
       {pendingDay && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -574,19 +676,48 @@ export default function CreateOrderPage() {
 
                 {/* Date-lock: block submission if order already exists for this delivery date */}
                 {existingOrderForDate && existingOrderForDate.status !== 'OPEN_FOR_EDITING' ? (
-                  <div className="rounded-xl border-2 border-orange-200 bg-orange-50 p-4 text-center space-y-3">
-                    <div className="flex items-center justify-center gap-2 text-orange-700">
+                  <div className="rounded-xl border-2 border-orange-200 bg-orange-50 p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-orange-700">
                       <Lock className="w-5 h-5 flex-shrink-0" />
-                      <p className="font-bold text-sm">Você já possui um pedido registrado para essa data de entrega.</p>
+                      <p className="font-bold text-sm">Já existe um pedido registrado para este dia.</p>
                     </div>
                     <p className="text-orange-600 text-xs">
-                      Pedido <span className="font-mono font-bold">{existingOrderForDate.orderCode || `#${existingOrderForDate.id}`}</span> — status: <span className="font-bold">{existingOrderForDate.status === 'CONFIRMED' ? 'Pedido Confirmado' : existingOrderForDate.status === 'REOPEN_REQUESTED' ? 'Solicitação de Alteração' : existingOrderForDate.status}</span>
+                      Pedido <span className="font-mono font-bold">{existingOrderForDate.orderCode || `#${existingOrderForDate.id}`}</span>{' '}
+                      — <span className="font-bold">{existingOrderForDate.status === 'CONFIRMED' ? 'Confirmado' : existingOrderForDate.status === 'REOPEN_REQUESTED' ? 'Solicitação enviada, aguardando aprovação' : existingOrderForDate.status}</span>
                     </p>
-                    <a href="/client/history"
-                      data-testid="button-view-existing-order"
-                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white font-bold rounded-xl text-sm hover:bg-orange-600 transition-colors">
-                      Ver meu pedido
-                    </a>
+                    {existingOrderForDate.status === 'REOPEN_REQUESTED' ? (
+                      <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700 font-medium">
+                        <Clock className="w-4 h-4 flex-shrink-0" />
+                        Solicitação de alteração enviada. Aguardando aprovação do administrador.
+                      </div>
+                    ) : reopenSuccess ? (
+                      <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700 font-bold">
+                        <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                        Solicitação enviada com sucesso! O administrador irá liberar a edição.
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          data-testid="button-request-reopen"
+                          onClick={() => {
+                            setReopenTargetId(existingOrderForDate.id);
+                            setReopenSuccess(false);
+                            setShowReopenModal(true);
+                          }}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-sm hover:bg-blue-700 transition-colors">
+                          <SendHorizonal className="w-4 h-4" />
+                          Solicitar Alteração
+                        </button>
+                        <a href="/client/history"
+                          data-testid="button-view-existing-order"
+                          className="inline-flex items-center gap-2 px-4 py-2.5 border-2 border-orange-300 text-orange-700 font-bold rounded-xl text-sm hover:bg-orange-100 transition-colors">
+                          Ver pedido
+                        </a>
+                      </div>
+                    )}
+                    <p className="text-orange-500 text-xs">
+                      Caso precise alterar, solicite abertura do pedido ao administrador.
+                    </p>
                   </div>
                 ) : (
                   <>

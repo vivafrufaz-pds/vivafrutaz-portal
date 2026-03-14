@@ -2,9 +2,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { useActiveOrderWindow, useCompanyOrders } from "@/hooks/use-ordering";
 import { Layout } from "@/components/Layout";
 import { Link, useLocation } from "wouter";
-import { ShoppingCart, History, AlertCircle, CheckCircle2, Info, Clock, AlertTriangle } from "lucide-react";
+import { ShoppingCart, History, AlertCircle, CheckCircle2, Info, Clock, AlertTriangle, Wrench, FlaskConical } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useQuery } from "@tanstack/react-query";
 
 const DAY_MAP: Record<string, string> = {
   "Segunda-feira": "Segunda-feira", "Terça-feira": "Terça-feira",
@@ -33,6 +34,13 @@ export default function ClientDashboard() {
   const { data: activeWindow } = useActiveOrderWindow();
   const { data: orders } = useCompanyOrders(company?.id);
   const [, setLocation] = useLocation();
+
+  const { data: testModeData } = useQuery<{ enabled: boolean }>({
+    queryKey: ['/api/settings/test-mode'],
+    staleTime: 0,
+    refetchOnMount: true,
+  });
+  const testModeActive = testModeData?.enabled === true;
 
   if (!isLoading && !company) return <CompanyMissing />;
 
@@ -66,13 +74,29 @@ export default function ClientDashboard() {
             </p>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              <Link href="/client/order" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-primary font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
-                <ShoppingCart className="w-5 h-5" /> Novo Pedido
-              </Link>
+              {testModeActive ? (
+                <div className="inline-flex items-center gap-2 px-6 py-3.5 bg-amber-100/80 text-amber-800 font-bold rounded-xl border-2 border-amber-300 cursor-not-allowed opacity-80"
+                  data-testid="button-new-order-blocked-test">
+                  <FlaskConical className="w-5 h-5" /> Pedidos Bloqueados (Modo Teste)
+                </div>
+              ) : (
+                <Link href="/client/order"
+                  data-testid="link-new-order"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-primary font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
+                  <ShoppingCart className="w-5 h-5" /> Novo Pedido
+                </Link>
+              )}
               <Link href="/client/history" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-white font-bold rounded-xl transition-all">
                 <History className="w-5 h-5" /> Meus Pedidos
               </Link>
             </div>
+
+            {testModeActive && (
+              <div className="mt-3 flex items-center gap-2 text-amber-200 text-xs font-medium">
+                <FlaskConical className="w-3.5 h-3.5 flex-shrink-0" />
+                Sistema em modo teste. Criação de pedidos temporariamente bloqueada.
+              </div>
+            )}
           </div>
         </div>
 
@@ -157,20 +181,31 @@ export default function ClientDashboard() {
             {allowedDays.length === 0 ? (
               <p className="text-muted-foreground text-sm">Nenhum dia de entrega configurado. Contate o administrador.</p>
             ) : (
-              <div className="flex flex-col gap-2.5">
-                {allowedDays.map(day => (
-                  <button
-                    key={day}
-                    data-testid={`button-day-${day}`}
-                    onClick={() => handleDayClick(day)}
-                    disabled={!activeWindow}
-                    className="w-full flex items-center justify-between px-5 py-3.5 bg-primary/10 hover:bg-primary text-primary hover:text-white font-bold rounded-xl transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span>{day}</span>
-                    <ShoppingCart className="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-                  </button>
-                ))}
-              </div>
+              <>
+                {testModeActive && (
+                  <div className="mb-3 flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 font-medium">
+                    <FlaskConical className="w-4 h-4 flex-shrink-0" />
+                    Sistema em modo teste. Criação de pedidos bloqueada.
+                  </div>
+                )}
+                <div className="flex flex-col gap-2.5">
+                  {allowedDays.map(day => (
+                    <button
+                      key={day}
+                      data-testid={`button-day-${day}`}
+                      onClick={() => !testModeActive && handleDayClick(day)}
+                      disabled={!activeWindow || testModeActive}
+                      className="w-full flex items-center justify-between px-5 py-3.5 bg-primary/10 hover:bg-primary text-primary hover:text-white font-bold rounded-xl transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span>{day}</span>
+                      {testModeActive
+                        ? <FlaskConical className="w-4 h-4 opacity-60" />
+                        : <ShoppingCart className="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity" />
+                      }
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </div>
