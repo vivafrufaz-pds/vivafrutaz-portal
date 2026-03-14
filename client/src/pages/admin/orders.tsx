@@ -11,7 +11,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Receipt, Search, ChevronDown, ChevronUp, MessageSquare, Package, FileText,
   XCircle, Edit3, AlertTriangle, CheckCircle, StickyNote, Save, Trash2, Calendar,
-  Lock, Unlock, ThumbsUp, ThumbsDown, ClipboardEdit
+  Lock, Unlock, ThumbsUp, ThumbsDown, ClipboardEdit, Bell, Building2
 } from "lucide-react";
 import { api } from "@shared/routes";
 
@@ -560,6 +560,81 @@ export default function OrdersPage() {
           {counts.cancelled > 0 && <div className="px-3 py-1.5 bg-red-100 text-red-700 rounded-xl text-sm font-bold">{counts.cancelled} cancelados</div>}
         </div>
       </div>
+
+      {/* ─── Dedicated Reopen Requests Panel ─────────────────────── */}
+      {counts.reopenRequested > 0 && (() => {
+        const pendingOrders = orders!.filter(o => o.status === 'REOPEN_REQUESTED');
+        return (
+          <div className="mb-6 bg-orange-50 border-2 border-orange-200 rounded-2xl overflow-hidden">
+            <div className="p-4 border-b border-orange-200 bg-orange-100 flex items-center gap-3">
+              <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Bell className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-display font-bold text-orange-900 text-base">Solicitações de Alteração de Pedido</h2>
+                <p className="text-xs text-orange-700 mt-0.5">
+                  {counts.reopenRequested} solicitação{counts.reopenRequested !== 1 ? 'ões' : ''} aguardando análise
+                </p>
+              </div>
+            </div>
+            <div className="divide-y divide-orange-100">
+              {pendingOrders.map(order => {
+                const company = companies?.find((c: any) => c.id === order.companyId);
+                return (
+                  <div key={order.id} className="p-4 hover:bg-orange-100/50 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      {/* Info */}
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono font-bold text-sm text-orange-900">{order.orderCode || `#${order.id}`}</span>
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-orange-200 text-orange-800">Solicitação de Alteração</span>
+                        </div>
+                        <div className="flex flex-wrap gap-3 text-xs text-orange-700 font-medium">
+                          <span className="flex items-center gap-1">
+                            <Building2 className="w-3.5 h-3.5" />
+                            {company?.companyName || `Empresa #${order.companyId}`}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            Entrega: {order.deliveryDate ? format(new Date(order.deliveryDate), "dd/MM/yyyy", { locale: ptBR }) : '—'}
+                          </span>
+                          {order.reopenRequestedAt && (
+                            <span className="flex items-center gap-1">
+                              <ClipboardEdit className="w-3.5 h-3.5" />
+                              Solicitado em: {format(new Date(order.reopenRequestedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            </span>
+                          )}
+                        </div>
+                        {order.reopenReason && (
+                          <div className="flex items-start gap-1.5 p-2 bg-orange-200/60 rounded-lg">
+                            <MessageSquare className="w-3.5 h-3.5 text-orange-700 mt-0.5 flex-shrink-0" />
+                            <p className="text-xs text-orange-900 font-medium">"{order.reopenReason}"</p>
+                          </div>
+                        )}
+                      </div>
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          data-testid={`button-approve-panel-${order.id}`}
+                          onClick={() => approveReopen(order)}
+                          className="px-4 py-2 bg-green-500 text-white text-xs font-bold rounded-xl hover:bg-green-600 transition-colors flex items-center gap-1.5 shadow-sm">
+                          <ThumbsUp className="w-3.5 h-3.5" /> Aprovar reabertura
+                        </button>
+                        <button
+                          data-testid={`button-deny-panel-${order.id}`}
+                          onClick={() => denyReopen(order)}
+                          className="px-4 py-2 bg-red-500 text-white text-xs font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center gap-1.5 shadow-sm">
+                          <ThumbsDown className="w-3.5 h-3.5" /> Negar solicitação
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="bg-card rounded-2xl border border-border/50 premium-shadow overflow-hidden">
         {/* Toolbar */}
