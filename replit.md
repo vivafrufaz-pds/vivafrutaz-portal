@@ -30,6 +30,9 @@ Key features:
 - Maintenance mode: stored in systemSettings (key: maintenance_mode); toggle in admin dashboard; blocks all client routes; ADMIN/DIRECTOR/DEVELOPER bypass
 - Secure password change: PUT /api/users/:id/password; only ADMIN/DIRECTOR/DEVELOPER can change passwords; confirmation dialog; full audit logging; temp password Viva2026@
 - Test mode: stored in systemSettings (key: test_mode); orders intercepted to test_orders table with TESTE-{year}-{id} code; amber banner shown to staff; toggle in dashboard for ADMIN/DIRECTOR/DEVELOPER
+- Tarefas (tasks): kanban board (Pendente/Em andamento/Concluída); ADMIN/DIRECTOR/DEVELOPER create/edit/delete; all staff see assigned tasks; priority LOW/MEDIUM/HIGH; deadline support; audit logs
+- Ocorrências de Clientes: client portal (/client/incidents) to register incidents with type/description/photo/contact; admin panel (/admin/client-incidents) for ADMIN/DIRECTOR/DEVELOPER/OPS to view and update status + admin note; base64 photo storage
+- Ocorrências Internas: all staff can create; visible to ADMIN/DIRECTOR/DEVELOPER/OPS; categories LOGISTICS/QUALITY/FINANCIAL/SYSTEM/OTHER; priority/status tracking; audit logs
 
 ## User Preferences
 

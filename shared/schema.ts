@@ -173,6 +173,56 @@ export const testOrders = pgTable("test_orders", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ─── Tarefas da Diretoria ──────────────────────────────────────
+export const tasks = pgTable("tasks", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  assignedToId: integer("assigned_to_id").references(() => users.id),
+  assignedToName: text("assigned_to_name"),
+  createdById: integer("created_by_id").references(() => users.id),
+  createdByName: text("created_by_name"),
+  deadline: date("deadline"),
+  priority: text("priority").notNull().default("MEDIUM"), // LOW, MEDIUM, HIGH
+  status: text("status").notNull().default("PENDING"),    // PENDING, IN_PROGRESS, DONE
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ─── Ocorrências de Clientes ───────────────────────────────────
+export const clientIncidents = pgTable("client_incidents", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  companyName: text("company_name").notNull(),
+  type: text("type").notNull(), // DELIVERY_PROBLEM, DEFECTIVE_PRODUCT, MISSING_PRODUCT, QUALITY, COMPLAINT, OTHER
+  description: text("description").notNull(),
+  contactPhone: text("contact_phone"),
+  contactEmail: text("contact_email"),
+  photoBase64: text("photo_base64"), // base64 encoded image
+  photoMime: text("photo_mime"),
+  status: text("status").notNull().default("OPEN"), // OPEN, ANALYZING, RESOLVED
+  adminNote: text("admin_note"),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ─── Ocorrências Internas ──────────────────────────────────────
+export const internalIncidents = pgTable("internal_incidents", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(), // LOGISTICS, QUALITY, FINANCIAL, SYSTEM, OTHER
+  assignedToId: integer("assigned_to_id").references(() => users.id),
+  assignedToName: text("assigned_to_name"),
+  createdById: integer("created_by_id").references(() => users.id),
+  createdByName: text("created_by_name"),
+  priority: text("priority").notNull().default("MEDIUM"), // LOW, MEDIUM, HIGH
+  status: text("status").notNull().default("OPEN"),       // OPEN, ANALYZING, RESOLVED
+  adminNote: text("admin_note"),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ─── Insert Schemas ───────────────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertPriceGroupSchema = createInsertSchema(priceGroups).omit({ id: true });
@@ -231,3 +281,6 @@ export type InsertSpecialOrderRequest = z.infer<typeof insertSpecialOrderRequest
 export type PasswordResetRequest = typeof passwordResetRequests.$inferSelect;
 export type InsertPasswordResetRequest = z.infer<typeof insertPasswordResetRequestSchema>;
 export type TestOrder = typeof testOrders.$inferSelect;
+export type Task = typeof tasks.$inferSelect;
+export type ClientIncident = typeof clientIncidents.$inferSelect;
+export type InternalIncident = typeof internalIncidents.$inferSelect;

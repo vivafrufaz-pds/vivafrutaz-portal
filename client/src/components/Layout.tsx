@@ -5,7 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { 
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
-  ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical
+  ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
+  ClipboardList, AlertTriangle, Building2
 } from 'lucide-react';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/users', label: 'Usuários do Sistema', icon: UserCog, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'] },
     { href: '/admin/backups', label: 'Backup & E-mails', icon: HardDrive, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'] },
     { href: '/admin/developer', label: 'Área do Desenvolvedor', icon: ShieldCheck, roles: ['DEVELOPER', 'ADMIN', 'DIRECTOR'] },
+    { href: '/admin/tasks', label: 'Tarefas', icon: ClipboardList, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO'] },
+    { href: '/admin/client-incidents', label: 'Ocorrências de Clientes', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
+    { href: '/admin/internal-incidents', label: 'Ocorrências Internas', icon: AlertTriangle, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
   ];
 
   const clientLinks = [
@@ -43,6 +47,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/client/order', label: 'Novo Pedido', icon: ShoppingCart },
     { href: '/client/history', label: 'Meus Pedidos', icon: Receipt },
     { href: '/client/special-order', label: 'Pedidos Pontuais', icon: Star },
+    { href: '/client/incidents', label: 'Ocorrências', icon: AlertTriangle },
   ];
 
   const links = isStaff 

@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, internalIncidents,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -8,7 +8,8 @@ import {
   type SpecialOrderRequest,
   type OrderException, type InsertOrderException,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
-  type PasswordResetRequest, type SystemLog, type TestOrder
+  type PasswordResetRequest, type SystemLog, type TestOrder,
+  type Task, type ClientIncident, type InternalIncident
 } from "@shared/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 
@@ -578,6 +579,67 @@ export class DatabaseStorage implements IStorage {
 
   async getLogs(limit = 200): Promise<SystemLog[]> {
     return db.select().from(systemLogs).orderBy(desc(systemLogs.createdAt)).limit(limit);
+  }
+
+  // ─── Tarefas ──────────────────────────────────────────────────
+  async createTask(data: { title: string; description: string; assignedToId?: number; assignedToName?: string; createdById?: number; createdByName?: string; deadline?: string; priority: string }): Promise<Task> {
+    const [task] = await db.insert(tasks).values({ ...data, status: 'PENDING' }).returning();
+    return task;
+  }
+
+  async getTasks(): Promise<Task[]> {
+    return db.select().from(tasks).orderBy(desc(tasks.createdAt));
+  }
+
+  async getTasksByUser(userId: number): Promise<Task[]> {
+    return db.select().from(tasks).where(eq(tasks.assignedToId, userId)).orderBy(desc(tasks.createdAt));
+  }
+
+  async updateTask(id: number, updates: Partial<{ title: string; description: string; assignedToId: number; assignedToName: string; deadline: string; priority: string; status: string; updatedAt: Date }>): Promise<Task> {
+    const [updated] = await db.update(tasks).set({ ...updates, updatedAt: new Date() }).where(eq(tasks.id, id)).returning();
+    return updated;
+  }
+
+  async deleteTask(id: number): Promise<void> {
+    await db.delete(tasks).where(eq(tasks.id, id));
+  }
+
+  // ─── Ocorrências de Clientes ──────────────────────────────────
+  async createClientIncident(data: { companyId: number; companyName: string; type: string; description: string; contactPhone?: string; contactEmail?: string; photoBase64?: string; photoMime?: string }): Promise<ClientIncident> {
+    const [inc] = await db.insert(clientIncidents).values({ ...data, status: 'OPEN' }).returning();
+    return inc;
+  }
+
+  async getClientIncidents(): Promise<ClientIncident[]> {
+    return db.select().from(clientIncidents).orderBy(desc(clientIncidents.createdAt));
+  }
+
+  async getClientIncidentsByCompany(companyId: number): Promise<ClientIncident[]> {
+    return db.select().from(clientIncidents).where(eq(clientIncidents.companyId, companyId)).orderBy(desc(clientIncidents.createdAt));
+  }
+
+  async updateClientIncident(id: number, updates: { status?: string; adminNote?: string; resolvedAt?: Date | null }): Promise<ClientIncident> {
+    const [updated] = await db.update(clientIncidents).set(updates as any).where(eq(clientIncidents.id, id)).returning();
+    return updated;
+  }
+
+  // ─── Ocorrências Internas ─────────────────────────────────────
+  async createInternalIncident(data: { title: string; description: string; category: string; assignedToId?: number; assignedToName?: string; createdById?: number; createdByName?: string; priority: string }): Promise<InternalIncident> {
+    const [inc] = await db.insert(internalIncidents).values({ ...data, status: 'OPEN' }).returning();
+    return inc;
+  }
+
+  async getInternalIncidents(): Promise<InternalIncident[]> {
+    return db.select().from(internalIncidents).orderBy(desc(internalIncidents.createdAt));
+  }
+
+  async updateInternalIncident(id: number, updates: { status?: string; adminNote?: string; resolvedAt?: Date | null; assignedToId?: number; assignedToName?: string }): Promise<InternalIncident> {
+    const [updated] = await db.update(internalIncidents).set(updates as any).where(eq(internalIncidents.id, id)).returning();
+    return updated;
+  }
+
+  async deleteInternalIncident(id: number): Promise<void> {
+    await db.delete(internalIncidents).where(eq(internalIncidents.id, id));
   }
 }
 

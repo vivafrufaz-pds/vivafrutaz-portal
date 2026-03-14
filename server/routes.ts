@@ -1041,6 +1041,162 @@ export async function registerRoutes(
     }
   });
 
+  // ─── TAREFAS ──────────────────────────────────────────────────
+  app.get('/api/tasks', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: 'Not authenticated' });
+    try {
+      let result;
+      if (['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+        result = await storage.getTasks();
+      } else {
+        result = await storage.getTasksByUser(user.id);
+      }
+      res.json(result);
+    } catch (e) { res.status(500).json({ message: 'Error fetching tasks' }); }
+  });
+
+  app.post('/api/tasks', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+      return res.status(403).json({ message: 'Sem permissão' });
+    }
+    try {
+      const { title, description, assignedToId, assignedToName, priority } = req.body;
+      const deadline = req.body.deadline || undefined;
+      if (!title || !description || !priority) return res.status(400).json({ message: 'Campos obrigatórios' });
+      const assignedToIdNum = assignedToId ? parseInt(assignedToId) : undefined;
+      const task = await storage.createTask({ title, description, assignedToId: assignedToIdNum, assignedToName, deadline, priority, createdById: user.id, createdByName: user.name });
+      await storage.createLog({ action: 'TASK_CREATED', description: `Tarefa criada: ${title}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(task);
+    } catch (e: any) { console.error('[TASKS] createTask error:', e?.message); res.status(500).json({ message: 'Error creating task' }); }
+  });
+
+  app.patch('/api/tasks/:id', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: 'Not authenticated' });
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      const task = await storage.updateTask(id, updates);
+      await storage.createLog({ action: 'TASK_UPDATED', description: `Tarefa atualizada: ${task.title} → status: ${updates.status || task.status}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(task);
+    } catch (e) { res.status(500).json({ message: 'Error updating task' }); }
+  });
+
+  app.delete('/api/tasks/:id', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+      return res.status(403).json({ message: 'Sem permissão' });
+    }
+    try {
+      await storage.deleteTask(parseInt(req.params.id));
+      await storage.createLog({ action: 'TASK_DELETED', description: `Tarefa #${req.params.id} excluída`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ message: 'Error deleting task' }); }
+  });
+
+  // ─── OCORRÊNCIAS DE CLIENTES ──────────────────────────────────
+  app.post('/api/client-incidents', async (req, res) => {
+    if (!req.session?.companyId && !req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    try {
+      const { companyId, companyName, type, description, contactPhone, contactEmail, photoBase64, photoMime } = req.body;
+      if (!companyId || !type || !description) return res.status(400).json({ message: 'Campos obrigatórios' });
+      const incident = await storage.createClientIncident({ companyId, companyName, type, description, contactPhone, contactEmail, photoBase64, photoMime });
+      await storage.createLog({ action: 'CLIENT_INCIDENT_CREATED', description: `Ocorrência de cliente criada: ${type} por empresa ${companyName}`, companyId, level: 'WARN' });
+      res.json(incident);
+    } catch (e) { res.status(500).json({ message: 'Error creating incident' }); }
+  });
+
+  app.get('/api/client-incidents', async (req, res) => {
+    if (!req.session?.userId && !req.session?.companyId) return res.status(401).json({ message: 'Not authenticated' });
+    try {
+      if (req.session?.companyId) {
+        const incidents = await storage.getClientIncidentsByCompany(req.session.companyId);
+        return res.json(incidents);
+      }
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) {
+        return res.status(403).json({ message: 'Sem permissão' });
+      }
+      const incidents = await storage.getClientIncidents();
+      res.json(incidents);
+    } catch (e) { res.status(500).json({ message: 'Error fetching incidents' }); }
+  });
+
+  app.patch('/api/client-incidents/:id', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) {
+      return res.status(403).json({ message: 'Sem permissão' });
+    }
+    try {
+      const id = parseInt(req.params.id);
+      const { status, adminNote } = req.body;
+      const resolvedAt = status === 'RESOLVED' ? new Date() : null;
+      const updated = await storage.updateClientIncident(id, { status, adminNote, resolvedAt });
+      await storage.createLog({ action: 'CLIENT_INCIDENT_UPDATED', description: `Ocorrência #${id} atualizada → ${status}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(updated);
+    } catch (e) { res.status(500).json({ message: 'Error updating incident' }); }
+  });
+
+  // ─── OCORRÊNCIAS INTERNAS ─────────────────────────────────────
+  app.get('/api/internal-incidents', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) {
+      return res.status(403).json({ message: 'Sem permissão' });
+    }
+    try {
+      const incidents = await storage.getInternalIncidents();
+      res.json(incidents);
+    } catch (e) { res.status(500).json({ message: 'Error fetching internal incidents' }); }
+  });
+
+  app.post('/api/internal-incidents', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: 'Not authenticated' });
+    try {
+      const { title, description, category, assignedToId, assignedToName, priority } = req.body;
+      if (!title || !description || !category || !priority) return res.status(400).json({ message: 'Campos obrigatórios' });
+      const incident = await storage.createInternalIncident({ title, description, category, assignedToId, assignedToName, priority, createdById: user.id, createdByName: user.name });
+      await storage.createLog({ action: 'INTERNAL_INCIDENT_CREATED', description: `Ocorrência interna criada: ${title}`, userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN' });
+      res.json(incident);
+    } catch (e) { res.status(500).json({ message: 'Error creating internal incident' }); }
+  });
+
+  app.patch('/api/internal-incidents/:id', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user) return res.status(401).json({ message: 'Not authenticated' });
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      const resolvedAt = updates.status === 'RESOLVED' ? new Date() : null;
+      const updated = await storage.updateInternalIncident(id, { ...updates, ...(resolvedAt !== undefined ? { resolvedAt } : {}) });
+      await storage.createLog({ action: 'INTERNAL_INCIDENT_UPDATED', description: `Ocorrência interna #${id} → ${updates.status || 'editada'}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(updated);
+    } catch (e) { res.status(500).json({ message: 'Error updating internal incident' }); }
+  });
+
+  app.delete('/api/internal-incidents/:id', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+      return res.status(403).json({ message: 'Sem permissão' });
+    }
+    try {
+      await storage.deleteInternalIncident(parseInt(req.params.id));
+      await storage.createLog({ action: 'INTERNAL_INCIDENT_DELETED', description: `Ocorrência interna #${req.params.id} excluída`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ message: 'Error deleting internal incident' }); }
+  });
+
   // Seed DB Function
   await seedDatabase();
 

@@ -27,10 +27,15 @@ import AdminUsers from "@/pages/admin/users";
 import AdminBackups from "@/pages/admin/backups";
 import AdminDeveloper from "@/pages/admin/developer";
 
+import AdminTasks from "@/pages/admin/tasks";
+import AdminClientIncidents from "@/pages/admin/client-incidents";
+import AdminInternalIncidents from "@/pages/admin/internal-incidents";
+
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
 import ClientOrderHistory from "@/pages/client/order-history";
 import ClientSpecialOrder from "@/pages/client/special-order";
+import ClientIncidents from "@/pages/client/incidents";
 
 // Maintenance screen for blocked clients
 function MaintenanceScreen() {
@@ -171,6 +176,15 @@ function Router() {
       <Route path="/admin/developer">
         {() => <ProtectedRoute component={AdminDeveloper} role="admin" allowedRoles={['DEVELOPER', 'ADMIN', 'DIRECTOR']} />}
       </Route>
+      <Route path="/admin/tasks">
+        {() => <ProtectedRoute component={AdminTasks} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO']} />}
+      </Route>
+      <Route path="/admin/client-incidents">
+        {() => <ProtectedRoute component={AdminClientIncidents} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} />}
+      </Route>
+      <Route path="/admin/internal-incidents">
+        {() => <ProtectedRoute component={AdminInternalIncidents} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} />}
+      </Route>
 
       {/* Client Routes */}
       <Route path="/client">
@@ -184,6 +198,9 @@ function Router() {
       </Route>
       <Route path="/client/special-order">
         {() => <ProtectedRoute component={ClientSpecialOrder} role="client" />}
+      </Route>
+      <Route path="/client/incidents">
+        {() => <ProtectedRoute component={ClientIncidents} role="client" />}
       </Route>
 
       <Route component={NotFound} />
