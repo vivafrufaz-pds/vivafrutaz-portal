@@ -32,6 +32,7 @@ import AdminClientIncidents from "@/pages/admin/client-incidents";
 import AdminInternalIncidents from "@/pages/admin/internal-incidents";
 import AdminLogistics from "@/pages/admin/logistics";
 import AdminQuotations from "@/pages/admin/quotations";
+import AdminExecutiveDashboard from "@/pages/admin/executive-dashboard";
 
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
@@ -192,6 +193,9 @@ function Router() {
       </Route>
       <Route path="/admin/quotations">
         {() => <ProtectedRoute component={AdminQuotations} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} />}
+      </Route>
+      <Route path="/admin/executive">
+        {() => <ProtectedRoute component={AdminExecutiveDashboard} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER']} />}
       </Route>
 
       {/* Client Routes */}

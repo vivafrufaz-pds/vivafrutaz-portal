@@ -21,6 +21,9 @@ Key features:
 - Developer area (/admin/developer): System Logs (with advanced filters: event type/user/date range), Auditoria (GET /api/audit), AI Bug Detector, Saúde do Sistema (GET /api/health) tabs; "Limpar Histórico" button (DELETE /api/logs)
 - Módulo Logística (/admin/logistics): 4 tabs — Rotas (with driver/date filters + status update), Motoristas, Veículos, Manutenção; all with CSV/Excel export
 - Cotação de Empresas (/admin/quotations): full lifecycle management (PENDING→IN_ANALYSIS→APPROVED/REJECTED), price group assignment, logistics notes, CSV export
+- Dashboard Executivo (/admin/executive): KPI cards (day/week/month revenue, avg ticket, order counts), recharts (LineChart revenue 30d, BarChart orders by weekday), Top Empresas + Top Produtos progress bars, Clientes Inativos list, Previsão de Compra table, auto-generated alerts; access: ADMIN, DIRECTOR, FINANCEIRO, DEVELOPER
+- Assistente Virtual: floating chat widget (bottom-right) available to all logged users; FAQ-based answers in PT-BR for 15+ topics (pedidos, cancelamento, logística, cotações, exportações, etc.); quick question buttons; bot replies with 400ms delay
+- Missão VivaFrutaz: enhanced mission section in client portal (/client) with full mission statement
 - Financial panel with date filters (Hoje/Esta Semana/Este Mês/Período Personalizado) + Nimbi expiration filter
 - NimbiExpiration date field on orders (editable inline in admin orders expanded detail)
 - Double-click protection on order submission

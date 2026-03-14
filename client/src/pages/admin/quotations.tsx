@@ -44,7 +44,7 @@ function QuotationForm({ onClose, priceGroups, editItem }: { onClose: () => void
     estimatedVolume: editItem?.estimatedVolume || '',
     productInterest: editItem?.productInterest || '',
     logisticsNote: editItem?.logisticsNote || '',
-    priceGroupId: editItem?.priceGroupId?.toString() || '',
+    priceGroupId: editItem?.priceGroupId?.toString() || 'none',
   });
 
   const saveMut = useMutation({
@@ -66,8 +66,8 @@ function QuotationForm({ onClose, priceGroups, editItem }: { onClose: () => void
     const pg = priceGroups.find(p => p.id.toString() === form.priceGroupId);
     saveMut.mutate({
       ...form,
-      priceGroupId: form.priceGroupId ? parseInt(form.priceGroupId) : undefined,
-      priceGroupName: pg?.groupName,
+      priceGroupId: form.priceGroupId && form.priceGroupId !== 'none' ? parseInt(form.priceGroupId) : undefined,
+      priceGroupName: pg?.groupName || undefined,
     });
   };
 
@@ -113,7 +113,7 @@ function QuotationDetail({ quotation, onClose, priceGroups }: { quotation: Compa
   const { toast } = useToast();
   const [status, setStatus] = useState(quotation.status);
   const [adminNote, setAdminNote] = useState(quotation.adminNote || '');
-  const [priceGroupId, setPriceGroupId] = useState(quotation.priceGroupId?.toString() || '');
+  const [priceGroupId, setPriceGroupId] = useState(quotation.priceGroupId?.toString() || 'none');
 
   const updateMut = useMutation({
     mutationFn: (data: any) => apiRequest('PATCH', `/api/quotations/${quotation.id}`, data),

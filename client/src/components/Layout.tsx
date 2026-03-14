@@ -6,8 +6,9 @@ import {
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
-  ClipboardList, AlertTriangle, Building2, Truck, FileText
+  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp
 } from 'lucide-react';
+import { VirtualAssistant } from './VirtualAssistant';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, company, isStaff, isClient, logout } = useAuth();
@@ -42,6 +43,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/internal-incidents', label: 'Ocorrências Internas', icon: AlertTriangle, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
     { href: '/admin/logistics', label: 'Logística', icon: Truck, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
     { href: '/admin/quotations', label: 'Cotação de Empresas', icon: FileText, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
+    { href: '/admin/executive', label: 'Dashboard Executivo', icon: TrendingUp, roles: ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER'] },
   ];
 
   const clientLinks = [
@@ -122,6 +124,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
+      <VirtualAssistant />
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         {testModeActive && (
           <div className="flex items-center justify-center gap-2 bg-amber-400 text-amber-900 px-4 py-2 text-sm font-bold shrink-0 z-20">

@@ -60,14 +60,15 @@ export default function ClientDashboard() {
           </div>
         </div>
 
-        {/* Institutional message */}
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-2xl p-5 flex items-start gap-4">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <span className="text-2xl">🍎</span>
-          </div>
+        {/* Institutional message — MISSÃO VIVAFRUTAZ */}
+        <div className="bg-gradient-to-br from-green-50 via-emerald-50 to-green-50 border border-green-100 rounded-2xl p-6 flex items-start gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5 text-2xl">🍊</div>
           <div>
-            <p className="font-bold text-green-800 text-sm mb-1">Nossa missão</p>
-            <p className="text-sm text-green-700">
+            <p className="font-bold text-green-800 text-base mb-2 tracking-wide uppercase text-sm">Missão VivaFrutaz</p>
+            <p className="text-sm text-green-800 font-medium leading-relaxed mb-2">
+              Garantir a total satisfação de nossos clientes, prestando um serviço de altíssimo nível e oferecendo produtos de qualidade.
+            </p>
+            <p className="text-sm text-green-700 leading-relaxed">
               Na VivaFrutaz acreditamos que frutas frescas fazem parte de um ambiente de trabalho saudável e produtivo.
             </p>
           </div>
