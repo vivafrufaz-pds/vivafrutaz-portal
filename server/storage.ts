@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -13,7 +13,8 @@ import {
   type LogisticsDriver, type LogisticsVehicle, type LogisticsRoute, type LogisticsMaintenance, type CompanyQuotation,
   type ContractScope, type InsertContractScope,
   type DanfeRecord, type InsertDanfeRecord,
-  type CompanyConfig, type InsertCompanyConfig
+  type CompanyConfig, type InsertCompanyConfig,
+  type Announcement, type InsertAnnouncement
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -120,6 +121,13 @@ export interface IStorage {
 
   // Order cleanup
   deleteOrder(id: number): Promise<void>;
+
+  // Announcements
+  getAnnouncements(): Promise<Announcement[]>;
+  getActiveAnnouncementsForCompany(companyId: number): Promise<Announcement[]>;
+  createAnnouncement(data: InsertAnnouncement): Promise<Announcement>;
+  updateAnnouncement(id: number, data: Partial<InsertAnnouncement>): Promise<Announcement>;
+  deleteAnnouncement(id: number): Promise<void>;
 
   // System Logs
   createLog(log: { action: string; description: string; userId?: number; companyId?: number; userEmail?: string; userRole?: string; ip?: string; level?: string }): Promise<void>;
@@ -855,6 +863,40 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteQuotation(id: number): Promise<void> {
     await db.delete(companyQuotations).where(eq(companyQuotations.id, id));
+  }
+
+  // ─── Announcements ────────────────────────────────────────────
+  async getAnnouncements(): Promise<Announcement[]> {
+    return db.select().from(announcements).orderBy(desc(announcements.createdAt));
+  }
+
+  async getActiveAnnouncementsForCompany(companyId: number): Promise<Announcement[]> {
+    const today = new Date().toISOString().split('T')[0];
+    const all = await db.select().from(announcements)
+      .where(and(eq(announcements.active, true), lte(announcements.startDate, today), gte(announcements.endDate, today)))
+      .orderBy(desc(announcements.priority), desc(announcements.createdAt));
+    const company = await this.getCompany(companyId);
+    if (!company) return [];
+    return all.filter(a => {
+      if (a.targetAll) return true;
+      if (a.targetClientTypes && a.targetClientTypes.length > 0 && company.clientType && a.targetClientTypes.includes(company.clientType)) return true;
+      if (a.targetCompanyIds && a.targetCompanyIds.length > 0 && a.targetCompanyIds.includes(companyId)) return true;
+      return false;
+    });
+  }
+
+  async createAnnouncement(data: InsertAnnouncement): Promise<Announcement> {
+    const [row] = await db.insert(announcements).values(data).returning();
+    return row;
+  }
+
+  async updateAnnouncement(id: number, data: Partial<InsertAnnouncement>): Promise<Announcement> {
+    const [row] = await db.update(announcements).set(data).where(eq(announcements.id, id)).returning();
+    return row;
+  }
+
+  async deleteAnnouncement(id: number): Promise<void> {
+    await db.delete(announcements).where(eq(announcements.id, id));
   }
 
   // ─── Logs: delete all ─────────────────────────────────────────

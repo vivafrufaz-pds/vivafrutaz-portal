@@ -430,6 +430,27 @@ export type CompanyQuotation = typeof companyQuotations.$inferSelect;
 export type ContractScope = typeof contractScopes.$inferSelect;
 export type InsertContractScope = z.infer<typeof insertContractScopeSchema>;
 
+// ─── Painel de Avisos ──────────────────────────────────────────
+export const announcements = pgTable("announcements", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").notNull().default("info"), // "info" | "important" | "maintenance" | "logistics"
+  priority: text("priority").notNull().default("normal"), // "normal" | "high"
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  active: boolean("active").default(true).notNull(),
+  targetAll: boolean("target_all").default(true).notNull(),
+  targetClientTypes: text("target_client_types").array(), // e.g. ["mensal","sodexo","grsa"]
+  targetCompanyIds: integer("target_company_ids").array(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAnnouncementSchema = createInsertSchema(announcements).omit({ id: true, createdAt: true });
+export type Announcement = typeof announcements.$inferSelect;
+export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
+
 // ─── Configuração da Empresa ───────────────────────────────────
 export const companyConfig = pgTable("company_config", {
   id: serial("id").primaryKey(),

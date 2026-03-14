@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useActiveOrderWindow, useCompanyOrders } from "@/hooks/use-ordering";
 import { Layout } from "@/components/Layout";
 import { Link, useLocation } from "wouter";
-import { ShoppingCart, History, AlertCircle, CheckCircle2, Info, Clock, AlertTriangle, Wrench, FlaskConical } from "lucide-react";
+import { ShoppingCart, History, AlertCircle, CheckCircle2, Info, Clock, AlertTriangle, Wrench, FlaskConical, Megaphone, X, Truck } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
@@ -14,6 +15,110 @@ const DAY_MAP: Record<string, string> = {
   "Monday": "Segunda-feira", "Tuesday": "Terça-feira", "Wednesday": "Quarta-feira",
   "Thursday": "Quinta-feira", "Friday": "Sexta-feira",
 };
+
+type Announcement = {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  priority: string;
+  startDate: string;
+  endDate: string;
+};
+
+const TYPE_STYLE: Record<string, { border: string; bg: string; icon: typeof Info; iconColor: string; titleColor: string; msgColor: string }> = {
+  info: {
+    border: "border-blue-200", bg: "bg-blue-50",
+    icon: Info, iconColor: "text-blue-600", titleColor: "text-blue-800", msgColor: "text-blue-700",
+  },
+  important: {
+    border: "border-orange-200", bg: "bg-orange-50",
+    icon: AlertTriangle, iconColor: "text-orange-600", titleColor: "text-orange-800", msgColor: "text-orange-700",
+  },
+  maintenance: {
+    border: "border-red-200", bg: "bg-red-50",
+    icon: Wrench, iconColor: "text-red-600", titleColor: "text-red-800", msgColor: "text-red-700",
+  },
+  logistics: {
+    border: "border-purple-200", bg: "bg-purple-50",
+    icon: Truck, iconColor: "text-purple-600", titleColor: "text-purple-800", msgColor: "text-purple-700",
+  },
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  info: "Informativo", important: "Importante", maintenance: "Manutenção", logistics: "Comunicado Logístico",
+};
+
+function AnnouncementBanners({ companyId }: { companyId: number }) {
+  const [dismissed, setDismissed] = useState<Set<number>>(() => {
+    try {
+      const stored = localStorage.getItem('vf_dismissed_announcements');
+      return new Set(stored ? JSON.parse(stored) : []);
+    } catch { return new Set(); }
+  });
+
+  const { data: announcements = [] } = useQuery<Announcement[]>({
+    queryKey: ['/api/announcements/active', companyId],
+    queryFn: async () => {
+      const res = await fetch('/api/announcements/active', { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 60000,
+  });
+
+  const visible = announcements.filter(a => !dismissed.has(a.id));
+  if (visible.length === 0) return null;
+
+  const dismiss = (id: number) => {
+    const next = new Set(dismissed).add(id);
+    setDismissed(next);
+    localStorage.setItem('vf_dismissed_announcements', JSON.stringify([...next]));
+  };
+
+  return (
+    <div className="space-y-3">
+      {visible.map(a => {
+        const s = TYPE_STYLE[a.type] || TYPE_STYLE.info;
+        const Icon = s.icon;
+        const isHigh = a.priority === 'high';
+        return (
+          <div key={a.id} data-testid={`announcement-banner-${a.id}`}
+            className={`relative rounded-2xl border-2 p-4 sm:p-5 ${s.bg} ${isHigh ? 'border-orange-400' : s.border}`}>
+            {isHigh && (
+              <div className="absolute -top-2 left-4">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white shadow-sm">
+                  🔴 Alta Prioridade
+                </span>
+              </div>
+            )}
+            <div className="flex items-start gap-3.5">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${s.bg} border ${s.border}`}>
+                <Icon className={`w-5 h-5 ${s.iconColor}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center flex-wrap gap-2 mb-1">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${s.titleColor} opacity-70`}>
+                    Aviso VivaFrutaz · {TYPE_LABELS[a.type] || a.type}
+                  </span>
+                </div>
+                <p className={`font-bold text-base ${s.titleColor} mb-1`}>{a.title}</p>
+                <p className={`text-sm leading-relaxed ${s.msgColor}`}>{a.message}</p>
+              </div>
+              <button
+                data-testid={`button-dismiss-announcement-${a.id}`}
+                onClick={() => dismiss(a.id)}
+                className={`p-1.5 rounded-lg hover:bg-black/10 transition-colors flex-shrink-0 ${s.iconColor}`}
+                title="Dispensar aviso">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function CompanyMissing() {
   return (
@@ -99,6 +204,9 @@ export default function ClientDashboard() {
             )}
           </div>
         </div>
+
+        {/* ── Announcements banners ── */}
+        {company?.id && <AnnouncementBanners companyId={company.id} />}
 
         {/* Institutional message — MISSÃO VIVAFRUTAZ */}
         <div className="bg-gradient-to-br from-green-50 via-emerald-50 to-green-50 border border-green-100 rounded-2xl p-6 flex items-start gap-4">
