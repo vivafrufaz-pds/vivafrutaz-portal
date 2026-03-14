@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Plus, AlertTriangle, CheckCircle2, Clock, ImageIcon } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle2, Clock, ImageIcon, MessageSquareReply } from 'lucide-react';
 import type { ClientIncident } from '@shared/schema';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -23,10 +23,16 @@ const TYPE_LABELS: Record<string, string> = {
   OTHER: 'Outro',
 };
 
-const STATUS_LABEL: Record<string, string> = { OPEN: 'Aberta', ANALYZING: 'Em análise', RESOLVED: 'Resolvida' };
+const STATUS_LABEL: Record<string, string> = {
+  OPEN: 'Aberta',
+  ANALYZING: 'Em análise',
+  RESPONDED: 'Respondida',
+  RESOLVED: 'Resolvida',
+};
 const STATUS_COLOR: Record<string, string> = {
   OPEN: 'bg-red-100 text-red-800',
   ANALYZING: 'bg-yellow-100 text-yellow-800',
+  RESPONDED: 'bg-blue-100 text-blue-800',
   RESOLVED: 'bg-green-100 text-green-800',
 };
 
@@ -188,10 +194,16 @@ export default function ClientIncidentsPage() {
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground line-clamp-2">{inc.description}</p>
-                    {inc.adminNote && (
-                      <div className="mt-2 p-2 bg-muted/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground font-medium">Resposta da equipe:</p>
-                        <p className="text-sm">{inc.adminNote}</p>
+                    {(inc as any).responseMessage && (
+                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <MessageSquareReply className="w-3.5 h-3.5 text-blue-600" />
+                          <p className="text-xs font-semibold text-blue-700">
+                            Resposta oficial da VivaFrutaz
+                            {(inc as any).respondedByName && <span className="font-normal text-blue-600"> — {(inc as any).respondedByName}</span>}
+                          </p>
+                        </div>
+                        <p className="text-sm text-blue-900">{(inc as any).responseMessage}</p>
                       </div>
                     )}
                   </div>

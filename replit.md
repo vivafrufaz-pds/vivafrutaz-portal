@@ -28,6 +28,10 @@ Key features:
 - Financial panel with date filters (Hoje/Esta Semana/Este Mês/Período Personalizado) + Nimbi expiration filter
 - NimbiExpiration date field on orders (editable inline in admin orders expanded detail)
 - Double-click protection on order submission
+- Login improvements: Admin tab shows username input with "@vivafrutaz.com" suffix auto-appended; login is case-insensitive for both admin and company portals (DB queries use lower() for comparison)
+- Keep-alive ping: KeepAlive component in App.tsx pings /api/health every 5 minutes to prevent Replit sleep
+- Tasks module fix: PATCH /api/tasks/:id sanitizes request body — empty string deadline → null, prevents 500 error
+- Client incidents response feature: responseMessage + respondedByName + respondedAt columns in client_incidents table; status RESPONDED added; POST /api/client-incidents/:id/respond endpoint; admin can respond via dialog in client-incidents page; client sees blue "Resposta oficial da VivaFrutaz" box in /client/incidents
 - Duplicate order protection (in-memory, 60-second window per companyId:deliveryDate:orderWindowId)
 - System logs table with level (INFO/WARN/ERROR), action, user, IP tracking
 - Developer user auto-seeded: dev@vivafrutaz.com / dev

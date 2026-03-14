@@ -12,7 +12,7 @@ import {
   type Task, type ClientIncident, type InternalIncident,
   type LogisticsDriver, type LogisticsVehicle, type LogisticsRoute, type LogisticsMaintenance, type CompanyQuotation
 } from "@shared/schema";
-import { eq, and, desc, gte, lte } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Auth & Users
@@ -137,7 +137,7 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const [user] = await db.select().from(users).where(sql`lower(${users.email}) = ${email.toLowerCase()}`);
     return user;
   }
   
@@ -152,7 +152,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCompanyByEmail(email: string): Promise<Company | undefined> {
-    const [company] = await db.select().from(companies).where(eq(companies.email, email));
+    const [company] = await db.select().from(companies).where(sql`lower(${companies.email}) = ${email.toLowerCase()}`);
     return company;
   }
 
@@ -647,6 +647,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateClientIncident(id: number, updates: { status?: string; adminNote?: string; resolvedAt?: Date | null }): Promise<ClientIncident> {
     const [updated] = await db.update(clientIncidents).set(updates as any).where(eq(clientIncidents.id, id)).returning();
+    return updated;
+  }
+
+  async respondToClientIncident(id: number, responseMessage: string, respondedByName: string): Promise<ClientIncident> {
+    const [updated] = await db.update(clientIncidents)
+      .set({ responseMessage, respondedByName, respondedAt: new Date(), status: 'RESPONDED' })
+      .where(eq(clientIncidents.id, id))
+      .returning();
     return updated;
   }
 

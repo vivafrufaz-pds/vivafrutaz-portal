@@ -235,14 +235,15 @@ export async function registerRoutes(
       const input = api.auth.login.input.parse(req.body);
       
       const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || '';
+      const normalizedEmail = input.email.toLowerCase().trim();
       if (input.type === 'admin') {
-        const user = await storage.getUserByEmail(input.email);
+        const user = await storage.getUserByEmail(normalizedEmail);
         if (!user || user.password !== input.password) {
-          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login falhou: ${input.email}`, userEmail: input.email, level: 'WARN', ip });
-          return res.status(401).json({ message: "Email ou senha incorretos." });
+          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login falhou: ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
+          return res.status(401).json({ message: "Usuário ou senha incorretos." });
         }
         if (user.active === false) {
-          await storage.createLog({ action: 'LOGIN_BLOCKED', description: `Login bloqueado (usuário inativo): ${input.email}`, userEmail: input.email, level: 'WARN', ip });
+          await storage.createLog({ action: 'LOGIN_BLOCKED', description: `Login bloqueado (usuário inativo): ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
           return res.status(401).json({ message: "Usuário inativo. Entre em contato com o administrador." });
         }
         (req.session as any).userId = user.id;
@@ -250,9 +251,9 @@ export async function registerRoutes(
         await storage.createLog({ action: 'LOGIN', description: `Login realizado: ${user.name} (${user.role})`, userId: user.id, userEmail: user.email, userRole: user.role, ip });
         return res.json({ user });
       } else {
-        const company = await storage.getCompanyByEmail(input.email);
+        const company = await storage.getCompanyByEmail(normalizedEmail);
         if (!company || company.password !== input.password) {
-          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login cliente falhou: ${input.email}`, userEmail: input.email, level: 'WARN', ip });
+          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login cliente falhou: ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
           return res.status(401).json({ message: "Email ou senha incorretos." });
         }
         if (!company.active) {
@@ -1149,11 +1150,20 @@ export async function registerRoutes(
     if (!user) return res.status(401).json({ message: 'Not authenticated' });
     try {
       const id = parseInt(req.params.id);
-      const updates = req.body;
+      const raw = req.body;
+      const updates: Record<string, any> = {};
+      if (raw.title !== undefined) updates.title = raw.title;
+      if (raw.description !== undefined) updates.description = raw.description;
+      if (raw.priority !== undefined) updates.priority = raw.priority;
+      if (raw.status !== undefined) updates.status = raw.status;
+      if (raw.assignedToId !== undefined) updates.assignedToId = raw.assignedToId ? Number(raw.assignedToId) : null;
+      if (raw.assignedToName !== undefined) updates.assignedToName = raw.assignedToName || null;
+      // sanitize date: empty string → null to avoid DB type error
+      if (raw.deadline !== undefined) updates.deadline = raw.deadline && raw.deadline !== '' ? raw.deadline : null;
       const task = await storage.updateTask(id, updates);
       await storage.createLog({ action: 'TASK_UPDATED', description: `Tarefa atualizada: ${task.title} → status: ${updates.status || task.status}`, userId: user.id, userEmail: user.email, userRole: user.role });
       res.json(task);
-    } catch (e) { res.status(500).json({ message: 'Error updating task' }); }
+    } catch (e: any) { console.error('Error updating task:', e); res.status(500).json({ message: 'Error updating task', detail: e?.message }); }
   });
 
   app.delete('/api/tasks/:id', async (req, res) => {
@@ -1206,11 +1216,27 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const { status, adminNote } = req.body;
-      const resolvedAt = status === 'RESOLVED' ? new Date() : null;
-      const updated = await storage.updateClientIncident(id, { status, adminNote, resolvedAt });
+      const resolvedAt = status === 'RESOLVED' ? new Date() : undefined;
+      const updated = await storage.updateClientIncident(id, { status, adminNote, ...(resolvedAt !== undefined ? { resolvedAt } : {}) });
       await storage.createLog({ action: 'CLIENT_INCIDENT_UPDATED', description: `Ocorrência #${id} atualizada → ${status}`, userId: user.id, userEmail: user.email, userRole: user.role });
       res.json(updated);
     } catch (e) { res.status(500).json({ message: 'Error updating incident' }); }
+  });
+
+  app.post('/api/client-incidents/:id/respond', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) {
+      return res.status(403).json({ message: 'Sem permissão' });
+    }
+    try {
+      const id = parseInt(req.params.id);
+      const { responseMessage } = req.body;
+      if (!responseMessage || !responseMessage.trim()) return res.status(400).json({ message: 'Mensagem de resposta obrigatória' });
+      const updated = await storage.respondToClientIncident(id, responseMessage.trim(), user.name);
+      await storage.createLog({ action: 'CLIENT_INCIDENT_RESPONDED', description: `Ocorrência #${id} recebeu resposta de ${user.name}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(updated);
+    } catch (e) { res.status(500).json({ message: 'Error responding to incident' }); }
   });
 
   // ─── OCORRÊNCIAS INTERNAS ─────────────────────────────────────

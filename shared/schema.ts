@@ -201,8 +201,11 @@ export const clientIncidents = pgTable("client_incidents", {
   contactEmail: text("contact_email"),
   photoBase64: text("photo_base64"), // base64 encoded image
   photoMime: text("photo_mime"),
-  status: text("status").notNull().default("OPEN"), // OPEN, ANALYZING, RESOLVED
+  status: text("status").notNull().default("OPEN"), // OPEN, ANALYZING, RESPONDED, RESOLVED
   adminNote: text("admin_note"),
+  responseMessage: text("response_message"),   // official response visible to client
+  respondedByName: text("responded_by_name"),   // staff member who responded
+  respondedAt: timestamp("responded_at"),        // when response was sent
   resolvedAt: timestamp("resolved_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

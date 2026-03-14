@@ -6,7 +6,18 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
+
+// Keep-alive: ping every 5 minutes to prevent Replit sleep
+function KeepAlive() {
+  useEffect(() => {
+    const ping = () => fetch('/api/health').catch(() => {});
+    const id = setInterval(ping, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+  return null;
+}
 
 // Page Imports
 import Login from "@/pages/auth/login";
@@ -226,6 +237,7 @@ function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
+          <KeepAlive />
           <Toaster />
           <Router />
         </TooltipProvider>

@@ -5,7 +5,12 @@ import { Leaf, Building2, UserCircle, KeyRound, ArrowLeft, CheckCircle2 } from "
 export default function Login() {
   const { login, isLoggingIn } = useAuth();
   const [type, setType] = useState<'admin' | 'company'>('company');
-  const [email, setEmail] = useState("");
+
+  // Company tab uses full email
+  const [companyEmail, setCompanyEmail] = useState("");
+  // Admin tab uses just the username (domain is @vivafrutaz.com)
+  const [adminUsername, setAdminUsername] = useState("");
+
   const [password, setPassword] = useState("");
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -14,6 +19,9 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const email = type === 'admin'
+      ? `${adminUsername.trim().toLowerCase()}@vivafrutaz.com`
+      : companyEmail.trim().toLowerCase();
     await login({ email, password, type });
   };
 
@@ -24,7 +32,7 @@ export default function Login() {
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: forgotEmail }),
+        body: JSON.stringify({ email: forgotEmail.toLowerCase() }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -140,15 +148,42 @@ export default function Login() {
               </div>
 
               <form className="space-y-6" onSubmit={handleSubmit}>
-                <div>
-                  <label className="block text-sm font-semibold text-foreground mb-2">Email</label>
-                  <input
-                    data-testid="input-email"
-                    type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
-                    placeholder="voce@empresa.com"
-                  />
-                </div>
+                {type === 'admin' ? (
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-2">Usuário</label>
+                    <div className="flex items-center border-2 border-border rounded-xl overflow-hidden focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 transition-all bg-background">
+                      <input
+                        data-testid="input-username"
+                        type="text"
+                        required
+                        value={adminUsername}
+                        onChange={e => setAdminUsername(e.target.value)}
+                        autoComplete="username"
+                        className="flex-1 px-4 py-3 bg-transparent text-foreground placeholder:text-muted-foreground outline-none min-w-0"
+                        placeholder="seu.nome"
+                      />
+                      <span className="px-3 py-3 text-sm font-semibold text-primary/80 bg-primary/5 border-l border-border/50 whitespace-nowrap select-none">
+                        @vivafrutaz.com
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      O domínio @vivafrutaz.com é adicionado automaticamente.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-semibold text-foreground mb-2">Email de acesso</label>
+                    <input
+                      data-testid="input-email"
+                      type="email"
+                      required
+                      value={companyEmail}
+                      onChange={e => setCompanyEmail(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-background border-2 border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                      placeholder="voce@empresa.com"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-semibold text-foreground mb-2">Senha</label>
@@ -171,7 +206,7 @@ export default function Login() {
 
               {type === 'company' && (
                 <div className="mt-6 text-center">
-                  <button onClick={() => { setShowForgot(true); setForgotEmail(email); }}
+                  <button onClick={() => { setShowForgot(true); setForgotEmail(companyEmail); }}
                     className="text-sm text-muted-foreground hover:text-primary transition-colors font-medium flex items-center gap-1.5 mx-auto">
                     <KeyRound className="w-3.5 h-3.5" />
                     Esqueci minha senha
