@@ -9,6 +9,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   role: text("role").notNull(),
   active: boolean("active").default(true).notNull(),
+  tabPermissions: jsonb("tab_permissions"), // string[] | null — null means no restriction (use role defaults)
 });
 
 export const priceGroups = pgTable("price_groups", {

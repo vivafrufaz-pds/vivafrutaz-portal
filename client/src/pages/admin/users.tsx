@@ -4,9 +4,35 @@ import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code, Crown, BarChart3, KeyRound, AlertTriangle } from "lucide-react";
+import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code, Crown, BarChart3, KeyRound, AlertTriangle, Lock, Unlock } from "lucide-react";
 
-type AdminUser = { id: number; name: string; email: string; password: string; role: string; active: boolean; };
+type AdminUser = { id: number; name: string; email: string; password: string; role: string; active: boolean; tabPermissions: string[] | null; };
+
+// All system tabs with labels and role access
+const ALL_TABS: { key: string; label: string; roles: string[] }[] = [
+  { key: 'dashboard', label: 'Dashboard (Painel)', roles: ['ADMIN', 'DIRECTOR', 'LOGISTICS', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO'] },
+  { key: 'orders', label: 'Pedidos', roles: ['ADMIN', 'DIRECTOR', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'LOGISTICS'] },
+  { key: 'special-orders', label: 'Pedidos Pontuais', roles: ['ADMIN', 'DIRECTOR', 'OPERATIONS_MANAGER', 'DEVELOPER', 'LOGISTICS'] },
+  { key: 'companies', label: 'Empresas', roles: ['ADMIN', 'DIRECTOR'] },
+  { key: 'products', label: 'Produtos', roles: ['ADMIN', 'DIRECTOR'] },
+  { key: 'categories', label: 'Categorias', roles: ['ADMIN', 'DIRECTOR'] },
+  { key: 'price-groups', label: 'Grupos de Preço', roles: ['ADMIN', 'DIRECTOR'] },
+  { key: 'order-windows', label: 'Janelas de Pedido', roles: ['ADMIN', 'DIRECTOR', 'OPERATIONS_MANAGER'] },
+  { key: 'order-exceptions', label: 'Exceções de Pedido', roles: ['ADMIN', 'DIRECTOR'] },
+  { key: 'purchasing', label: 'Compras', roles: ['ADMIN', 'DIRECTOR', 'PURCHASE_MANAGER'] },
+  { key: 'industrialized', label: 'Industrializados', roles: ['ADMIN', 'DIRECTOR', 'PURCHASE_MANAGER'] },
+  { key: 'financial', label: 'Painel Financeiro', roles: ['ADMIN', 'DIRECTOR', 'FINANCEIRO'] },
+  { key: 'password-reset', label: 'Senhas de Clientes', roles: ['ADMIN', 'DIRECTOR'] },
+  { key: 'tasks', label: 'Tarefas', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'] },
+  { key: 'incidents', label: 'Ocorrências de Clientes', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'] },
+  { key: 'internal-incidents', label: 'Ocorrências Internas', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'] },
+  { key: 'logistics', label: 'Logística', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'] },
+  { key: 'quotations', label: 'Cotação de Empresas', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
+  { key: 'users', label: 'Usuários do Sistema', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'] },
+  { key: 'backups', label: 'Backup & E-mails', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'] },
+  { key: 'developer', label: 'Área do Desenvolvedor', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'] },
+  { key: 'executive', label: 'Dashboard Executivo', roles: ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER'] },
+];
 
 const ROLES = [
   { value: "ADMIN", label: "Administrador", desc: "Acesso total ao sistema", icon: Shield, color: "text-red-600 bg-red-100" },
@@ -21,7 +47,7 @@ const ROLES = [
 const PRIVILEGED_ROLES = ['ADMIN', 'DIRECTOR', 'DEVELOPER'];
 const TEMP_PASSWORD = "Viva2026@";
 
-const blank = { name: "", email: "", password: "", role: "ADMIN", active: true };
+const blank = { name: "", email: "", password: "", role: "ADMIN", active: true, tabPermissions: null as string[] | null };
 
 export default function UsersAdminPage() {
   const { toast } = useToast();
@@ -100,9 +126,30 @@ export default function UsersAdminPage() {
 
   const openCreate = () => { setForm(blank); setModal({ open: true, editing: null }); };
   const openEdit = (u: AdminUser) => {
-    setForm({ name: u.name, email: u.email, password: '', role: u.role, active: u.active !== false });
+    setForm({ name: u.name, email: u.email, password: '', role: u.role, active: u.active !== false, tabPermissions: u.tabPermissions ?? null });
     setModal({ open: true, editing: u });
   };
+
+  // Tab permissions helpers
+  const roleTabsForRole = (role: string) => ALL_TABS.filter(t => t.roles.includes(role));
+  const isTabChecked = (key: string) => {
+    if (!form.tabPermissions) return true; // null = all allowed
+    return form.tabPermissions.includes(key);
+  };
+  const toggleTab = (key: string) => {
+    const roleTabs = roleTabsForRole(form.role).map(t => t.key);
+    if (!form.tabPermissions) {
+      // First toggle: set to all minus this one
+      setForm(f => ({ ...f, tabPermissions: roleTabs.filter(k => k !== key) }));
+    } else {
+      const newPerms = form.tabPermissions.includes(key)
+        ? form.tabPermissions.filter(k => k !== key)
+        : [...form.tabPermissions, key];
+      setForm(f => ({ ...f, tabPermissions: newPerms.length === roleTabs.length ? null : newPerms }));
+    }
+  };
+  const resetTabPerms = () => setForm(f => ({ ...f, tabPermissions: null }));
+  const enableCustomPerms = () => setForm(f => ({ ...f, tabPermissions: roleTabsForRole(f.role).map(t => t.key) }));
 
   const openPasswordChange = (u: AdminUser) => {
     if (!canManageUsers) {
@@ -232,8 +279,8 @@ export default function UsersAdminPage() {
 
       {/* Create/Edit Modal */}
       <Modal isOpen={modal.open} onClose={() => setModal({ open: false, editing: null })}
-        title={modal.editing ? `Editar Usuário — ${modal.editing.name}` : "Novo Usuário"} maxWidth="max-w-lg">
-        <div className="space-y-4">
+        title={modal.editing ? `Editar Usuário — ${modal.editing.name}` : "Novo Usuário"} maxWidth="max-w-2xl">
+        <div className="space-y-4 overflow-y-auto max-h-[80vh] pr-1">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="block text-sm font-semibold mb-1.5">Nome completo *</label>
@@ -286,6 +333,61 @@ export default function UsersAdminPage() {
               <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.active ? 'translate-x-7' : 'translate-x-1'}`} />
             </button>
           </div>
+
+          {/* Tab Permissions Section — only ADMIN/DIRECTOR/DEVELOPER can edit */}
+          {canManageUsers && (
+            <div className="border border-border/60 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {form.tabPermissions ? <Lock className="w-4 h-4 text-orange-500" /> : <Unlock className="w-4 h-4 text-green-500" />}
+                  <p className="font-semibold text-sm text-foreground">Permissões de Acesso a Abas</p>
+                </div>
+                <div className="flex gap-2">
+                  {form.tabPermissions && (
+                    <button type="button" onClick={resetTabPerms}
+                      className="text-xs px-3 py-1 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors font-medium">
+                      Remover restrições
+                    </button>
+                  )}
+                  {!form.tabPermissions && (
+                    <button type="button" onClick={enableCustomPerms}
+                      className="text-xs px-3 py-1 rounded-lg bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100 transition-colors font-medium">
+                      Personalizar acesso
+                    </button>
+                  )}
+                </div>
+              </div>
+              {!form.tabPermissions ? (
+                <p className="text-xs text-muted-foreground">
+                  Sem restrições de abas — o usuário acessa todos os módulos permitidos pelo seu perfil ({ROLES.find(r => r.value === form.role)?.label || form.role}).
+                </p>
+              ) : (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Marque apenas as abas que este usuário pode acessar. Abas desmarcadas exibem mensagem de acesso negado.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {roleTabsForRole(form.role).map(tab => (
+                      <label key={tab.key}
+                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border transition-colors ${isTabChecked(tab.key) ? 'bg-primary/5 border-primary/30' : 'bg-muted/30 border-border/40'}`}>
+                        <input type="checkbox" checked={isTabChecked(tab.key)}
+                          onChange={() => toggleTab(tab.key)}
+                          data-testid={`tab-perm-${tab.key}`}
+                          className="w-3.5 h-3.5 rounded accent-primary" />
+                        <span className={`text-xs font-medium ${isTabChecked(tab.key) ? 'text-foreground' : 'text-muted-foreground'}`}>{tab.label}</span>
+                      </label>
+                    ))}
+                    {roleTabsForRole(form.role).length === 0 && (
+                      <p className="col-span-2 text-xs text-muted-foreground italic">Nenhuma aba disponível para este perfil.</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {form.tabPermissions.length} de {roleTabsForRole(form.role).length} abas ativas
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           <button onClick={() => {
             if (!form.name || !form.email || (!modal.editing && !form.password)) {

@@ -560,13 +560,14 @@ export async function registerRoutes(
 
   app.put('/api/users/:id', async (req, res) => {
     try {
-      const { name, email, password, role, active } = req.body;
+      const { name, email, password, role, active, tabPermissions } = req.body;
       const updates: any = {};
       if (name) updates.name = name;
       if (email) updates.email = email;
       if (password && password !== '***') updates.password = password;
       if (role) updates.role = role;
       if (active !== undefined) updates.active = active;
+      if (tabPermissions !== undefined) updates.tabPermissions = tabPermissions; // null resets to no restriction
       const user = await storage.updateUser(Number(req.params.id), updates);
       res.json({ ...user, password: '***' });
     } catch { res.status(500).json({ message: "Erro interno" }); }

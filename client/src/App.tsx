@@ -86,14 +86,33 @@ function MaintenanceScreen() {
 }
 
 // Auth Guard Wrapper
+function UnauthorizedModule() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center space-y-4 p-8">
+        <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center mx-auto">
+          <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M5.07 19H19a2 2 0 001.75-2.97L13.75 4a2 2 0 00-3.5 0L3.25 16.03A2 2 0 005.07 19z" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-foreground">Acesso não autorizado para este módulo.</h2>
+        <p className="text-muted-foreground text-sm max-w-xs mx-auto">Você não possui permissão para acessar esta área. Entre em contato com o administrador do sistema.</p>
+        <a href="/admin" className="inline-block mt-2 px-6 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl text-sm hover:opacity-90 transition-opacity">Voltar ao início</a>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedRoute({
   component: Component,
   role,
   allowedRoles,
+  tabKey,
 }: {
   component: any;
   role?: 'admin' | 'client';
   allowedRoles?: string[];
+  tabKey?: string;
 }) {
   const { isAuthenticated, isStaff, isClient, isLoading, user } = useAuth();
   const [location] = useLocation();
@@ -119,6 +138,14 @@ function ProtectedRoute({
       credentials: 'include',
     }).catch(() => {});
     return <Redirect to="/admin" />;
+  }
+
+  // Tab-level permission check (only when tabPermissions is explicitly set)
+  if (tabKey && user) {
+    const tabPerms = (user as any).tabPermissions as string[] | null | undefined;
+    if (tabPerms && tabPerms.length > 0 && !tabPerms.includes(tabKey)) {
+      return <UnauthorizedModule />;
+    }
   }
 
   // Maintenance mode: block clients (not staff)
@@ -153,70 +180,70 @@ function Router() {
 
       {/* Admin Routes */}
       <Route path="/admin">
-        {() => <ProtectedRoute component={AdminDashboard} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS']} />}
+        {() => <ProtectedRoute component={AdminDashboard} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS']} tabKey="dashboard" />}
       </Route>
       <Route path="/admin/companies">
-        {() => <ProtectedRoute component={AdminCompanies} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={AdminCompanies} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} tabKey="companies" />}
       </Route>
       <Route path="/admin/products">
-        {() => <ProtectedRoute component={AdminProducts} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={AdminProducts} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} tabKey="products" />}
       </Route>
       <Route path="/admin/categories">
-        {() => <ProtectedRoute component={AdminCategories} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={AdminCategories} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} tabKey="categories" />}
       </Route>
       <Route path="/admin/price-groups">
-        {() => <ProtectedRoute component={AdminPriceGroups} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={AdminPriceGroups} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} tabKey="price-groups" />}
       </Route>
       <Route path="/admin/order-windows">
-        {() => <ProtectedRoute component={AdminOrderWindows} role="admin" allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={AdminOrderWindows} role="admin" allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR']} tabKey="order-windows" />}
       </Route>
       <Route path="/admin/order-exceptions">
-        {() => <ProtectedRoute component={AdminOrderExceptions} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={AdminOrderExceptions} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} tabKey="order-exceptions" />}
       </Route>
       <Route path="/admin/orders">
-        {() => <ProtectedRoute component={AdminOrders} role="admin" allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'DIRECTOR', 'LOGISTICS']} />}
+        {() => <ProtectedRoute component={AdminOrders} role="admin" allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'DIRECTOR', 'LOGISTICS']} tabKey="orders" />}
       </Route>
       <Route path="/admin/purchasing">
-        {() => <ProtectedRoute component={PurchasingReport} role="admin" allowedRoles={['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={PurchasingReport} role="admin" allowedRoles={['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR']} tabKey="purchasing" />}
       </Route>
       <Route path="/admin/industrialized">
-        {() => <ProtectedRoute component={IndustrializedReport} role="admin" allowedRoles={['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={IndustrializedReport} role="admin" allowedRoles={['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR']} tabKey="industrialized" />}
       </Route>
       <Route path="/admin/financial">
-        {() => <ProtectedRoute component={FinancialReport} role="admin" allowedRoles={['ADMIN', 'FINANCEIRO', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={FinancialReport} role="admin" allowedRoles={['ADMIN', 'FINANCEIRO', 'DIRECTOR']} tabKey="financial" />}
       </Route>
       <Route path="/admin/password-reset-requests">
-        {() => <ProtectedRoute component={PasswordResetRequestsPage} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={PasswordResetRequestsPage} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} tabKey="password-reset" />}
       </Route>
       <Route path="/admin/special-orders">
-        {() => <ProtectedRoute component={AdminSpecialOrders} role="admin" allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR', 'DEVELOPER', 'LOGISTICS']} />}
+        {() => <ProtectedRoute component={AdminSpecialOrders} role="admin" allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR', 'DEVELOPER', 'LOGISTICS']} tabKey="special-orders" />}
       </Route>
       <Route path="/admin/users">
-        {() => <ProtectedRoute component={AdminUsers} role="admin" allowedRoles={['ADMIN', 'DEVELOPER', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={AdminUsers} role="admin" allowedRoles={['ADMIN', 'DEVELOPER', 'DIRECTOR']} tabKey="users" />}
       </Route>
       <Route path="/admin/backups">
-        {() => <ProtectedRoute component={AdminBackups} role="admin" allowedRoles={['ADMIN', 'DEVELOPER', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={AdminBackups} role="admin" allowedRoles={['ADMIN', 'DEVELOPER', 'DIRECTOR']} tabKey="backups" />}
       </Route>
       <Route path="/admin/developer">
-        {() => <ProtectedRoute component={AdminDeveloper} role="admin" allowedRoles={['DEVELOPER', 'ADMIN', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={AdminDeveloper} role="admin" allowedRoles={['DEVELOPER', 'ADMIN', 'DIRECTOR']} tabKey="developer" />}
       </Route>
       <Route path="/admin/tasks">
-        {() => <ProtectedRoute component={AdminTasks} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS']} />}
+        {() => <ProtectedRoute component={AdminTasks} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS']} tabKey="tasks" />}
       </Route>
       <Route path="/admin/client-incidents">
-        {() => <ProtectedRoute component={AdminClientIncidents} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS']} />}
+        {() => <ProtectedRoute component={AdminClientIncidents} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS']} tabKey="incidents" />}
       </Route>
       <Route path="/admin/internal-incidents">
-        {() => <ProtectedRoute component={AdminInternalIncidents} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS']} />}
+        {() => <ProtectedRoute component={AdminInternalIncidents} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS']} tabKey="internal-incidents" />}
       </Route>
       <Route path="/admin/logistics">
-        {() => <ProtectedRoute component={AdminLogistics} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS']} />}
+        {() => <ProtectedRoute component={AdminLogistics} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS']} tabKey="logistics" />}
       </Route>
       <Route path="/admin/quotations">
-        {() => <ProtectedRoute component={AdminQuotations} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} />}
+        {() => <ProtectedRoute component={AdminQuotations} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} tabKey="quotations" />}
       </Route>
       <Route path="/admin/executive">
-        {() => <ProtectedRoute component={AdminExecutiveDashboard} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER']} />}
+        {() => <ProtectedRoute component={AdminExecutiveDashboard} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER']} tabKey="executive" />}
       </Route>
 
       {/* Client Routes */}
