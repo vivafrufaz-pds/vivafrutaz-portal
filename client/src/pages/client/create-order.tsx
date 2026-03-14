@@ -63,6 +63,7 @@ export default function CreateOrderPage() {
   const [cart, setCart] = useState<Record<number, number>>({});
   const [orderNote, setOrderNote] = useState("");
   const [replicating, setReplicating] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [successOrder, setSuccessOrder] = useState<{ orderCode: string; total: number } | null>(null);
   const [filterCategory, setFilterCategory] = useState("ALL");
   const [search, setSearch] = useState("");
@@ -176,29 +177,35 @@ export default function CreateOrderPage() {
 
   const handleSubmit = async () => {
     if (!activeWindow || !company || !deliveryDate) return;
-    const items = cartItems.map(({ product, qty }) => ({
-      productId: product.id,
-      quantity: qty,
-      unitPrice: String(product.price),
-      totalPrice: String(product.price * qty),
-    }));
+    if (submitting) return; // proteção clique duplo
+    setSubmitting(true);
+    try {
+      const items = cartItems.map(({ product, qty }) => ({
+        productId: product.id,
+        quantity: qty,
+        unitPrice: String(product.price),
+        totalPrice: String(product.price * qty),
+      }));
 
-    const result = await createOrder.mutateAsync({
-      order: {
-        companyId: company.id,
-        deliveryDate: new Date(deliveryDate + 'T12:00:00').toISOString(),
-        weekReference: activeWindow.weekReference,
-        totalValue: String(cartTotal),
-        orderNote: orderNote || null,
-        allowReplication: false,
-      },
-      items,
-    });
+      const result = await createOrder.mutateAsync({
+        order: {
+          companyId: company.id,
+          deliveryDate: new Date(deliveryDate + 'T12:00:00').toISOString(),
+          weekReference: activeWindow.weekReference,
+          totalValue: String(cartTotal),
+          orderNote: orderNote || null,
+          allowReplication: false,
+        },
+        items,
+      });
 
-    setSuccessOrder({
-      orderCode: result.orderCode || `VF-${new Date().getFullYear()}-${String(result.id).padStart(6, '0')}`,
-      total: cartTotal,
-    });
+      setSuccessOrder({
+        orderCode: result.orderCode || `VF-${new Date().getFullYear()}-${String(result.id).padStart(6, '0')}`,
+        total: cartTotal,
+      });
+    } catch {
+      setSubmitting(false);
+    }
   };
 
   if (windowLoading) {
@@ -497,10 +504,10 @@ export default function CreateOrderPage() {
                   <p className="text-2xl font-display font-bold text-primary">R$ {fmtBRL(cartTotal)}</p>
                 </div>
                 <button data-testid="button-submit-order" onClick={handleSubmit}
-                  disabled={!selectedDay || !deliveryDate || cartItems.length === 0 || createOrder.isPending}
+                  disabled={!selectedDay || !deliveryDate || cartItems.length === 0 || createOrder.isPending || submitting}
                   className="w-full py-3.5 bg-secondary text-secondary-foreground font-bold rounded-xl shadow-lg shadow-secondary/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:transform-none flex justify-center items-center gap-2">
                   <CheckCircle2 className="w-5 h-5" />
-                  {createOrder.isPending ? "Enviando..." : "Confirmar Pedido"}
+                  {submitting || createOrder.isPending ? "Processando pedido..." : "Confirmar Pedido"}
                 </button>
                 {!selectedDay && cartItems.length > 0 && (
                   <p className="text-red-500 text-xs font-medium text-center">Selecione um dia de entrega.</p>

@@ -6,18 +6,25 @@ VivaFrutaz is a B2B corporate fruit ordering platform built for companies to log
 
 Key features:
 - Dual-portal system: Admin staff portal + Client company portal
-- Role-based access control (ADMIN, OPERATIONS_MANAGER, PURCHASE_MANAGER, DEVELOPER)
+- Role-based access control (ADMIN, DIRECTOR, OPERATIONS_MANAGER, PURCHASE_MANAGER, FINANCEIRO, DEVELOPER)
 - Price groups tied strictly to individual companies; finalPrice = basePrice × (1 + adminFee/100)
 - Time-windowed ordering (order windows with open/close/delivery dates) with delete support
 - Purchasing and financial reports with CSV export (NF / Nimbi formats)
 - Pedidos Pontuais (special orders): client requests + admin review workflow
-- User management admin page (CRUD for all staff users)
+- User management admin page (CRUD for all staff users; active/inactive toggle + login block)
 - CNPJ + full delivery address on company profiles
 - Day-lock in cart: cannot switch day when cart has items
-- Automatic daily database backup (03:00 AM) with up to 30 kept; admin download UI
+- Automatic daily database backup (17:00) with up to 30 kept; admin download UI
 - Automatic email system (nodemailer SMTP): order placed, status change, password reset, special orders
 - Email status indicator on Backup page (shows if SMTP is configured)
 - Full Brazilian Portuguese (PT-BR) interface
+- Developer area (/admin/developer): System Logs, Audit system, AI Bug Detector tabs
+- Financial panel with date filters (Hoje/Esta Semana/Este Mês/Período Personalizado) + Nimbi expiration filter
+- NimbiExpiration date field on orders (editable inline in admin orders expanded detail)
+- Double-click protection on order submission
+- Duplicate order protection (in-memory, 60-second window per companyId:deliveryDate:orderWindowId)
+- System logs table with level (INFO/WARN/ERROR), action, user, IP tracking
+- Developer user auto-seeded: dev@vivafrutaz.com / dev
 
 ## User Preferences
 

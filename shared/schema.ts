@@ -8,6 +8,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").notNull(),
+  active: boolean("active").default(true).notNull(),
 });
 
 export const priceGroups = pgTable("price_groups", {
@@ -114,6 +115,7 @@ export const orders = pgTable("orders", {
   totalValue: numeric("total_value", { precision: 10, scale: 2 }).notNull(),
   orderNote: text("order_note"),
   allowReplication: boolean("allow_replication").default(false).notNull(),
+  nimbiExpiration: date("nimbi_expiration"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

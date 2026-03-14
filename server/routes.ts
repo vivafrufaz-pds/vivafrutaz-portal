@@ -69,6 +69,93 @@ export async function registerRoutes(
     res.json(mailerStatus());
   });
 
+  // --- System Audit API ---
+  app.get('/api/admin/audit', async (req, res) => {
+    try {
+      const issues: Array<{ severity: string; category: string; message: string }> = [];
+
+      // Check DB tables reachability
+      try {
+        const users = await storage.getUsers();
+        if (users.length === 0) issues.push({ severity: 'WARN', category: 'Banco de Dados', message: 'Nenhum usuário administrativo encontrado no banco de dados.' });
+      } catch (e: any) {
+        issues.push({ severity: 'ERROR', category: 'Banco de Dados', message: `Erro ao acessar tabela de usuários: ${e.message}` });
+      }
+
+      try {
+        const companies = await storage.getCompanies();
+        const inactive = companies.filter((c: any) => !c.active);
+        if (inactive.length > 0) issues.push({ severity: 'INFO', category: 'Empresas', message: `${inactive.length} empresa(s) inativa(s) no sistema.` });
+        const noPriceGroup = companies.filter((c: any) => !c.priceGroupId && c.active);
+        if (noPriceGroup.length > 0) issues.push({ severity: 'WARN', category: 'Empresas', message: `${noPriceGroup.length} empresa(s) ativa(s) sem grupo de preço configurado.` });
+      } catch (e: any) {
+        issues.push({ severity: 'ERROR', category: 'Banco de Dados', message: `Erro ao acessar tabela de empresas: ${e.message}` });
+      }
+
+      try {
+        const orders = await storage.getOrders();
+        const twoMonthsAgo = new Date();
+        twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+        const old = orders.filter((o: any) => new Date(o.orderDate) < twoMonthsAgo);
+        if (old.length > 0) issues.push({ severity: 'WARN', category: 'Pedidos', message: `${old.length} pedido(s) com mais de 2 meses. Recomenda-se limpeza.` });
+        const noCode = orders.filter((o: any) => !o.orderCode);
+        if (noCode.length > 0) issues.push({ severity: 'ERROR', category: 'Pedidos', message: `${noCode.length} pedido(s) sem código VF gerado.` });
+      } catch (e: any) {
+        issues.push({ severity: 'ERROR', category: 'Banco de Dados', message: `Erro ao acessar tabela de pedidos: ${e.message}` });
+      }
+
+      try {
+        const products = await storage.getProducts();
+        const inactive = products.filter((p: any) => !p.active);
+        if (inactive.length > 0) issues.push({ severity: 'INFO', category: 'Produtos', message: `${inactive.length} produto(s) inativo(s) no catálogo.` });
+        const noPrice = products.filter((p: any) => !p.basePrice);
+        if (noPrice.length > 0) issues.push({ severity: 'WARN', category: 'Produtos', message: `${noPrice.length} produto(s) sem preço base definido.` });
+      } catch (e: any) {
+        issues.push({ severity: 'ERROR', category: 'Banco de Dados', message: `Erro ao acessar tabela de produtos: ${e.message}` });
+      }
+
+      try {
+        const recentLogs = await storage.getLogs(100);
+        const loginFails = recentLogs.filter((l: any) => l.action === 'LOGIN_FAILED');
+        if (loginFails.length >= 5) issues.push({ severity: 'WARN', category: 'Segurança', message: `${loginFails.length} tentativas de login falhas recentes detectadas.` });
+        const errors = recentLogs.filter((l: any) => l.level === 'ERROR');
+        if (errors.length > 0) issues.push({ severity: 'ERROR', category: 'Logs', message: `${errors.length} evento(s) de erro registrado(s) recentemente.` });
+      } catch (e: any) {
+        issues.push({ severity: 'ERROR', category: 'Logs', message: `Erro ao acessar logs do sistema: ${e.message}` });
+      }
+
+      if (issues.length === 0) {
+        issues.push({ severity: 'INFO', category: 'Sistema', message: 'Nenhum problema encontrado. Sistema funcionando normalmente.' });
+      }
+
+      await storage.createLog({ action: 'AUDIT_RUN', description: `Auditoria executada. ${issues.length} item(ns) encontrado(s).`, level: 'INFO' });
+      res.json({ issues, scannedAt: new Date().toISOString() });
+    } catch (err) {
+      res.status(500).json({ message: "Erro ao executar auditoria" });
+    }
+  });
+
+  // --- Orders export with date filter ---
+  app.get('/api/orders/export', async (req, res) => {
+    try {
+      const { dateFrom, dateTo } = req.query;
+      const allOrders = await storage.getOrders();
+      let filtered = allOrders;
+      if (dateFrom) {
+        const from = new Date(dateFrom as string);
+        filtered = filtered.filter((o: any) => new Date(o.deliveryDate) >= from);
+      }
+      if (dateTo) {
+        const to = new Date(dateTo as string);
+        to.setHours(23, 59, 59, 999);
+        filtered = filtered.filter((o: any) => new Date(o.deliveryDate) <= to);
+      }
+      res.json(filtered);
+    } catch {
+      res.status(500).json({ message: "Erro interno" });
+    }
+  });
+
   // --- System Logs API ---
   app.get('/api/admin/logs', async (req, res) => {
     try {
@@ -91,6 +178,10 @@ export async function registerRoutes(
         if (!user || user.password !== input.password) {
           await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login falhou: ${input.email}`, userEmail: input.email, level: 'WARN', ip });
           return res.status(401).json({ message: "Email ou senha incorretos." });
+        }
+        if (user.active === false) {
+          await storage.createLog({ action: 'LOGIN_BLOCKED', description: `Login bloqueado (usuário inativo): ${input.email}`, userEmail: input.email, level: 'WARN', ip });
+          return res.status(401).json({ message: "Usuário inativo. Entre em contato com o administrador." });
         }
         (req.session as any).userId = user.id;
         (req.session as any).userType = 'admin';
@@ -220,21 +311,22 @@ export async function registerRoutes(
 
   app.post('/api/users', async (req, res) => {
     try {
-      const { name, email, password, role } = req.body;
+      const { name, email, password, role, active } = req.body;
       if (!name || !email || !password || !role) return res.status(400).json({ message: "Campos obrigatórios faltando." });
-      const user = await storage.createUser({ name, email, password, role });
+      const user = await storage.createUser({ name, email, password, role, active: active !== false });
       res.status(201).json({ ...user, password: '***' });
     } catch { res.status(500).json({ message: "Email já cadastrado ou erro interno." }); }
   });
 
   app.put('/api/users/:id', async (req, res) => {
     try {
-      const { name, email, password, role } = req.body;
+      const { name, email, password, role, active } = req.body;
       const updates: any = {};
       if (name) updates.name = name;
       if (email) updates.email = email;
       if (password && password !== '***') updates.password = password;
       if (role) updates.role = role;
+      if (active !== undefined) updates.active = active;
       const user = await storage.updateUser(Number(req.params.id), updates);
       res.json({ ...user, password: '***' });
     } catch { res.status(500).json({ message: "Erro interno" }); }
@@ -627,10 +719,11 @@ export async function registerRoutes(
   app.patch('/api/orders/:id', async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const { status, adminNote } = req.body;
+      const { status, adminNote, nimbiExpiration } = req.body;
       const updates: any = {};
       if (status !== undefined) updates.status = status;
       if (adminNote !== undefined) updates.adminNote = adminNote;
+      if (nimbiExpiration !== undefined) updates.nimbiExpiration = nimbiExpiration || null;
       const order = await storage.updateOrder(id, updates);
       res.json(order);
 
@@ -793,25 +886,47 @@ export async function registerRoutes(
 
 async function seedDatabase() {
   try {
+    // Ensure default developer user always exists
+    const devUser = await storage.getUserByEmail("dev@vivafrutaz.com");
+    if (!devUser) {
+      await storage.createUser({
+        name: "Desenvolvedor VF",
+        email: "dev@vivafrutaz.com",
+        password: "dev",
+        role: "DEVELOPER",
+        active: true,
+      });
+    }
+
     const admin = await storage.getUserByEmail("admin@vivafrutaz.com");
     if (!admin) {
       await storage.createUser({
         name: "Admin User",
         email: "admin@vivafrutaz.com",
         password: "admin",
-        role: "ADMIN"
+        role: "ADMIN",
+        active: true,
       });
       await storage.createUser({
         name: "Operations",
         email: "ops@vivafrutaz.com",
         password: "ops",
-        role: "OPERATIONS_MANAGER"
+        role: "OPERATIONS_MANAGER",
+        active: true,
       });
       await storage.createUser({
         name: "Purchasing",
         email: "buy@vivafrutaz.com",
         password: "buy",
-        role: "PURCHASE_MANAGER"
+        role: "PURCHASE_MANAGER",
+        active: true,
+      });
+      await storage.createUser({
+        name: "Desenvolvedor VF",
+        email: "dev@vivafrutaz.com",
+        password: "dev",
+        role: "DEVELOPER",
+        active: true,
       });
     }
 

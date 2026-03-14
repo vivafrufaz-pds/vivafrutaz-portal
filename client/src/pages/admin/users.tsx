@@ -5,7 +5,7 @@ import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code, Crown, BarChart3 } from "lucide-react";
 
-type AdminUser = { id: number; name: string; email: string; password: string; role: string; };
+type AdminUser = { id: number; name: string; email: string; password: string; role: string; active: boolean; };
 
 const ROLES = [
   { value: "ADMIN", label: "Administrador", desc: "Acesso total ao sistema", icon: Shield, color: "text-red-600 bg-red-100" },
@@ -16,7 +16,7 @@ const ROLES = [
   { value: "DEVELOPER", label: "Desenvolvedor", desc: "Acesso técnico + logs + backups", icon: Code, color: "text-purple-600 bg-purple-100" },
 ];
 
-const blank = { name: "", email: "", password: "", role: "ADMIN" };
+const blank = { name: "", email: "", password: "", role: "ADMIN", active: true };
 
 export default function UsersAdminPage() {
   const { toast } = useToast();
@@ -66,7 +66,7 @@ export default function UsersAdminPage() {
   });
 
   const openCreate = () => { setForm(blank); setModal({ open: true, editing: null }); };
-  const openEdit = (u: AdminUser) => { setForm({ name: u.name, email: u.email, password: '', role: u.role }); setModal({ open: true, editing: u }); };
+  const openEdit = (u: AdminUser) => { setForm({ name: u.name, email: u.email, password: '', role: u.role, active: u.active !== false }); setModal({ open: true, editing: u }); };
 
   return (
     <Layout>
@@ -114,6 +114,7 @@ export default function UsersAdminPage() {
               <th className="px-6 py-4 font-semibold">Nome</th>
               <th className="px-6 py-4 font-semibold">Email</th>
               <th className="px-6 py-4 font-semibold">Perfil</th>
+              <th className="px-6 py-4 font-semibold">Status</th>
               <th className="px-6 py-4 font-semibold"></th>
             </tr>
           </thead>
@@ -137,6 +138,11 @@ export default function UsersAdminPage() {
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${role?.color || 'bg-muted text-muted-foreground'}`}>
                       <Icon className="w-3 h-3" /> {role?.label || u.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${u.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                      {u.active !== false ? 'Ativo' : 'Inativo'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -199,6 +205,18 @@ export default function UsersAdminPage() {
                 );
               })}
             </div>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border/50">
+            <div>
+              <p className="font-semibold text-sm text-foreground">Status do Usuário</p>
+              <p className="text-xs text-muted-foreground">{form.active ? "Usuário ativo — pode acessar o sistema" : "Usuário inativo — acesso bloqueado"}</p>
+            </div>
+            <button type="button" onClick={() => setForm({ ...form, active: !form.active })}
+              data-testid="toggle-active"
+              className={`relative w-12 h-6 rounded-full transition-colors ${form.active ? 'bg-green-500' : 'bg-muted-foreground/30'}`}>
+              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.active ? 'translate-x-7' : 'translate-x-1'}`} />
+            </button>
           </div>
 
           <button onClick={() => { if (!form.name || !form.email || (!modal.editing && !form.password)) { toast({ title: "Preencha todos os campos obrigatórios.", variant: "destructive" }); return; } save.mutate(); }}

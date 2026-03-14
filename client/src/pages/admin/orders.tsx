@@ -10,7 +10,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Receipt, Search, ChevronDown, ChevronUp, MessageSquare, Package, FileText,
-  XCircle, Edit3, AlertTriangle, CheckCircle, StickyNote, Save, Trash2
+  XCircle, Edit3, AlertTriangle, CheckCircle, StickyNote, Save, Trash2, Calendar
 } from "lucide-react";
 import { api } from "@shared/routes";
 
@@ -203,7 +203,7 @@ function CancelModal({ order, onClose, onConfirm }: { order: Order; onClose: () 
 
 // ─── Order Row ────────────────────────────────────────────────
 function OrderRow({
-  order, companyName, products, onNoteEdit, onEdit, onCancel, onRestore
+  order, companyName, products, onNoteEdit, onEdit, onCancel, onRestore, onPatchNimbi
 }: {
   order: Order;
   companyName: string;
@@ -212,10 +212,18 @@ function OrderRow({
   onEdit: (order: Order) => void;
   onCancel: (order: Order) => void;
   onRestore: (order: Order) => void;
+  onPatchNimbi: (id: number, date: string) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [nimbiDate, setNimbiDate] = useState(order.nimbiExpiration || '');
+  const [savingNimbi, setSavingNimbi] = useState(false);
   const { data: detail } = useOrderDetail(expanded ? order.id : undefined);
   const isCancelled = order.status === 'CANCELLED';
+
+  const handleSaveNimbi = async () => {
+    setSavingNimbi(true);
+    try { await onPatchNimbi(order.id, nimbiDate); } finally { setSavingNimbi(false); }
+  };
 
   return (
     <>
@@ -317,6 +325,23 @@ function OrderRow({
         <tr>
           <td colSpan={8} className="px-5 py-0 bg-muted/10 border-b border-border/50">
             <div className="py-4 space-y-3">
+              {/* Nimbi Expiration inline edit */}
+              <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
+                <Calendar className="w-4 h-4 text-orange-600 flex-shrink-0" />
+                <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">Expiração Nimbi</span>
+                <input type="date" value={nimbiDate} onChange={e => setNimbiDate(e.target.value)}
+                  data-testid={`input-nimbi-${order.id}`}
+                  className="px-3 py-1.5 border-2 border-orange-200 rounded-lg text-sm focus:border-orange-400 outline-none bg-white" />
+                <button onClick={handleSaveNimbi} disabled={savingNimbi}
+                  data-testid={`button-save-nimbi-${order.id}`}
+                  className="px-3 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50">
+                  {savingNimbi ? '...' : 'Salvar'}
+                </button>
+                {nimbiDate && <button onClick={() => { setNimbiDate(''); onPatchNimbi(order.id, ''); }}
+                  className="px-3 py-1.5 border border-orange-300 text-orange-600 text-xs font-bold rounded-lg hover:bg-orange-100 transition-colors">
+                  Limpar
+                </button>}
+              </div>
               {order.orderNote && (
                 <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-xl border border-blue-100">
                   <MessageSquare className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
@@ -411,6 +436,11 @@ export default function OrdersPage() {
   const cancelOrderFn = async () => {
     await patchOrder(cancelOrder!.id, { status: 'CANCELLED' });
     toast({ title: "Pedido cancelado.", variant: "destructive" });
+  };
+
+  const saveNimbi = async (id: number, date: string) => {
+    await patchOrder(id, { nimbiExpiration: date || null });
+    toast({ title: date ? "Expiração Nimbi salva!" : "Expiração Nimbi removida." });
   };
 
   const restoreOrder = async (order: Order) => {
@@ -509,6 +539,7 @@ export default function OrdersPage() {
                       onEdit={setEditOrder}
                       onCancel={setCancelOrder}
                       onRestore={restoreOrder}
+                      onPatchNimbi={saveNimbi}
                     />
                   );
                 })
