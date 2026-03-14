@@ -5,9 +5,10 @@ import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
 import {
   Plus, Package, Edit2, DollarSign, CheckCircle, XCircle,
-  Factory, Snowflake, AlignLeft, CalendarDays, Search, X
+  Factory, Snowflake, AlignLeft, CalendarDays, Search, X, AlertTriangle
 } from "lucide-react";
 import type { Product } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 const UNITS = [
   { value: "kg", label: "Quilograma (kg)" },
@@ -64,6 +65,7 @@ export default function ProductsPage() {
   const { data: categories } = useCategories();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
+  const { toast } = useToast();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -71,6 +73,7 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [priceError, setPriceError] = useState(false);
 
   const openCreate = () => {
     setEditingProduct(null);
@@ -87,6 +90,7 @@ export default function ProductsPage() {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingProduct(null);
+    setPriceError(false);
   };
 
   const set = (field: string, value: any) =>
@@ -103,12 +107,21 @@ export default function ProductsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPriceError(false);
+
+    const priceNum = Number(formData.basePrice);
+    if (!formData.basePrice || isNaN(priceNum) || priceNum <= 0) {
+      setPriceError(true);
+      toast({ title: 'Preço base obrigatório', description: 'Informe um preço base válido (maior que zero) antes de salvar.', variant: 'destructive' });
+      return;
+    }
+
     const payload: any = {
       name: formData.name,
       category: formData.category,
       unit: formData.unit,
       active: formData.active,
-      basePrice: formData.basePrice ? String(formData.basePrice) : null,
+      basePrice: String(priceNum),
       isIndustrialized: formData.isIndustrialized,
       isSeasonal: formData.isSeasonal,
       observation: formData.observation || null,
@@ -352,20 +365,29 @@ export default function ProductsPage() {
           </div>
 
           {/* Base Price */}
-          <div className="p-4 rounded-xl border-2 border-primary/20 bg-primary/5">
-            <label className="flex items-center gap-2 text-sm font-bold text-primary mb-2">
-              <DollarSign className="w-4 h-4" /> Preço Base Interno (R$)
+          <div className={`p-4 rounded-xl border-2 ${priceError ? 'border-red-400 bg-red-50' : 'border-primary/20 bg-primary/5'}`}>
+            <label className={`flex items-center gap-2 text-sm font-bold mb-2 ${priceError ? 'text-red-600' : 'text-primary'}`}>
+              <DollarSign className="w-4 h-4" /> Preço Base Interno (R$) <span className="text-red-500">*</span>
             </label>
             <input
               type="number" step="0.01" min="0"
               value={formData.basePrice}
-              onChange={e => set("basePrice", e.target.value)}
-              placeholder="0,00"
-              className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none text-lg font-bold"
+              onChange={e => { set("basePrice", e.target.value); if (priceError) setPriceError(false); }}
+              placeholder="Ex: 5,90"
+              data-testid="input-product-price"
+              className={`w-full px-4 py-2.5 rounded-xl border-2 focus:outline-none text-lg font-bold ${priceError ? 'border-red-400 focus:border-red-500 bg-white' : 'border-border focus:border-primary'}`}
             />
-            <p className="text-xs text-muted-foreground mt-2">
-              Preço interno da VivaFrutaz. Preço final ao cliente = base × (1 + taxa admin / 100).
-            </p>
+            {priceError && (
+              <p className="flex items-center gap-1.5 text-xs text-red-600 font-semibold mt-2">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                Preço obrigatório. Informe um valor maior que zero.
+              </p>
+            )}
+            {!priceError && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Preço interno da VivaFrutaz. Preço final ao cliente = base × (1 + taxa admin / 100).
+              </p>
+            )}
           </div>
 
           {/* Status */}

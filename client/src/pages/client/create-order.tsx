@@ -188,7 +188,9 @@ export default function CreateOrderPage() {
     const adminFee = Number(company.adminFee || 0);
     return products
       .filter(p => {
-        if (!p.active || !p.basePrice) return false;
+        if (!p || !p.active) return false;
+        const base = Number(p.basePrice);
+        if (!p.basePrice || isNaN(base) || base <= 0) return false;
         const days = (p as any).availableDays;
         if (days && Array.isArray(days) && days.length > 0 && selectedDay) {
           if (!days.includes(selectedDay)) return false;
@@ -198,8 +200,10 @@ export default function CreateOrderPage() {
       .map(product => {
         const base = Number(product.basePrice);
         const finalPrice = base * (1 + adminFee / 100);
-        return { ...product, price: Math.round(finalPrice * 100) / 100 };
-      });
+        const price = Math.round(finalPrice * 100) / 100;
+        return { ...product, price };
+      })
+      .filter(p => p.price > 0); // final safety net
   }, [products, company, selectedDay]);
 
   const categories = useMemo(() => {
@@ -221,10 +225,11 @@ export default function CreateOrderPage() {
     return Object.entries(cart)
       .filter(([, qty]) => qty > 0)
       .map(([productId, qty]) => {
-        const p = availableProducts.find(x => x.id === Number(productId))!;
+        const p = availableProducts.find(x => x.id === Number(productId));
+        if (!p || !p.price) return null; // guard: product removed or has no price
         return { product: p, qty, subtotal: p.price * qty };
       })
-      .filter(item => item.product);
+      .filter((item): item is { product: typeof availableProducts[0]; qty: number; subtotal: number } => item !== null);
   }, [cart, availableProducts]);
 
   const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + i.subtotal, 0), [cartItems]);
@@ -568,6 +573,7 @@ export default function CreateOrderPage() {
             ) : (
               <div className="divide-y divide-border/50">
                 {visibleProducts.map(product => {
+                  if (!product || !product.price) return null; // defensive guard
                   const qty = cart[product.id] || 0;
                   const subtotal = qty * product.price;
                   return (
