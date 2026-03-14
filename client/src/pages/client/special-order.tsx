@@ -10,7 +10,7 @@ import { Star, Plus, Clock, CheckCircle, XCircle, Send, Calendar } from "lucide-
 const DAYS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
 
 type SpecialOrderRequest = {
-  id: number; companyId: number; requestedDay: string; description: string;
+  id: number; companyId: number; requestedDay: string; requestedDate?: string | null; description: string;
   quantity: string; observations: string | null; status: string;
   adminNote: string | null; createdAt: string; resolvedAt: string | null;
 };
@@ -38,7 +38,7 @@ export default function SpecialOrderPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ requestedDay: "", description: "", quantity: "", observations: "" });
+  const [form, setForm] = useState({ requestedDay: "", requestedDate: "", description: "", quantity: "", observations: "" });
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ['/api/special-order-requests/company', company?.id],
@@ -63,7 +63,7 @@ export default function SpecialOrderPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/special-order-requests/company', company?.id] });
       toast({ title: "Pedido pontual enviado! Aguarde a aprovação da VivaFrutaz." });
       setShowForm(false);
-      setForm({ requestedDay: "", description: "", quantity: "", observations: "" });
+      setForm({ requestedDay: "", requestedDate: "", description: "", quantity: "", observations: "" });
     },
     onError: () => toast({ title: "Erro ao enviar solicitação.", variant: "destructive" }),
   });
@@ -107,10 +107,29 @@ export default function SpecialOrderPage() {
               <label className="block text-sm font-semibold mb-1.5">Dia Desejado *</label>
               <select required value={form.requestedDay} onChange={e => setForm({ ...form, requestedDay: e.target.value })}
                 data-testid="select-requested-day"
-                className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none">
+                className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none bg-background">
                 <option value="">Selecione um dia...</option>
                 {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-1.5 flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-primary" /> Data do Pedido *
+              </label>
+              <input
+                type="date"
+                required
+                value={form.requestedDate}
+                onChange={e => setForm({ ...form, requestedDate: e.target.value })}
+                data-testid="input-requested-date"
+                min={new Date().toISOString().split('T')[0]}
+                className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none bg-background"
+              />
+              {form.requestedDate && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {new Date(form.requestedDate + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1.5">Quantidade Aproximada *</label>
@@ -139,7 +158,7 @@ export default function SpecialOrderPage() {
               Cancelar
             </button>
             <button type="button"
-              onClick={() => { if (!form.requestedDay || !form.description || !form.quantity) { toast({ title: "Preencha todos os campos obrigatórios.", variant: "destructive" }); return; } submit.mutate(); }}
+              onClick={() => { if (!form.requestedDay || !form.requestedDate || !form.description || !form.quantity) { toast({ title: "Preencha todos os campos obrigatórios.", variant: "destructive" }); return; } submit.mutate(); }}
               disabled={submit.isPending}
               data-testid="button-submit-special-order"
               className="px-8 py-2.5 bg-secondary text-secondary-foreground font-bold rounded-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 flex items-center gap-2">

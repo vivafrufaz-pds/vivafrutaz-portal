@@ -9,7 +9,7 @@ import { ptBR } from "date-fns/locale";
 import { Star, Building2, CheckCircle, XCircle, Clock, Eye, Calendar, AlertTriangle } from "lucide-react";
 
 type SpecialOrderRequest = {
-  id: number; companyId: number; requestedDay: string; description: string;
+  id: number; companyId: number; requestedDay: string; requestedDate?: string | null; description: string;
   quantity: string; observations: string | null; status: string;
   adminNote: string | null; createdAt: string; resolvedAt: string | null;
 };
@@ -157,7 +157,13 @@ export default function SpecialOrdersAdminPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="flex items-center gap-1 text-sm font-medium">
-                          <Calendar className="w-3.5 h-3.5 text-primary" /> {req.requestedDay}
+                          <Calendar className="w-3.5 h-3.5 text-primary" />
+                          <span>{req.requestedDay}</span>
+                          {req.requestedDate && (
+                            <span className="text-muted-foreground text-xs">
+                              — {new Date(req.requestedDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                            </span>
+                          )}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-foreground max-w-xs truncate">{req.description}</td>
@@ -209,6 +215,11 @@ export default function SpecialOrdersAdminPage() {
                     <div>
                       <span className="text-muted-foreground font-semibold">Dia desejado:</span>
                       <p className="font-bold text-foreground mt-0.5">{reviewing.requestedDay}</p>
+                      {reviewing.requestedDate && (
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                          Data: {new Date(reviewing.requestedDate + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <span className="text-muted-foreground font-semibold">Quantidade:</span>

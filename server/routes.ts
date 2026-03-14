@@ -345,11 +345,11 @@ export async function registerRoutes(
   // Client: submit special order
   app.post('/api/special-order-requests', async (req, res) => {
     try {
-      const { companyId, requestedDay, description, quantity, observations } = req.body;
+      const { companyId, requestedDay, requestedDate, description, quantity, observations } = req.body;
       if (!companyId || !requestedDay || !description || !quantity) {
         return res.status(400).json({ message: "Campos obrigatórios faltando." });
       }
-      const req2 = await storage.createSpecialOrderRequest({ companyId, requestedDay, description, quantity, observations });
+      const req2 = await storage.createSpecialOrderRequest({ companyId, requestedDay, requestedDate: requestedDate || null, description, quantity, observations });
       res.status(201).json(req2);
     } catch { res.status(500).json({ message: "Erro interno" }); }
   });

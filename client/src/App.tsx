@@ -229,7 +229,7 @@ function Router() {
         {() => <ProtectedRoute component={ClientIncidents} role="client" />}
       </Route>
       <Route path="/client/quotations">
-        {() => <ProtectedRoute component={ClientQuotations} role="client" />}
+        {() => <Redirect to="/client" />}
       </Route>
       <Route path="/client/profile">
         {() => <ProtectedRoute component={ClientProfile} role="client" />}

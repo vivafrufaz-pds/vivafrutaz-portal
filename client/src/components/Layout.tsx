@@ -51,7 +51,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/client/order', label: 'Novo Pedido', icon: ShoppingCart },
     { href: '/client/history', label: 'Histórico de Pedidos', icon: Receipt },
     { href: '/client/special-order', label: 'Pedidos Pontuais', icon: Star },
-    { href: '/client/quotations', label: 'Cotações', icon: FileText },
     { href: '/client/incidents', label: 'Ocorrências', icon: AlertTriangle },
     { href: '/client/profile', label: 'Perfil da Empresa', icon: UserCircle },
   ];

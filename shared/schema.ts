@@ -139,6 +139,7 @@ export const specialOrderRequests = pgTable("special_order_requests", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").references(() => companies.id).notNull(),
   requestedDay: text("requested_day").notNull(),
+  requestedDate: text("requested_date"),
   description: text("description").notNull(),
   quantity: text("quantity").notNull(),
   observations: text("observations"),

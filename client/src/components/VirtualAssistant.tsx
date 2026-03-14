@@ -9,56 +9,83 @@ interface Message {
   isMenu?: boolean;
 }
 
-const MENU_OPTIONS = [
-  { key: '1', label: '1 — Como fazer pedido' },
+const CLIENT_MENU_OPTIONS = [
+  { key: '1', label: '1 — Como fazer meu pedido' },
   { key: '2', label: '2 — Como cancelar pedido' },
-  { key: '3', label: '3 — Como cadastrar empresa' },
-  { key: '4', label: '4 — Como exportar pedidos' },
+  { key: '3', label: '3 — Como realizar pedido pontual' },
+  { key: '4', label: '4 — Como acessar histórico de pedidos' },
   { key: '5', label: '5 — Falar com suporte' },
 ];
 
-const ANSWERS: Record<string, string> = {
-  '1': 'Para fazer um pedido: acesse "Novo Pedido" no menu lateral, escolha o dia de entrega disponível, selecione os produtos e quantidades, e clique em "Finalizar Pedido". Você receberá uma confirmação após o envio.',
-  '2': 'Para cancelar um pedido, entre em contato com a equipe de operações. Pedidos só podem ser cancelados até 2 dias úteis antes da entrega, até às 09h. Acesse "Meus Pedidos" para ver o status atual do seu pedido.',
-  '3': 'Para cadastrar uma empresa: acesse "Empresas" no menu administrativo, clique em "Nova Empresa", preencha os dados (nome, CNPJ, endereço, grupo de preço) e salve. A empresa terá acesso ao portal após o cadastro.',
-  '4': 'Para exportar pedidos: acesse "Pedidos" ou "Painel Financeiro" no menu, use os filtros de data/empresa e clique no botão "Exportar". Gera um arquivo CSV com todos os dados do período selecionado.',
-  '5': 'Para falar com o suporte da VivaFrutaz, entre em contato com a equipe pelo e-mail ou WhatsApp informados no seu contrato. Para questões urgentes sobre entregas, contate o gerente de operações diretamente.',
-};
-
-const FAQ_EXTRA: Array<{ patterns: string[]; answer: string }> = [
-  { patterns: ['ocorrencia', 'ocorrência', 'problema', 'reclamação'], answer: 'Para registrar uma ocorrência: acesse "Ocorrências" no menu, clique em "Nova Ocorrência", descreva o problema e envie. A equipe será notificada.' },
-  { patterns: ['logistica', 'logística', 'rota', 'motorista', 'entrega', 'veículo'], answer: 'O módulo de Logística (menu lateral) permite cadastrar motoristas, veículos e rotas de entrega. Disponível para Administradores e Gerentes de Operações.' },
-  { patterns: ['cotação', 'cotacao', 'empresa interessada'], answer: 'Para registrar interesse de nova empresa: acesse "Cotação de Empresas" no menu, preencha os dados, volume estimado e produtos de interesse.' },
-  { patterns: ['senha', 'esqueci senha'], answer: 'Para trocar a senha acesse o menu de perfil. Administradores gerenciam senhas de clientes em "Senhas de Clientes".' },
-  { patterns: ['financeiro', 'faturamento', 'nota fiscal', 'nimbi'], answer: 'O Painel Financeiro mostra pedidos com filtros por data, empresa e produto. Exporte no formato Nimbi (para ERPs) ou CSV padrão.' },
-  { patterns: ['backup', 'banco de dados'], answer: 'Backups automáticos são feitos diariamente às 17h. Para baixar: acesse "Backup & E-mails" e clique em "Executar Backup".' },
-  { patterns: ['dashboard executivo', 'painel executivo', 'kpi', 'faturamento'], answer: 'O Dashboard Executivo (menu lateral) exibe faturamento, top empresas, produtos mais vendidos, clientes inativos e previsão de compra.' },
-  { patterns: ['modo teste', 'teste'], answer: 'O Modo Teste ativa um banner amarelo no topo. Ative/desative no Painel Administrativo. Pedidos de teste não afetam dados reais.' },
+const ADMIN_MENU_OPTIONS = [
+  { key: '1', label: '1 — Como fazer pedido para cliente' },
+  { key: '2', label: '2 — Como cadastrar empresa' },
+  { key: '3', label: '3 — Como gerenciar tarefas' },
+  { key: '4', label: '4 — Como exportar relatórios' },
+  { key: '5', label: '5 — Suporte técnico' },
 ];
 
-function findFaqAnswer(input: string): string | null {
+const CLIENT_ANSWERS: Record<string, string> = {
+  '1': 'Para fazer seu pedido: acesse "Novo Pedido" no menu lateral, escolha o dia de entrega disponível, selecione os produtos e quantidades, e clique em "Finalizar Pedido". Você receberá uma confirmação após o envio.',
+  '2': 'Para cancelar um pedido, entre em contato com a equipe de operações. Pedidos só podem ser cancelados até 2 dias úteis antes da entrega. Acesse "Histórico de Pedidos" para verificar o status.',
+  '3': 'Para realizar um pedido pontual: acesse "Pedidos Pontuais" no menu lateral, clique em "Nova Solicitação", informe o dia desejado, a data, a quantidade aproximada e a descrição. A equipe VivaFrutaz analisará e entrará em contato.',
+  '4': 'Para acessar seu histórico: clique em "Histórico de Pedidos" no menu lateral. Você pode filtrar por mês, ano ou período para encontrar pedidos anteriores.',
+  '5': 'Para suporte imediato fale conosco pelo WhatsApp:\n📱 11 99411-3911\n\nOu registre uma ocorrência em "Ocorrências" no menu lateral.',
+};
+
+const ADMIN_ANSWERS: Record<string, string> = {
+  '1': 'Para gerenciar pedidos de clientes: acesse "Pedidos" no menu lateral. É possível confirmar, cancelar e adicionar observações a qualquer pedido.',
+  '2': 'Para cadastrar uma empresa: acesse "Empresas" no menu lateral, clique em "Nova Empresa", preencha os dados e salve. A empresa terá acesso ao portal após o cadastro.',
+  '3': 'Para gerenciar tarefas: acesse "Tarefas" no menu lateral. Admins podem criar, atribuir e excluir tarefas para a equipe.',
+  '4': 'Para exportar relatórios: acesse "Painel Financeiro" ou "Logística" e use os filtros de data. Clique em "Exportar" para gerar CSV.',
+  '5': 'Para suporte técnico do sistema, entre em contato com o desenvolvedor pelo WhatsApp:\n📱 11 99411-3911',
+};
+
+const CLIENT_FAQ: Array<{ patterns: string[]; answer: string }> = [
+  { patterns: ['ocorrencia', 'ocorrência', 'problema', 'reclamação', 'reclamacao'], answer: 'Para registrar uma ocorrência: acesse "Ocorrências" no menu, clique em "Registrar Ocorrência", descreva o problema e envie. A equipe será notificada.' },
+  { patterns: ['senha', 'esqueci senha', 'trocar senha'], answer: 'Para recuperar sua senha, na tela de login clique em "Esqueci minha senha" e siga as instruções. Ou entre em contato com a VivaFrutaz pelo WhatsApp: 11 99411-3911.' },
+  { patterns: ['perfil', 'dados da empresa', 'dados empresa'], answer: 'Para ver os dados da sua empresa: acesse "Perfil da Empresa" no menu lateral.' },
+  { patterns: ['whatsapp', 'suporte', 'contato', 'telefone', 'fone'], answer: 'Para suporte imediato fale conosco pelo WhatsApp:\n📱 11 99411-3911\n\nHorário de atendimento: segunda a sexta, das 7h às 18h.' },
+];
+
+const ADMIN_FAQ: Array<{ patterns: string[]; answer: string }> = [
+  { patterns: ['logistica', 'logística', 'rota', 'motorista', 'entrega', 'veículo'], answer: 'O módulo de Logística permite cadastrar motoristas, veículos e rotas de entrega. Disponível para Administradores e Gerentes de Operações.' },
+  { patterns: ['senha', 'reset', 'redefinir'], answer: 'Senhas de clientes são gerenciadas em "Senhas de Clientes" no menu lateral. Administradores podem aprovar solicitações de reset.' },
+  { patterns: ['financeiro', 'faturamento', 'nota fiscal', 'nimbi'], answer: 'O Painel Financeiro mostra pedidos com filtros por data, empresa e produto. Exporte no formato Nimbi (para ERPs) ou CSV padrão.' },
+  { patterns: ['backup', 'banco de dados'], answer: 'Backups automáticos são feitos diariamente às 17h. Para baixar: acesse "Backup & E-mails" e clique em "Executar Backup".' },
+];
+
+function findFaqAnswer(input: string, isClient: boolean): string | null {
   const lower = input.toLowerCase().trim();
-  for (const faq of FAQ_EXTRA) {
+  const faqList = isClient ? CLIENT_FAQ : ADMIN_FAQ;
+  for (const faq of faqList) {
     if (faq.patterns.some(p => lower.includes(p))) return faq.answer;
   }
   return null;
 }
 
-const MENU_TEXT = 'Olá! Sou o Assistente VivaFrutaz 🍊. O que você precisa?\n\n' + MENU_OPTIONS.map(o => o.label).join('\n');
-
-const INITIAL_MESSAGES: Message[] = [
-  { id: 0, from: 'bot', text: MENU_TEXT, isMenu: true },
-];
-
 export function VirtualAssistant() {
   const { user, company } = useAuth();
+  const isClient = !!company;
+  const isLoggedIn = !!(user || company);
+
+  const MENU_OPTIONS = isClient ? CLIENT_MENU_OPTIONS : ADMIN_MENU_OPTIONS;
+  const ANSWERS = isClient ? CLIENT_ANSWERS : ADMIN_ANSWERS;
+
+  const MENU_TEXT = isClient
+    ? 'Olá! Sou o Assistente VivaFrutaz 🍊. Como posso ajudar?\n\n' + MENU_OPTIONS.map(o => o.label).join('\n') + '\n\n📱 WhatsApp: 11 99411-3911'
+    : 'Olá! Sou o Assistente VivaFrutaz 🍊. O que você precisa?\n\n' + MENU_OPTIONS.map(o => o.label).join('\n');
+
+  const INITIAL_MESSAGES: Message[] = [
+    { id: 0, from: 'bot', text: MENU_TEXT, isMenu: true },
+  ];
+
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
   const [disabled, setDisabled] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const isLoggedIn = !!(user || company);
   if (!isLoggedIn) return null;
 
   useEffect(() => {
@@ -93,7 +120,6 @@ export function VirtualAssistant() {
     if (!msg || disabled) return;
     setInput('');
 
-    // Check if it's a menu number
     const trimmed = msg.trim();
     const menuNum = ['1','2','3','4','5'].find(n => trimmed === n || trimmed.startsWith(n + ' ') || trimmed.startsWith(n + '.') || trimmed.startsWith(n + '-'));
     if (menuNum) {
@@ -109,11 +135,14 @@ export function VirtualAssistant() {
     addUserMessage(msg);
     setDisabled(true);
     setTimeout(() => {
-      const faqAnswer = findFaqAnswer(msg);
+      const faqAnswer = findFaqAnswer(msg, isClient);
       if (faqAnswer) {
         addBotMessage(faqAnswer);
       } else {
-        addBotMessage('Não encontrei uma resposta específica. Por favor, escolha uma das opções do menu abaixo ou entre em contato com o suporte.', true);
+        const fallback = isClient
+          ? 'Não encontrei uma resposta. Escolha uma das opções abaixo ou fale pelo WhatsApp: 11 99411-3911'
+          : 'Não encontrei uma resposta específica. Escolha uma das opções do menu abaixo.';
+        addBotMessage(fallback, true);
       }
       setDisabled(false);
     }, 350);
@@ -126,7 +155,6 @@ export function VirtualAssistant() {
 
   return (
     <>
-      {/* Floating button */}
       <button
         onClick={() => setOpen(o => !o)}
         data-testid="button-assistant-toggle"
@@ -136,21 +164,21 @@ export function VirtualAssistant() {
         {open ? <ChevronDown className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
       </button>
 
-      {/* Chat window */}
       {open && (
         <div
           data-testid="assistant-window"
           className="fixed bottom-24 right-5 z-50 w-80 md:w-96 bg-card rounded-2xl shadow-2xl border border-border/50 flex flex-col"
           style={{ maxHeight: '72vh' }}
         >
-          {/* Header */}
           <div className="flex items-center gap-3 p-4 bg-primary rounded-t-2xl text-white">
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
               <Bot className="w-5 h-5" />
             </div>
             <div className="flex-1">
               <p className="font-bold text-sm">Assistente VivaFrutaz</p>
-              <p className="text-xs text-white/70">Tire suas dúvidas aqui</p>
+              <p className="text-xs text-white/70">
+                {isClient ? 'Suporte ao cliente' : 'Suporte interno'}
+              </p>
             </div>
             <button
               data-testid="button-assistant-reset"
@@ -165,7 +193,6 @@ export function VirtualAssistant() {
             </button>
           </div>
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: '42vh' }}>
             {messages.map(m => (
               <div key={m.id} className={`flex ${m.from === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -178,7 +205,6 @@ export function VirtualAssistant() {
                   <div className={`px-3 py-2 rounded-xl text-sm ${m.from === 'user' ? 'bg-primary text-white rounded-br-sm' : 'bg-muted text-foreground rounded-bl-sm'}`}>
                     {m.text.split('\n').map((line, i) => <span key={i}>{line}{i < m.text.split('\n').length - 1 && <br />}</span>)}
                   </div>
-                  {/* Menu options as clickable buttons */}
                   {m.isMenu && m.from === 'bot' && (
                     <div className="mt-2 flex flex-col gap-1.5">
                       {MENU_OPTIONS.map(opt => (
@@ -192,11 +218,20 @@ export function VirtualAssistant() {
                           {opt.label}
                         </button>
                       ))}
+                      {isClient && (
+                        <a
+                          href="https://wa.me/5511994113911"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full text-center text-xs px-3 py-2 bg-green-50 hover:bg-green-100 border border-green-200 rounded-xl transition-colors font-bold text-green-700 flex items-center justify-center gap-1.5"
+                        >
+                          📱 WhatsApp: 11 99411-3911
+                        </a>
+                      )}
                     </div>
                   )}
-                  {/* Navigation buttons after bot answer (not menu) */}
                   {!m.isMenu && m.from === 'bot' && m.id !== 0 && (
-                    <div className="mt-2 flex gap-1.5">
+                    <div className="mt-2 flex gap-1.5 flex-wrap">
                       <button
                         data-testid="button-back-to-menu"
                         onClick={returnToMenu}
@@ -204,13 +239,16 @@ export function VirtualAssistant() {
                       >
                         <Home className="w-3 h-3" /> Voltar ao Menu
                       </button>
-                      <button
-                        data-testid="button-new-question"
-                        onClick={() => { setInput(''); }}
-                        className="text-xs px-2.5 py-1.5 bg-muted hover:bg-muted/70 rounded-lg text-muted-foreground font-medium transition-colors"
-                      >
-                        Nova Pergunta
-                      </button>
+                      {isClient && (
+                        <a
+                          href="https://wa.me/5511994113911"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs px-2.5 py-1.5 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg text-green-700 font-bold transition-colors"
+                        >
+                          📱 WhatsApp
+                        </a>
+                      )}
                       <button
                         onClick={() => setOpen(false)}
                         className="text-xs px-2.5 py-1.5 bg-muted hover:bg-muted/70 rounded-lg text-muted-foreground font-medium transition-colors"
@@ -225,14 +263,13 @@ export function VirtualAssistant() {
             <div ref={bottomRef} />
           </div>
 
-          {/* Input */}
           <div className="p-3 border-t border-border/50 flex gap-2">
             <input
               data-testid="input-assistant-message"
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !disabled && sendMessage()}
-              placeholder="Digite 1-5 ou sua pergunta..."
+              placeholder={isClient ? 'Digite 1-5 ou sua pergunta...' : 'Digite 1-5 ou sua pergunta...'}
               disabled={disabled}
               className="flex-1 text-sm px-3 py-2 bg-muted rounded-xl border-0 outline-none focus:ring-2 focus:ring-primary/20"
             />

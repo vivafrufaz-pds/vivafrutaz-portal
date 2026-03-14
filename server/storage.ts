@@ -89,7 +89,7 @@ export interface IStorage {
   // Special Order Requests
   getSpecialOrderRequests(): Promise<SpecialOrderRequest[]>;
   getSpecialOrderRequestsByCompany(companyId: number): Promise<SpecialOrderRequest[]>;
-  createSpecialOrderRequest(data: { companyId: number; requestedDay: string; description: string; quantity: string; observations?: string }): Promise<SpecialOrderRequest>;
+  createSpecialOrderRequest(data: { companyId: number; requestedDay: string; requestedDate?: string | null; description: string; quantity: string; observations?: string }): Promise<SpecialOrderRequest>;
   updateSpecialOrderRequest(id: number, updates: { status: string; adminNote?: string; resolvedAt?: Date }): Promise<SpecialOrderRequest>;
 
   // User Management
@@ -559,7 +559,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(specialOrderRequests).where(eq(specialOrderRequests.companyId, companyId)).orderBy(desc(specialOrderRequests.createdAt));
   }
 
-  async createSpecialOrderRequest(data: { companyId: number; requestedDay: string; description: string; quantity: string; observations?: string }): Promise<SpecialOrderRequest> {
+  async createSpecialOrderRequest(data: { companyId: number; requestedDay: string; requestedDate?: string | null; description: string; quantity: string; observations?: string }): Promise<SpecialOrderRequest> {
     const [req] = await db.insert(specialOrderRequests).values({ ...data, status: 'PENDING' }).returning();
     return req;
   }
