@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Plus, Eye, Pencil, Trash2, Building2, Download, Clock } from 'lucide-react';
+import { Plus, Eye, Pencil, Trash2, Building2, Download, Clock, MapPin, Route, Users } from 'lucide-react';
 import type { CompanyQuotation, PriceGroup } from '@shared/schema';
 
 const STATUS_LABEL: Record<string, string> = { PENDING: 'Pendente', IN_ANALYSIS: 'Em análise', APPROVED: 'Aprovado', REJECTED: 'Rejeitado', HORARIOS_DISPONIVEIS: 'Horários Disponíveis' };
@@ -34,6 +34,114 @@ function exportToCSV(rows: any[], filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+
+type SuggestionCompany = {
+  id: number;
+  companyName: string;
+  addressCity: string | null;
+  addressStreet: string | null;
+  addressNeighborhood: string | null;
+  enabledDays: { day: string; startTime: string; endTime: string }[];
+};
+
+function DeliverySuggestionsPanel({ city }: { city: string }) {
+  const [suggestions, setSuggestions] = useState<SuggestionCompany[]>([]);
+  const [loading, setLoading] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!city || city.trim().length < 2) { setSuggestions([]); return; }
+
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/companies/delivery-suggestions?city=${encodeURIComponent(city.trim())}`, { credentials: 'include' });
+        if (res.ok) setSuggestions(await res.json());
+      } catch {}
+      setLoading(false);
+    }, 500);
+
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [city]);
+
+  if (!city || city.trim().length < 2) return null;
+
+  if (loading) {
+    return (
+      <div className="mt-3 p-3 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-600 flex items-center gap-2">
+        <Clock className="w-4 h-4 animate-spin" />
+        Buscando empresas próximas com rota ativa...
+      </div>
+    );
+  }
+
+  if (suggestions.length === 0) {
+    return (
+      <div className="mt-3 p-3 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-500 flex items-center gap-2">
+        <MapPin className="w-4 h-4" />
+        Nenhuma empresa com rota ativa encontrada em <strong>&nbsp;{city}</strong>.
+      </div>
+    );
+  }
+
+  // Group companies by time window overlap
+  const windowGroups: Map<string, SuggestionCompany[]> = new Map();
+  suggestions.forEach(co => {
+    co.enabledDays.forEach(d => {
+      const key = `${d.startTime}-${d.endTime}`;
+      if (!windowGroups.has(key)) windowGroups.set(key, []);
+      windowGroups.get(key)!.push(co);
+    });
+  });
+
+  return (
+    <div className="mt-3 space-y-2" data-testid="delivery-suggestions-panel">
+      <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+        <Route className="w-4 h-4" />
+        Empresas com rota logística ativa em <span className="font-bold">{city}</span>
+      </div>
+
+      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+        {suggestions.map(co => (
+          <div key={co.id} className="p-3 rounded-xl bg-green-50 border border-green-200 text-sm">
+            <div className="flex items-center gap-2 mb-1">
+              <Building2 className="w-4 h-4 text-green-600" />
+              <span className="font-semibold text-green-800">{co.companyName}</span>
+              {co.addressNeighborhood && (
+                <span className="text-xs text-green-600">• {co.addressNeighborhood}</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {co.enabledDays.map(d => (
+                <span key={d.day} className="text-xs bg-white border border-green-300 text-green-700 px-2 py-0.5 rounded-full">
+                  {d.day.split('-')[0]}: {d.startTime}–{d.endTime}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Route grouping suggestions */}
+      {Array.from(windowGroups.entries()).filter(([, cos]) => cos.length > 1).map(([window, cos]) => {
+        const [start, end] = window.split('-');
+        return (
+          <div key={window} className="p-3 rounded-xl bg-orange-50 border border-orange-200 text-sm">
+            <div className="flex items-center gap-2 text-orange-700 font-semibold mb-1">
+              <Users className="w-4 h-4" />
+              Rota consolidável: {start}–{end}
+            </div>
+            <p className="text-xs text-orange-600">
+              {cos.map(c => c.companyName).join(', ')} — já existe rota logística ativa neste horário.
+              A nova empresa pode ser agrupada nessa rota.
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function QuotationForm({ onClose, priceGroups, editItem }: { onClose: () => void; priceGroups: PriceGroup[]; editItem?: CompanyQuotation }) {
@@ -78,7 +186,7 @@ function QuotationForm({ onClose, priceGroups, editItem }: { onClose: () => void
   };
 
   return (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+    <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <Label>Razão Social / Nome da Empresa *</Label>
@@ -89,8 +197,22 @@ function QuotationForm({ onClose, priceGroups, editItem }: { onClose: () => void
         <div><Label>Telefone</Label><Input value={form.contactPhone} onChange={e => setForm(p => ({ ...p, contactPhone: e.target.value }))} /></div>
         <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
         <div className="col-span-2"><Label>Endereço</Label><Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
-        <div><Label>Cidade</Label><Input value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} /></div>
+        <div>
+          <Label>Cidade</Label>
+          <Input
+            value={form.city}
+            data-testid="input-quotation-city"
+            onChange={e => setForm(p => ({ ...p, city: e.target.value }))}
+            placeholder="Ex: São Paulo"
+          />
+        </div>
         <div><Label>Estado</Label><Input value={form.state} maxLength={2} onChange={e => setForm(p => ({ ...p, state: e.target.value.toUpperCase() }))} placeholder="SP" /></div>
+      </div>
+
+      {/* Auto delivery suggestion panel - shows when city has value */}
+      <DeliverySuggestionsPanel city={form.city} />
+
+      <div className="grid grid-cols-2 gap-3">
         <div><Label>Volume Estimado</Label><Input value={form.estimatedVolume} onChange={e => setForm(p => ({ ...p, estimatedVolume: e.target.value }))} placeholder="ex: 50 caixas/semana" /></div>
         <div>
           <Label>Grupo de Preço</Label>

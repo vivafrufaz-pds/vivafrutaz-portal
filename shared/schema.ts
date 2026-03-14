@@ -42,6 +42,9 @@ export const companies = pgTable("companies", {
   contractModel: text("contract_model"), // "fixo" | "variavel" | "alternado" — only for clientType "contratual"
   minWeeklyBilling: numeric("min_weekly_billing", { precision: 10, scale: 2 }),
   deliveryTime: text("delivery_time"),
+  // Configuração de janela de entrega por dia da semana
+  // JSON: { "Segunda-feira": { enabled: boolean, startTime: string, endTime: string }, ... }
+  deliveryConfigJson: text("delivery_config_json"),
   // Taxa administrativa (%)
   adminFee: numeric("admin_fee", { precision: 5, scale: 2 }).default("0"),
   // Financeiro

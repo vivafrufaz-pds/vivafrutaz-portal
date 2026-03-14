@@ -13,14 +13,34 @@ import type { Company } from "@shared/schema";
 
 const DAYS_OPTIONS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
 
-type TabKey = "basico" | "config" | "financeiro" | "contrato";
+type TabKey = "basico" | "config" | "financeiro" | "contrato" | "entrega";
 
 const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: "basico", label: "Dados Básicos", icon: User },
   { key: "config", label: "Configurações", icon: Settings },
   { key: "financeiro", label: "Financeiro", icon: CreditCard },
   { key: "contrato", label: "Escopo Contratual", icon: Package },
+  { key: "entrega", label: "Configuração de Entrega", icon: Clock },
 ];
+
+type DeliveryDayConfig = { enabled: boolean; startTime: string; endTime: string };
+type DeliveryConfig = { [day: string]: DeliveryDayConfig };
+
+const DEFAULT_DELIVERY_CONFIG: DeliveryConfig = {
+  "Segunda-feira": { enabled: false, startTime: "09:00", endTime: "10:00" },
+  "Terça-feira": { enabled: false, startTime: "09:00", endTime: "10:00" },
+  "Quarta-feira": { enabled: false, startTime: "09:00", endTime: "10:00" },
+  "Quinta-feira": { enabled: false, startTime: "09:00", endTime: "10:00" },
+  "Sexta-feira": { enabled: false, startTime: "09:00", endTime: "10:00" },
+};
+
+function parseDeliveryConfig(json: string | null | undefined): DeliveryConfig {
+  try {
+    return json ? { ...DEFAULT_DELIVERY_CONFIG, ...JSON.parse(json) } : { ...DEFAULT_DELIVERY_CONFIG };
+  } catch {
+    return { ...DEFAULT_DELIVERY_CONFIG };
+  }
+}
 
 const emptyForm = {
   companyName: "",
@@ -48,6 +68,7 @@ const emptyForm = {
   billingFormat: "",
   paymentDates: "",
   financialNotes: "",
+  deliveryConfigJson: null as DeliveryConfig | null,
 };
 
 function companyToForm(c: Company): typeof emptyForm {
@@ -78,6 +99,7 @@ function companyToForm(c: Company): typeof emptyForm {
     billingFormat: c.billingFormat || "",
     paymentDates: c.paymentDates || "",
     financialNotes: c.financialNotes || "",
+    deliveryConfigJson: parseDeliveryConfig((c as any).deliveryConfigJson),
   };
 }
 
@@ -325,6 +347,7 @@ export default function CompaniesPage() {
       paymentDates: formData.paymentDates || null,
       financialNotes: formData.financialNotes || null,
       notificationEmail: formData.notificationEmail || null,
+      deliveryConfigJson: formData.deliveryConfigJson ? JSON.stringify(formData.deliveryConfigJson) : null,
     };
 
     if (editingCompany) {
@@ -888,6 +911,88 @@ export default function CompaniesPage() {
               company={editingCompany}
               contractModel={formData.contractModel}
             />
+          )}
+
+          {/* ─── Configuração de Entrega Tab ─── */}
+          {activeTab === "entrega" && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="w-5 h-5 text-primary" />
+                <h3 className="font-bold text-base">Configuração de Janelas de Entrega</h3>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Configure os dias e horários em que esta empresa recebe entregas. Essas informações serão usadas automaticamente na criação de cotações.
+              </p>
+              <div className="space-y-3">
+                {DAYS_OPTIONS.map(day => {
+                  const cfg = (formData.deliveryConfigJson || DEFAULT_DELIVERY_CONFIG)[day] || DEFAULT_DELIVERY_CONFIG[day];
+                  return (
+                    <div key={day} className={`rounded-xl border-2 p-4 transition-colors ${cfg.enabled ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/30'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const current = formData.deliveryConfigJson || { ...DEFAULT_DELIVERY_CONFIG };
+                              set("deliveryConfigJson", { ...current, [day]: { ...cfg, enabled: !cfg.enabled } });
+                            }}
+                            data-testid={`toggle-delivery-${day.replace(/[^a-z]/gi, '-').toLowerCase()}`}
+                            className={`relative w-12 h-6 rounded-full transition-colors ${cfg.enabled ? 'bg-primary' : 'bg-gray-300'}`}
+                          >
+                            <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${cfg.enabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                          </button>
+                          <span className="font-semibold text-sm">{day}</span>
+                          {cfg.enabled && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Entrega permitida</span>
+                          )}
+                          {!cfg.enabled && (
+                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Sem entrega</span>
+                          )}
+                        </div>
+                      </div>
+                      {cfg.enabled && (
+                        <div className="mt-3 flex items-center gap-4 pl-15">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground font-medium w-14">Início:</span>
+                            <input
+                              type="time"
+                              value={cfg.startTime}
+                              onChange={e => {
+                                const current = formData.deliveryConfigJson || { ...DEFAULT_DELIVERY_CONFIG };
+                                set("deliveryConfigJson", { ...current, [day]: { ...cfg, startTime: e.target.value } });
+                              }}
+                              data-testid={`time-start-${day.replace(/[^a-z]/gi, '-').toLowerCase()}`}
+                              className="px-2 py-1 rounded-lg border border-border text-sm focus:border-primary outline-none"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground font-medium">Fim:</span>
+                            <input
+                              type="time"
+                              value={cfg.endTime}
+                              onChange={e => {
+                                const current = formData.deliveryConfigJson || { ...DEFAULT_DELIVERY_CONFIG };
+                                set("deliveryConfigJson", { ...current, [day]: { ...cfg, endTime: e.target.value } });
+                              }}
+                              data-testid={`time-end-${day.replace(/[^a-z]/gi, '-').toLowerCase()}`}
+                              className="px-2 py-1 rounded-lg border border-border text-sm focus:border-primary outline-none"
+                            />
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {cfg.startTime && cfg.endTime ? `Janela: ${cfg.startTime} às ${cfg.endTime}` : ''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-200">
+                <p className="text-xs text-blue-700 font-medium">
+                  💡 Essas informações são exibidas automaticamente na aba de Cotações ao criar uma proposta para esta empresa, permitindo sugestões de agrupamento de rotas.
+                </p>
+              </div>
+            </div>
           )}
 
           {/* Footer */}

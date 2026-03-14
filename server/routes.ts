@@ -688,6 +688,49 @@ export async function registerRoutes(
   });
 
   // ─── Contract Scopes ─────────────────────────────────────────
+  // ─── Delivery Window Suggestions ────────────────────────────
+  app.get('/api/companies/delivery-suggestions', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const { city } = req.query;
+      const allCompanies = await storage.getCompanies();
+      const companiesWithConfig = allCompanies.filter(c => {
+        const ca = c as any;
+        if (!ca.deliveryConfigJson) return false;
+        try {
+          const cfg = JSON.parse(ca.deliveryConfigJson);
+          const hasEnabledDay = Object.values(cfg).some((v: any) => v?.enabled);
+          if (!hasEnabledDay) return false;
+        } catch { return false; }
+        if (city && typeof city === 'string') {
+          const cityNorm = city.trim().toLowerCase();
+          const compCity = (ca.addressCity || '').toLowerCase();
+          if (!compCity.includes(cityNorm) && !cityNorm.includes(compCity)) return false;
+        }
+        return true;
+      });
+
+      const result = companiesWithConfig.map(c => {
+        const ca = c as any;
+        let deliveryConfig: any = {};
+        try { deliveryConfig = JSON.parse(ca.deliveryConfigJson); } catch {}
+        const enabledDays = Object.entries(deliveryConfig)
+          .filter(([, v]: any) => v?.enabled)
+          .map(([day, v]: any) => ({ day, startTime: v.startTime, endTime: v.endTime }));
+        return {
+          id: c.id,
+          companyName: c.companyName,
+          addressCity: ca.addressCity,
+          addressStreet: ca.addressStreet,
+          addressNeighborhood: ca.addressNeighborhood,
+          enabledDays,
+        };
+      });
+
+      res.json(result);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   app.get('/api/companies/:id/contract-scopes', async (req, res) => {
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
