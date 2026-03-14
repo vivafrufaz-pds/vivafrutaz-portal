@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Pencil, Trash2, Truck, User, Wrench, MapPin, Download, CheckCircle2, Clock, XCircle, FileText, Search, Phone, Mail, Building2, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Truck, User, Wrench, MapPin, Download, CheckCircle2, Clock, XCircle, FileText, Search, Phone, Mail, Building2, RefreshCw, Navigation, ArrowUp, ArrowDown, Printer, Sparkles, CalendarDays } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { LogisticsDriver, LogisticsVehicle, LogisticsRoute, LogisticsMaintenance, CompanyQuotation } from '@shared/schema';
 
@@ -319,6 +319,13 @@ function RoutesTab() {
                   </div>
                   <div className="flex flex-col gap-1">
                     <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-600" title="Imprimir manifesto" data-testid={`button-print-route-${r.id}`} onClick={() => {
+                        const companies = (r.companyNames || '').split(',').map((n: string, i: number) => `<div class="item"><span class="num">${i+1}</span><div class="name">${n.trim()}</div><div class="clear"></div></div>`).join('');
+                        const w = window.open('', '_blank');
+                        if (!w) return;
+                        w.document.write(`<html><head><title>Manifesto – ${r.name}</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#111}h1{color:#15803d;font-size:20px;border-bottom:2px solid #15803d;padding-bottom:8px}h2{font-size:13px;color:#666;margin-bottom:16px}.item{border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:10px;page-break-inside:avoid}.num{font-size:22px;font-weight:bold;color:#15803d;float:left;margin-right:12px}.name{font-weight:bold;font-size:15px;padding-top:4px}.clear{clear:both}.footer{margin-top:30px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:8px}</style></head><body><h1>🚚 Manifesto – ${r.name}</h1><h2>Motorista: ${r.driverName || '—'} | Veículo: ${r.vehiclePlate || '—'} | Data: ${r.deliveryDate ? new Date(r.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'} | ${r.startTime ? r.startTime + (r.endTime ? ' – ' + r.endTime : '') : ''}</h2>${companies}<div class="footer">VivaFrutaz – Gerado em ${new Date().toLocaleString('pt-BR')}</div></body></html>`);
+                        w.document.close(); w.print();
+                      }}><Printer className="w-3.5 h-3.5" /></Button>
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(r)}><Pencil className="w-3.5 h-3.5" /></Button>
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => delMut.mutate(r.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                     </div>
@@ -850,6 +857,265 @@ function CotacoesTab() {
   );
 }
 
+// ─── Assistente de Rota ──────────────────────────────────────────────────────
+const WEEK_DAYS_ASSIST = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+type RouteCompany = {
+  id: number; companyName: string; addressStreet: string; addressNumber: string;
+  addressNeighborhood: string; addressCity: string; addressZip: string;
+  latitude: string | null; longitude: string | null; clientType: string;
+  deliveryWindow: { startTime: string; endTime: string } | null;
+  hasOrderForDate: boolean | null;
+};
+
+function RouteAssistantTab() {
+  const { toast } = useToast();
+  const [selectedDay, setSelectedDay] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [companies, setCompanies] = useState<RouteCompany[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showCreateRoute, setShowCreateRoute] = useState(false);
+  const [routeName, setRouteName] = useState('');
+  const { data: drivers = [] } = useQuery<LogisticsDriver[]>({ queryKey: ['/api/logistics/drivers'] });
+  const { data: vehicles = [] } = useQuery<LogisticsVehicle[]>({ queryKey: ['/api/logistics/vehicles'] });
+  const [routeDriver, setRouteDriver] = useState('');
+  const [routeVehicle, setRouteVehicle] = useState('');
+
+  const fetchAssistant = async () => {
+    if (!selectedDay) { toast({ title: 'Selecione um dia', variant: 'destructive' }); return; }
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ day: selectedDay });
+      if (selectedDate) params.set('date', selectedDate);
+      const res = await fetch(`/api/logistics/route-assistant?${params}`, { credentials: 'include' });
+      const data = await res.json();
+      setCompanies(Array.isArray(data) ? data : []);
+    } catch { toast({ title: 'Erro ao buscar dados', variant: 'destructive' }); }
+    finally { setLoading(false); }
+  };
+
+  const moveUp = (idx: number) => {
+    if (idx === 0) return;
+    const arr = [...companies];
+    [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+    setCompanies(arr);
+  };
+  const moveDown = (idx: number) => {
+    if (idx === companies.length - 1) return;
+    const arr = [...companies];
+    [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+    setCompanies(arr);
+  };
+
+  const printManifesto = () => {
+    const content = `
+      <html><head><title>Manifesto de Rota – ${selectedDay}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; color: #111; }
+        h1 { color: #15803d; font-size: 20px; border-bottom: 2px solid #15803d; padding-bottom: 8px; }
+        h2 { font-size: 13px; color: #666; margin-bottom: 16px; }
+        .item { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 10px; page-break-inside: avoid; }
+        .num { font-size: 22px; font-weight: bold; color: #15803d; float: left; margin-right: 12px; }
+        .name { font-weight: bold; font-size: 15px; }
+        .sub { font-size: 12px; color: #555; margin-top: 2px; }
+        .window { display: inline-block; background: #f0fdf4; border: 1px solid #86efac; color: #15803d; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; float: right; }
+        .clear { clear: both; }
+        .footer { margin-top: 30px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 8px; }
+      </style></head><body>
+      <h1>🚚 Manifesto de Rota – ${selectedDay}</h1>
+      <h2>${selectedDate ? `Data de entrega: ${new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR')}` : 'Rota sugerida pelo sistema'} | ${companies.length} empresa(s)</h2>
+      ${companies.map((c, i) => `
+        <div class="item">
+          <span class="num">${i + 1}</span>
+          ${c.deliveryWindow ? `<span class="window">🕐 ${c.deliveryWindow.startTime} – ${c.deliveryWindow.endTime}</span>` : ''}
+          <div class="name">${c.companyName}</div>
+          <div class="sub">${[c.addressStreet, c.addressNumber, c.addressNeighborhood, c.addressCity].filter(Boolean).join(', ')}</div>
+          ${c.hasOrderForDate ? '<div class="sub" style="color:#15803d">✔ Pedido confirmado para esta data</div>' : ''}
+          <div class="clear"></div>
+        </div>`).join('')}
+      <div class="footer">VivaFrutaz – Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(content);
+    w.document.close();
+    w.print();
+  };
+
+  const createRouteMut = useMutation({
+    mutationFn: () => {
+      const driver = drivers.find(d => d.id.toString() === routeDriver);
+      const vehicle = vehicles.find(v => v.id.toString() === routeVehicle);
+      return apiRequest('POST', '/api/logistics/routes', {
+        name: routeName || `Rota ${selectedDay}`,
+        driverId: routeDriver ? Number(routeDriver) : null,
+        driverName: driver?.name || '',
+        vehicleId: routeVehicle ? Number(routeVehicle) : null,
+        vehiclePlate: vehicle?.plate || '',
+        deliveryDate: selectedDate || new Date().toISOString().split('T')[0],
+        status: 'SCHEDULED',
+        companyIds: companies.map(c => c.id),
+        companyNames: companies.map(c => c.companyName).join(', '),
+        startTime: companies[0]?.deliveryWindow?.startTime || '08:00',
+        endTime: companies[companies.length - 1]?.deliveryWindow?.endTime || '18:00',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/logistics/routes'] });
+      toast({ title: 'Rota criada com sucesso!' });
+      setShowCreateRoute(false);
+    },
+    onError: (e: any) => toast({ title: e?.message || 'Erro ao criar rota', variant: 'destructive' }),
+  });
+
+  const withOrders = companies.filter(c => c.hasOrderForDate === true);
+  const withoutOrders = companies.filter(c => c.hasOrderForDate === false);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Sparkles className="w-5 h-5 text-primary" />
+        <div>
+          <p className="font-semibold">Assistente de Rota Inteligente</p>
+          <p className="text-xs text-muted-foreground">Agrupa empresas por dia de entrega, ordenadas por janela horária</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3 items-end">
+        <div>
+          <Label className="text-xs mb-1 block">Dia da semana *</Label>
+          <Select value={selectedDay} onValueChange={setSelectedDay}>
+            <SelectTrigger className="w-44" data-testid="select-assistant-day"><SelectValue placeholder="Selecionar dia" /></SelectTrigger>
+            <SelectContent>
+              {WEEK_DAYS_ASSIST.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs mb-1 block">Data de entrega (opcional)</Label>
+          <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-44" data-testid="input-assistant-date" />
+        </div>
+        <Button onClick={fetchAssistant} disabled={loading || !selectedDay} data-testid="button-fetch-assistant">
+          {loading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Navigation className="w-4 h-4 mr-1" />}
+          Gerar Sugestão
+        </Button>
+      </div>
+
+      {companies.length > 0 && (
+        <>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex gap-2 text-xs text-muted-foreground">
+              <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-medium">{withOrders.length} com pedido</span>
+              <span className="bg-muted px-2 py-0.5 rounded-full">{withoutOrders.length} sem pedido</span>
+              <span className="font-medium">{companies.length} total</span>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={printManifesto} data-testid="button-print-manifesto">
+                <Printer className="w-4 h-4 mr-1" /> Imprimir Manifesto
+              </Button>
+              <Button size="sm" onClick={() => { setShowCreateRoute(true); setRouteName(`Rota ${selectedDay}`); }} data-testid="button-create-from-assistant">
+                <Plus className="w-4 h-4 mr-1" /> Criar Rota
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {companies.map((c, i) => (
+              <Card key={c.id} data-testid={`card-assistant-company-${c.id}`} className={`premium-shadow transition-all ${c.hasOrderForDate === true ? 'border-green-300 bg-green-50/30 dark:bg-green-950/10' : ''}`}>
+                <CardContent className="p-3 flex items-center gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <button className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30" onClick={() => moveUp(i)} disabled={i === 0}><ArrowUp className="w-3.5 h-3.5" /></button>
+                    <span className="text-sm font-bold text-primary text-center leading-none">{i + 1}</span>
+                    <button className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30" onClick={() => moveDown(i)} disabled={i === companies.length - 1}><ArrowDown className="w-3.5 h-3.5" /></button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm">{c.companyName}</span>
+                      {c.hasOrderForDate === true && <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full font-medium">✔ Pedido</span>}
+                      <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">{c.clientType}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{[c.addressStreet, c.addressNumber, c.addressNeighborhood, c.addressCity].filter(Boolean).join(', ')}</p>
+                    {c.latitude && c.longitude && (
+                      <p className="text-xs text-blue-500">📍 {Number(c.latitude).toFixed(4)}, {Number(c.longitude).toFixed(4)}</p>
+                    )}
+                  </div>
+                  {c.deliveryWindow && (
+                    <div className="shrink-0 text-right">
+                      <div className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-lg">
+                        {c.deliveryWindow.startTime}
+                        <br />
+                        <span className="text-muted-foreground font-normal">{c.deliveryWindow.endTime}</span>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
+      {companies.length === 0 && !loading && selectedDay && (
+        <div className="text-center py-12 text-muted-foreground">
+          <Navigation className="w-10 h-10 mx-auto mb-2 opacity-30" />
+          <p>Nenhuma empresa com entrega configurada para <strong>{selectedDay}</strong></p>
+          <p className="text-xs mt-1">Configure a janela de entrega nas empresas para incluí-las na sugestão</p>
+        </div>
+      )}
+
+      {companies.length === 0 && !loading && !selectedDay && (
+        <div className="text-center py-12 text-muted-foreground">
+          <CalendarDays className="w-12 h-12 mx-auto mb-3 opacity-20" />
+          <p className="font-medium">Selecione um dia para gerar a sugestão de rota</p>
+          <p className="text-xs mt-1">O sistema irá agrupar as empresas por janela de entrega automaticamente</p>
+        </div>
+      )}
+
+      <Dialog open={showCreateRoute} onOpenChange={setShowCreateRoute}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Criar Rota a partir da Sugestão</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Nome da Rota *</Label>
+              <Input value={routeName} onChange={e => setRouteName(e.target.value)} data-testid="input-route-name" />
+            </div>
+            <div>
+              <Label>Motorista</Label>
+              <Select value={routeDriver} onValueChange={setRouteDriver}>
+                <SelectTrigger><SelectValue placeholder="Selecionar motorista" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  {drivers.filter(d => d.active).map(d => <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Veículo</Label>
+              <Select value={routeVehicle} onValueChange={setRouteVehicle}>
+                <SelectTrigger><SelectValue placeholder="Selecionar veículo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  {vehicles.filter(v => v.active).map(v => <SelectItem key={v.id} value={v.id.toString()}>{v.plate} – {v.model}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="bg-muted/40 rounded-lg p-3 text-xs text-muted-foreground">
+              <p className="font-medium mb-1 text-foreground">{companies.length} empresas incluídas:</p>
+              {companies.slice(0, 5).map((c, i) => <p key={c.id}>{i + 1}. {c.companyName}{c.deliveryWindow ? ` – ${c.deliveryWindow.startTime}` : ''}</p>)}
+              {companies.length > 5 && <p>+ {companies.length - 5} mais...</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateRoute(false)}>Cancelar</Button>
+            <Button onClick={() => createRouteMut.mutate()} disabled={createRouteMut.isPending || !routeName}>
+              {createRouteMut.isPending ? 'Criando...' : 'Criar Rota'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 export default function LogisticsPage() {
   const { data: drivers = [] } = useQuery<LogisticsDriver[]>({ queryKey: ['/api/logistics/drivers'] });
@@ -889,12 +1155,14 @@ export default function LogisticsPage() {
 
       <Tabs defaultValue="routes">
         <TabsList className="flex-wrap">
+          <TabsTrigger value="assistant" data-testid="tab-assistant">🧠 Assistente</TabsTrigger>
           <TabsTrigger value="routes" data-testid="tab-routes">Rotas</TabsTrigger>
           <TabsTrigger value="drivers" data-testid="tab-drivers">Motoristas</TabsTrigger>
           <TabsTrigger value="vehicles" data-testid="tab-vehicles">Veículos</TabsTrigger>
           <TabsTrigger value="maintenance" data-testid="tab-maintenance">Manutenção</TabsTrigger>
           <TabsTrigger value="quotations" data-testid="tab-quotations">Cotações</TabsTrigger>
         </TabsList>
+        <TabsContent value="assistant" className="mt-4"><RouteAssistantTab /></TabsContent>
         <TabsContent value="routes" className="mt-4"><RoutesTab /></TabsContent>
         <TabsContent value="drivers" className="mt-4"><DriversTab /></TabsContent>
         <TabsContent value="vehicles" className="mt-4"><VehiclesTab /></TabsContent>

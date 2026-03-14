@@ -55,6 +55,8 @@ const emptyForm = {
   addressNeighborhood: "",
   addressCity: "",
   addressZip: "",
+  latitude: "",
+  longitude: "",
   priceGroupId: "",
   allowedOrderDays: [] as string[],
   active: true,
@@ -86,6 +88,8 @@ function companyToForm(c: Company): typeof emptyForm {
     addressNeighborhood: ca.addressNeighborhood || "",
     addressCity: ca.addressCity || "",
     addressZip: ca.addressZip || "",
+    latitude: ca.latitude ? String(ca.latitude) : "",
+    longitude: ca.longitude ? String(ca.longitude) : "",
     priceGroupId: c.priceGroupId ? String(c.priceGroupId) : "",
     allowedOrderDays: Array.isArray(c.allowedOrderDays) ? (c.allowedOrderDays as any[]).map(String) : [],
     active: c.active,
@@ -336,6 +340,8 @@ export default function CompaniesPage() {
       addressNeighborhood: formData.addressNeighborhood || null,
       addressCity: formData.addressCity || null,
       addressZip: formData.addressZip || null,
+      latitude: formData.latitude ? formData.latitude : null,
+      longitude: formData.longitude ? formData.longitude : null,
       clientType: formData.clientType || null,
       contractModel: formData.contractModel || null,
       minWeeklyBilling: formData.minWeeklyBilling ? String(formData.minWeeklyBilling) : null,
@@ -669,6 +675,21 @@ export default function CompaniesPage() {
                       className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Latitude (GPS)</label>
+                    <input type="number" step="0.0000001" value={formData.latitude} onChange={e => set("latitude", e.target.value)}
+                      placeholder="-23.5505"
+                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Longitude (GPS)</label>
+                    <input type="number" step="0.0000001" value={formData.longitude} onChange={e => set("longitude", e.target.value)}
+                      placeholder="-46.6333"
+                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Coordenadas GPS usadas pelo Assistente de Rota para agrupamento geográfico.</p>
               </div>
 
               <div>

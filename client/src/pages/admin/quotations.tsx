@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Plus, Eye, Pencil, Trash2, Building2, Download, Clock, MapPin, Route, Users } from 'lucide-react';
+import { Plus, Eye, Pencil, Trash2, Building2, Download, Clock, MapPin, Route, Users, ArrowRight, CheckCircle2 } from 'lucide-react';
 import type { CompanyQuotation, PriceGroup } from '@shared/schema';
 
 const STATUS_LABEL: Record<string, string> = { PENDING: 'Pendente', IN_ANALYSIS: 'Em análise', APPROVED: 'Aprovado', REJECTED: 'Rejeitado', HORARIOS_DISPONIVEIS: 'Horários Disponíveis' };
@@ -313,11 +313,140 @@ function QuotationDetail({ quotation, onClose, priceGroups }: { quotation: Compa
   );
 }
 
+// ─── Converter Cotação em Empresa ────────────────────────────────────────────
+function ConvertToCompanyModal({ quotation, onClose }: { quotation: CompanyQuotation; onClose: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    companyName: quotation.companyName || '',
+    contactName: quotation.contactName || '',
+    email: quotation.email || '',
+    password: '123456',
+    phone: quotation.contactPhone || '',
+    cnpj: quotation.cnpj || '',
+    addressStreet: quotation.address || '',
+    addressNumber: '',
+    addressNeighborhood: '',
+    addressCity: quotation.city || '',
+    clientType: 'mensal',
+    active: true,
+  });
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const handleConvert = async () => {
+    if (!form.companyName || !form.email) {
+      toast({ title: 'Nome e e-mail são obrigatórios', variant: 'destructive' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/companies', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Erro ao criar empresa');
+      }
+      await fetch(`/api/quotations/${quotation.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'APPROVED', adminNote: `Convertida em empresa em ${new Date().toLocaleDateString('pt-BR')}` }),
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/companies'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotations'] });
+      setDone(true);
+      toast({ title: 'Empresa criada com sucesso!', description: `${form.companyName} cadastrada. Senha padrão: 123456` });
+    } catch (e: any) {
+      toast({ title: e.message || 'Erro', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div className="text-center py-8 space-y-3">
+        <CheckCircle2 className="w-14 h-14 mx-auto text-green-500" />
+        <p className="font-semibold text-lg">Empresa criada com sucesso!</p>
+        <p className="text-sm text-muted-foreground">A empresa <strong>{form.companyName}</strong> foi cadastrada no sistema.</p>
+        <p className="text-xs text-muted-foreground">Senha padrão: <strong>123456</strong> — altere no cadastro de empresas.</p>
+        <Button onClick={onClose} className="mt-2">Fechar</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+        Essa cotação será convertida em empresa ativa no sistema. Revise os dados abaixo antes de confirmar.
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <Label>Nome da Empresa *</Label>
+          <Input value={form.companyName} onChange={e => setForm(p => ({ ...p, companyName: e.target.value }))} data-testid="input-convert-companyname" />
+        </div>
+        <div>
+          <Label>Contato Responsável</Label>
+          <Input value={form.contactName} onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} />
+        </div>
+        <div>
+          <Label>Telefone</Label>
+          <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+        </div>
+        <div>
+          <Label>E-mail (login) *</Label>
+          <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} data-testid="input-convert-email" />
+        </div>
+        <div>
+          <Label>CNPJ</Label>
+          <Input value={form.cnpj} onChange={e => setForm(p => ({ ...p, cnpj: e.target.value }))} />
+        </div>
+        <div className="col-span-2">
+          <Label>Endereço</Label>
+          <Input value={form.addressStreet} onChange={e => setForm(p => ({ ...p, addressStreet: e.target.value }))} />
+        </div>
+        <div>
+          <Label>Cidade</Label>
+          <Input value={form.addressCity} onChange={e => setForm(p => ({ ...p, addressCity: e.target.value }))} />
+        </div>
+        <div>
+          <Label>Tipo de Cliente</Label>
+          <Select value={form.clientType} onValueChange={v => setForm(p => ({ ...p, clientType: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mensal">Mensal</SelectItem>
+              <SelectItem value="contratual">Contratual</SelectItem>
+              <SelectItem value="sodexo">Sodexo</SelectItem>
+              <SelectItem value="avulso">Avulso</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="col-span-2">
+          <Label>Senha inicial do cliente</Label>
+          <Input value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="123456" />
+          <p className="text-xs text-muted-foreground mt-1">Senha temporária — o admin pode alterar depois no cadastro de empresas.</p>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Cancelar</Button>
+        <Button onClick={handleConvert} disabled={loading} data-testid="button-confirm-convert" className="gap-2">
+          {loading ? 'Criando...' : <><ArrowRight className="w-4 h-4" /> Criar Empresa</>}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
 export default function QuotationsPage() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<CompanyQuotation | undefined>();
   const [selected, setSelected] = useState<CompanyQuotation | undefined>();
+  const [convertTarget, setConvertTarget] = useState<CompanyQuotation | undefined>();
   const [filterStatus, setFilterStatus] = useState('ALL');
 
   const { data: quotations = [], isLoading } = useQuery<CompanyQuotation[]>({ queryKey: ['/api/quotations'] });
@@ -400,7 +529,12 @@ export default function QuotationsPage() {
                   </div>
                   <div className="flex flex-col gap-1 items-end shrink-0">
                     <p className="text-xs text-muted-foreground">{new Date(q.createdAt).toLocaleDateString('pt-BR')}</p>
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 flex-wrap justify-end">
+                      {q.status === 'APPROVED' && (
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-green-700 border-green-300 hover:bg-green-50" onClick={() => setConvertTarget(q)} data-testid={`button-convert-quotation-${q.id}`}>
+                          <ArrowRight className="w-3 h-3 mr-1" /> Converter
+                        </Button>
+                      )}
                       <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setSelected(q)} data-testid={`button-view-quotation-${q.id}`}><Eye className="w-3.5 h-3.5 mr-1" /> Ver</Button>
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setEditItem(q); setShowForm(true); }}><Pencil className="w-3.5 h-3.5" /></Button>
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => delMut.mutate(q.id)} disabled={delMut.isPending}><Trash2 className="w-3.5 h-3.5" /></Button>
@@ -424,6 +558,17 @@ export default function QuotationsPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Cotação — {selected?.companyName}</DialogTitle></DialogHeader>
           {selected && <QuotationDetail quotation={selected} onClose={() => setSelected(undefined)} priceGroups={priceGroups} />}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!convertTarget} onOpenChange={() => setConvertTarget(undefined)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRight className="w-5 h-5 text-green-600" /> Converter Cotação em Empresa
+            </DialogTitle>
+          </DialogHeader>
+          {convertTarget && <ConvertToCompanyModal quotation={convertTarget} onClose={() => setConvertTarget(undefined)} />}
         </DialogContent>
       </Dialog>
     </div>

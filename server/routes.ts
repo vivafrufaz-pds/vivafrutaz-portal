@@ -1015,6 +1015,28 @@ export async function registerRoutes(
         return res.status(503).json({ message: 'Sistema em manutenção. Pedidos temporariamente desabilitados.' });
       }
 
+      // Check if user has SISTEMA_TESTE role — always route to test_orders
+      if (req.session?.userId) {
+        const actingUser = await storage.getUser(req.session.userId);
+        if (actingUser?.role === 'SISTEMA_TESTE') {
+          const company = await storage.getCompany(order.companyId);
+          const year = new Date().getFullYear();
+          const testCode = `TESTE-${year}-${String(Date.now()).slice(-6)}`;
+          const testOrder = await storage.createTestOrder({
+            orderCode: testCode,
+            companyId: order.companyId,
+            companyName: company?.companyName || `Empresa #${order.companyId}`,
+            deliveryDate: new Date(order.deliveryDate),
+            weekReference: order.weekReference,
+            totalValue: order.totalValue,
+            orderNote: order.orderNote || null,
+            items,
+            createdBy: actingUser.id,
+          });
+          return res.status(201).json({ ...testOrder, id: testOrder.id, orderCode: testCode, vfCode: testCode, isTestOrder: true });
+        }
+      }
+
       // Check if test mode is active — intercept and save to test_orders table (client sessions only)
       const testMode = await storage.getSetting('test_mode');
       if (testMode === 'true' && req.session?.companyId) {
@@ -2267,6 +2289,77 @@ export async function registerRoutes(
         period,
       });
     } catch (e: any) { console.error('Executive dashboard error:', e); res.status(500).json({ message: e?.message }); }
+  });
+
+  // ─── Assistente de Rota Inteligente ───────────────────────────
+  app.get('/api/logistics/route-assistant', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    try {
+      const { day, date } = req.query as { day?: string; date?: string };
+      const allCompanies = await storage.getCompanies();
+
+      // Get companies with orders for the requested date (if date provided)
+      let companiesWithOrders: Set<number> = new Set();
+      if (date) {
+        const allOrders = await storage.getOrders();
+        const dateStr = String(date);
+        allOrders.forEach(o => {
+          const od = new Date(o.deliveryDate).toISOString().split('T')[0];
+          if (od === dateStr && !['CANCELLED'].includes(o.status)) {
+            companiesWithOrders.add(o.companyId);
+          }
+        });
+      }
+
+      const result: any[] = [];
+      for (const c of allCompanies) {
+        if (!c.active) continue;
+        const ca = c as any;
+        let deliveryConfig: any = {};
+        try { if (ca.deliveryConfigJson) deliveryConfig = JSON.parse(ca.deliveryConfigJson); } catch {}
+
+        let windowForDay: { startTime: string; endTime: string } | null = null;
+
+        if (day) {
+          const dayData = deliveryConfig[day as string];
+          if (!dayData?.enabled) continue;
+          windowForDay = { startTime: dayData.startTime || '08:00', endTime: dayData.endTime || '09:00' };
+        } else {
+          // Include all companies with any delivery config
+          const enabledDays = Object.entries(deliveryConfig).filter(([, v]: any) => v?.enabled);
+          if (enabledDays.length === 0) continue;
+        }
+
+        result.push({
+          id: c.id,
+          companyName: c.companyName,
+          addressStreet: ca.addressStreet || '',
+          addressNumber: ca.addressNumber || '',
+          addressNeighborhood: ca.addressNeighborhood || '',
+          addressCity: ca.addressCity || '',
+          addressZip: ca.addressZip || '',
+          latitude: ca.latitude || null,
+          longitude: ca.longitude || null,
+          clientType: c.clientType || 'mensal',
+          deliveryWindow: windowForDay,
+          hasOrderForDate: date ? companiesWithOrders.has(c.id) : null,
+          allowedOrderDays: c.allowedOrderDays,
+        });
+      }
+
+      // Sort by start time (companies without window go last)
+      result.sort((a, b) => {
+        const ta = a.deliveryWindow?.startTime || '99:99';
+        const tb = b.deliveryWindow?.startTime || '99:99';
+        return ta.localeCompare(tb);
+      });
+
+      res.json(result);
+    } catch (e: any) {
+      console.error('Route assistant error:', e);
+      res.status(500).json({ message: e.message });
+    }
   });
 
   // ─── Announcements (Painel de Avisos) ─────────────────────────

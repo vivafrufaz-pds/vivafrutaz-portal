@@ -42,6 +42,9 @@ export const companies = pgTable("companies", {
   contractModel: text("contract_model"), // "fixo" | "variavel" | "alternado" — only for clientType "contratual"
   minWeeklyBilling: numeric("min_weekly_billing", { precision: 10, scale: 2 }),
   deliveryTime: text("delivery_time"),
+  // Coordenadas geográficas (para cálculo de rota)
+  latitude: numeric("latitude", { precision: 10, scale: 7 }),
+  longitude: numeric("longitude", { precision: 10, scale: 7 }),
   // Configuração de janela de entrega por dia da semana
   // JSON: { "Segunda-feira": { enabled: boolean, startTime: string, endTime: string }, ... }
   deliveryConfigJson: text("delivery_config_json"),
