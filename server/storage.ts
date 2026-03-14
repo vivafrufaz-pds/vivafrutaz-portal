@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -12,7 +12,8 @@ import {
   type Task, type ClientIncident, type IncidentMessage, type InternalIncident,
   type LogisticsDriver, type LogisticsVehicle, type LogisticsRoute, type LogisticsMaintenance, type CompanyQuotation,
   type ContractScope, type InsertContractScope,
-  type DanfeRecord, type InsertDanfeRecord
+  type DanfeRecord, type InsertDanfeRecord,
+  type CompanyConfig, type InsertCompanyConfig
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -88,6 +89,10 @@ export interface IStorage {
   updateOrderItems(orderId: number, newItems: { productId: number; quantity: number; unitPrice: string; totalPrice: string }[]): Promise<void>;
   getPurchasingReport(filters: { dateFrom?: string; dateTo?: string; companyId?: number; productId?: number }): Promise<any>;
   getIndustrializedReport(filters: { dateFrom?: string; dateTo?: string; companyId?: number; productId?: number }): Promise<any>;
+
+  // Company Config (Support, DANFE info)
+  getCompanyConfig(): Promise<CompanyConfig | undefined>;
+  updateCompanyConfig(updates: Partial<InsertCompanyConfig>): Promise<CompanyConfig>;
 
   // System Settings
   getSetting(key: string): Promise<string | null>;
@@ -573,6 +578,21 @@ export class DatabaseStorage implements IStorage {
     await db.insert(systemSettings)
       .values({ key, value })
       .onConflictDoUpdate({ target: systemSettings.key, set: { value } });
+  }
+
+  async getCompanyConfig(): Promise<CompanyConfig | undefined> {
+    const configs = await db.select().from(companyConfig);
+    return configs[0];
+  }
+
+  async updateCompanyConfig(updates: Partial<InsertCompanyConfig>): Promise<CompanyConfig> {
+    const configs = await db.select().from(companyConfig);
+    if (configs.length === 0) {
+      const [inserted] = await db.insert(companyConfig).values({ ...updates, updatedAt: new Date() } as any).returning();
+      return inserted;
+    }
+    const [updated] = await db.update(companyConfig).set({ ...updates, updatedAt: new Date() } as any).where(eq(companyConfig.id, configs[0].id)).returning();
+    return updated;
   }
 
   async getPasswordResetRequests(): Promise<PasswordResetRequest[]> {

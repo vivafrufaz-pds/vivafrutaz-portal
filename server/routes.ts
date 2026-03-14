@@ -1062,6 +1062,27 @@ export async function registerRoutes(
     res.json({ key: req.params.key, value });
   });
 
+  // ─── COMPANY CONFIG (Support, DANFE info) ─────────────────────
+  app.get('/api/company-config', async (req, res) => {
+    try {
+      const config = await storage.getCompanyConfig();
+      res.json(config || { companyName: 'VivaFrutaz' });
+    } catch (e) { res.status(500).json({ message: 'Error fetching config' }); }
+  });
+
+  app.patch('/api/company-config', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+      return res.status(403).json({ message: 'Sem permissão' });
+    }
+    try {
+      const updated = await storage.updateCompanyConfig(req.body);
+      await storage.createLog({ action: 'COMPANY_CONFIG_UPDATED', description: `Configuração de suporte atualizada por ${user.name}`, userId: user.id, userEmail: user.email, userRole: user.role });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // Admin order management
   app.patch('/api/orders/:id', async (req, res) => {
     try {

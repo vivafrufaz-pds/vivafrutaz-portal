@@ -426,3 +426,23 @@ export type LogisticsMaintenance = typeof logisticsMaintenance.$inferSelect;
 export type CompanyQuotation = typeof companyQuotations.$inferSelect;
 export type ContractScope = typeof contractScopes.$inferSelect;
 export type InsertContractScope = z.infer<typeof insertContractScopeSchema>;
+
+// ─── Configuração da Empresa ───────────────────────────────────
+export const companyConfig = pgTable("company_config", {
+  id: serial("id").primaryKey(),
+  companyName: text("company_name").notNull().default("VivaFrutaz"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  phone: text("phone"),
+  email: text("email"),
+  cnpj: text("cnpj"),
+  supportPhone: text("support_phone"),
+  supportEmail: text("support_email"),
+  supportMessage: text("support_message"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type CompanyConfig = typeof companyConfig.$inferSelect;
+export const insertCompanyConfigSchema = createInsertSchema(companyConfig).omit({ id: true, updatedAt: true });
+export type InsertCompanyConfig = z.infer<typeof insertCompanyConfigSchema>;

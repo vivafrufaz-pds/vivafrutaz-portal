@@ -52,6 +52,10 @@ export interface DanfeData {
     cnpj?: string | null;
     address?: string | null;
     phone?: string | null;
+    companyName?: string | null;
+    city?: string | null;
+    state?: string | null;
+    email?: string | null;
   };
 }
 
