@@ -173,3 +173,13 @@ export const mailerStatus = () => ({
   smtp: SMTP_HOST ? `${SMTP_HOST}:${SMTP_PORT}` : null,
   from: SMTP_FROM,
 });
+
+export async function sendTestEmail(toEmail: string) {
+  const html = wrapTemplate("Teste de envio de e-mail", `
+    <p>Este é um <strong>e-mail de teste</strong> enviado pelo sistema VivaFrutaz.</p>
+    <p>Se você recebeu esta mensagem, as configurações SMTP estão corretas e o envio automático de e-mails está funcionando.</p>
+    <p><strong>Servidor SMTP:</strong> ${SMTP_HOST}:${SMTP_PORT}</p>
+    <p><strong>Remetente:</strong> ${SMTP_FROM}</p>
+  `);
+  return sendMail(toEmail, "Teste de envio de e-mail do sistema VivaFrutaz.", html);
+}

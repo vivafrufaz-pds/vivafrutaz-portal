@@ -23,6 +23,7 @@ export const companies = pgTable("companies", {
   companyName: text("company_name").notNull(),
   contactName: text("contact_name").notNull(),
   email: text("email").notNull().unique(),
+  notificationEmail: text("notification_email"),
   password: text("password").notNull(),
   phone: text("phone"),
   cnpj: text("cnpj"),

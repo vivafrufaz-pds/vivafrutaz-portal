@@ -108,6 +108,9 @@ export interface IStorage {
   createLog(log: { action: string; description: string; userId?: number; companyId?: number; userEmail?: string; userRole?: string; ip?: string; level?: string }): Promise<void>;
   getLogs(limit?: number): Promise<SystemLog[]>;
   clearLogs(): Promise<void>;
+  deleteLogsByIds(ids: number[]): Promise<number>;
+  deleteLogsByDateRange(start: Date, end: Date): Promise<number>;
+  cleanOldLogs(olderThanDays?: number): Promise<number>;
   // Logistics
   getDrivers(): Promise<LogisticsDriver[]>;
   createDriver(data: Partial<LogisticsDriver>): Promise<LogisticsDriver>;
@@ -749,6 +752,28 @@ export class DatabaseStorage implements IStorage {
   // ─── Logs: delete all ─────────────────────────────────────────
   async clearLogs(): Promise<void> {
     await db.delete(systemLogs);
+  }
+
+  async deleteLogsByIds(ids: number[]): Promise<number> {
+    if (!ids.length) return 0;
+    const { inArray } = await import('drizzle-orm');
+    const result = await db.delete(systemLogs).where(inArray(systemLogs.id, ids));
+    return ids.length;
+  }
+
+  async deleteLogsByDateRange(start: Date, end: Date): Promise<number> {
+    const { and, gte: gteOp, lte: lteOp } = await import('drizzle-orm');
+    const before = await db.select().from(systemLogs).where(and(gteOp(systemLogs.createdAt, start), lteOp(systemLogs.createdAt, end)));
+    await db.delete(systemLogs).where(and(gteOp(systemLogs.createdAt, start), lteOp(systemLogs.createdAt, end)));
+    return before.length;
+  }
+
+  async cleanOldLogs(olderThanDays = 90): Promise<number> {
+    const { lt: ltOp } = await import('drizzle-orm');
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - olderThanDays);
+    const before = await db.select().from(systemLogs).where(ltOp(systemLogs.createdAt, cutoff));
+    await db.delete(systemLogs).where(ltOp(systemLogs.createdAt, cutoff));
+    return before.length;
   }
 }
 

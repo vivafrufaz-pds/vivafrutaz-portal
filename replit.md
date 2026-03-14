@@ -14,11 +14,12 @@ Key features:
 - User management admin page (CRUD for all staff users; active/inactive toggle + login block)
 - CNPJ + full delivery address on company profiles
 - Day-lock in cart: cannot switch day when cart has items
-- Automatic daily database backup (17:00) with up to 30 kept; admin download UI
-- Automatic email system (nodemailer SMTP): order placed, status change, password reset, special orders
-- Email status indicator on Backup page (shows if SMTP is configured)
+- Automatic daily database backup (17:00) with up to 30 kept; admin download UI; per-backup delete button; "Limpar Backups Antigos" (>30 days, POST /api/admin/backups/clean-old); SMTP test button (POST /api/admin/smtp-test)
+- Automatic email system (nodemailer SMTP): order placed, status change, password reset, special orders; sendTestEmail function
+- Email status indicator on Backup page (shows if SMTP is configured) + "Testar SMTP" button
 - Full Brazilian Portuguese (PT-BR) interface
-- Developer area (/admin/developer): System Logs (with advanced filters: event type/user/date range), Auditoria (GET /api/audit), AI Bug Detector, Saúde do Sistema (GET /api/health) tabs; "Limpar Histórico" button (DELETE /api/logs)
+- Developer area (/admin/developer): System Logs with advanced filters (event/user/date), row checkboxes + select all + bulk delete (DELETE /api/logs/selected), date range cleanup modal (DELETE /api/logs/by-date), export CSV (GET /api/logs/export), Auditoria, AI Bug Detector, Saúde do Sistema tabs; "Limpar Tudo" (DELETE /api/logs)
+- Auto-cleanup cron: logs older than 90 days auto-deleted daily at 03:00; backup cleanup API for logs older than 30 days
 - Módulo Logística (/admin/logistics): 4 tabs — Rotas (with driver/date filters + status update), Motoristas, Veículos, Manutenção; all with CSV/Excel export
 - Cotação de Empresas (/admin/quotations): full lifecycle management (PENDING→IN_ANALYSIS→APPROVED/REJECTED), price group assignment, logistics notes, CSV export
 - Dashboard Executivo (/admin/executive): KPI cards (day/week/month revenue, avg ticket, order counts), recharts (LineChart revenue 30d, BarChart orders by weekday), Top Empresas + Top Produtos progress bars, Clientes Inativos list, Previsão de Compra table, auto-generated alerts; access: ADMIN, DIRECTOR, FINANCEIRO, DEVELOPER

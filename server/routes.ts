@@ -7,9 +7,9 @@ import expressSession from "express-session";
 import MemoryStore from "memorystore";
 import {
   sendOrderPlaced, sendOrderStatusChanged, sendAdminNewOrder,
-  sendPasswordResetResolved, sendSpecialOrderResolved, mailerStatus
+  sendPasswordResetResolved, sendSpecialOrderResolved, mailerStatus, sendTestEmail
 } from "./mailer";
-import { scheduleBackups, runBackup, listBackups, getBackupPath } from "./backup";
+import { scheduleBackups, runBackup, listBackups, getBackupPath, deleteBackup, cleanOldBackups } from "./backup";
 import fs from "fs";
 import { db } from "./db";
 import { orders, orderItems, companies, products } from "@shared/schema";
@@ -34,6 +34,20 @@ export async function registerRoutes(
 
   // Start backup scheduler
   scheduleBackups();
+
+  // Auto-cleanup: remove logs older than 90 days, daily at 03:00
+  (async () => {
+    const cron = (await import('node-cron')).default;
+    cron.schedule('0 3 * * *', async () => {
+      try {
+        const removed = await storage.cleanOldLogs(90);
+        if (removed > 0) {
+          await storage.createLog({ action: 'CLEAN_LOGS', description: `Limpeza automática: ${removed} log(s) com mais de 90 dias removidos`, level: 'INFO' });
+          console.log(`[LOGS] Limpeza automática: ${removed} logs antigos removidos.`);
+        }
+      } catch (err) { console.error('[LOGS] Erro na limpeza automática de logs:', err); }
+    });
+  })();
 
   // Health check route
   app.get("/health", (req, res) => {
@@ -65,6 +79,51 @@ export async function registerRoutes(
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="${req.params.filename}"`);
     fs.createReadStream(filepath).pipe(res);
+  });
+
+  // --- Delete specific backup ---
+  app.delete('/api/admin/backups/:filename', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const ok = deleteBackup(req.params.filename);
+      if (!ok) return res.status(404).json({ message: 'Backup não encontrado' });
+      await storage.createLog({ action: 'BACKUP_DELETED', description: `Backup excluído: ${req.params.filename}`, userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN' });
+      res.json({ ok: true, message: 'Backup excluído.' });
+    } catch (e: any) { res.status(500).json({ message: e?.message }); }
+  });
+
+  // --- Clean old backups ---
+  app.post('/api/admin/backups/clean-old', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const removed = cleanOldBackups(30);
+      await storage.createLog({ action: 'BACKUPS_CLEANED', description: `${removed} backup(s) antigos removidos (>30 dias)`, userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN' });
+      res.json({ ok: true, removed, message: `${removed} backup(s) antigos removidos.` });
+    } catch (e: any) { res.status(500).json({ message: e?.message }); }
+  });
+
+  // --- Test SMTP email ---
+  app.post('/api/admin/smtp-test', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const status = mailerStatus();
+      if (!status.configured) return res.status(400).json({ message: 'SMTP não configurado. Configure SMTP_HOST, SMTP_USER e SMTP_PASS primeiro.' });
+      const toEmail = req.body.toEmail || process.env.SMTP_USER || '';
+      if (!toEmail) return res.status(400).json({ message: 'E-mail de destino não informado.' });
+      const result = await sendTestEmail(toEmail);
+      if (result.sent) {
+        await storage.createLog({ action: 'SMTP_TEST', description: `E-mail de teste enviado para ${toEmail}`, userId: user.id, userEmail: user.email, userRole: user.role, level: 'INFO' });
+        res.json({ ok: true, message: `E-mail de teste enviado para ${toEmail}` });
+      } else {
+        res.status(500).json({ ok: false, message: `Falha no envio: ${result.reason}` });
+      }
+    } catch (e: any) { res.status(500).json({ message: e?.message }); }
   });
 
   // --- Mailer status ---
@@ -1349,16 +1408,64 @@ export async function registerRoutes(
     try { await storage.deleteQuotation(parseInt(req.params.id)); res.json({ ok: true }); } catch (e) { res.status(500).json({ message: 'Erro' }); }
   });
 
-  // ─── LOGS: limpar ─────────────────────────────────────────────
+  // ─── LOGS: limpar todos ───────────────────────────────────────
   app.delete('/api/logs', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
     if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
+      const allLogs = await storage.getLogs(10000);
+      const count = allLogs.length;
       await storage.clearLogs();
-      await storage.createLog({ action: 'LOGS_CLEARED', description: 'Histórico de logs limpo', userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN' });
-      res.json({ ok: true });
+      await storage.createLog({ action: 'CLEAN_LOGS', description: `Histórico de logs limpo (${count} registros removidos)`, userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN' });
+      res.json({ ok: true, removed: count });
     } catch (e) { res.status(500).json({ message: 'Erro ao limpar logs' }); }
+  });
+
+  // ─── LOGS: excluir selecionados ───────────────────────────────
+  app.delete('/api/logs/selected', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ message: 'IDs inválidos.' });
+      const removed = await storage.deleteLogsByIds(ids.map(Number));
+      await storage.createLog({ action: 'CLEAN_LOGS', description: `${removed} log(s) selecionados removidos`, userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN' });
+      res.json({ ok: true, removed });
+    } catch (e) { res.status(500).json({ message: 'Erro ao excluir logs' }); }
+  });
+
+  // ─── LOGS: limpar por período ─────────────────────────────────
+  app.delete('/api/logs/by-date', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    try {
+      const { startDate, endDate } = req.body;
+      if (!startDate || !endDate) return res.status(400).json({ message: 'Datas inválidas.' });
+      const start = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T23:59:59');
+      const removed = await storage.deleteLogsByDateRange(start, end);
+      await storage.createLog({ action: 'CLEAN_LOGS', description: `${removed} log(s) removidos no período ${startDate} a ${endDate}`, userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN' });
+      res.json({ ok: true, removed });
+    } catch (e) { res.status(500).json({ message: 'Erro ao limpar logs por data' }); }
+  });
+
+  // ─── LOGS: exportar CSV ───────────────────────────────────────
+  app.get('/api/logs/export', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const user = await storage.getUser(req.session.userId);
+    if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    try {
+      const logs = await storage.getLogs(10000);
+      const headers = ['ID', 'Nível', 'Ação', 'Descrição', 'Usuário', 'E-mail', 'Papel', 'IP', 'Data/Hora'];
+      const rows = logs.map(l => [l.id, l.level || 'INFO', l.action, `"${(l.description || '').replace(/"/g, "'")}"`, l.userId || '', l.userEmail || '', l.userRole || '', l.ip || '', new Date(l.createdAt).toLocaleString('pt-BR')]);
+      const csv = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\r\n');
+      res.setHeader('Content-Type', 'text/csv;charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="logs_${new Date().toISOString().slice(0,10)}.csv"`);
+      res.send(csv);
+    } catch (e) { res.status(500).json({ message: 'Erro ao exportar logs' }); }
   });
 
   // ─── SAÚDE DO SISTEMA ─────────────────────────────────────────

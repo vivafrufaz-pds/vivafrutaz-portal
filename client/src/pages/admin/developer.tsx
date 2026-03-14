@@ -2,7 +2,8 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import {
   Shield, RefreshCw, AlertTriangle, CheckCircle, Info, LogIn, ShoppingCart, Edit,
-  Scan, Bug, Wrench, Zap, Play, Database, AlertCircle, Trash2, Activity, Server, Clock
+  Scan, Bug, Wrench, Zap, Play, Database, AlertCircle, Trash2, Activity, Server, Clock,
+  Download, Calendar, X
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
@@ -159,6 +160,10 @@ export default function DeveloperPage() {
   const [dateTo, setDateTo] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'logs' | 'audit' | 'ai' | 'health'>('logs');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [selectedLogs, setSelectedLogs] = useState<Set<number>>(new Set());
+  const [showDateCleanup, setShowDateCleanup] = useState(false);
+  const [cleanupStart, setCleanupStart] = useState("");
+  const [cleanupEnd, setCleanupEnd] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -184,11 +189,53 @@ export default function DeveloperPage() {
     mutationFn: () => apiRequest('DELETE', '/api/logs'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] });
+      setSelectedLogs(new Set());
       toast({ title: 'Histórico de logs limpo com sucesso!' });
       setShowClearConfirm(false);
     },
     onError: () => toast({ title: 'Erro ao limpar logs', variant: 'destructive' }),
   });
+
+  const deleteSelectedMut = useMutation({
+    mutationFn: async (ids: number[]) => {
+      const res = await fetch('/api/logs/selected', {
+        method: 'DELETE', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] });
+      setSelectedLogs(new Set());
+      toast({ title: `${data.removed} log(s) excluídos.` });
+    },
+    onError: (e: any) => toast({ title: e.message || 'Erro ao excluir logs', variant: 'destructive' }),
+  });
+
+  const cleanByDateMut = useMutation({
+    mutationFn: async ({ start, end }: { start: string; end: string }) => {
+      const res = await fetch('/api/logs/by-date', {
+        method: 'DELETE', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startDate: start, endDate: end }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.message); }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] });
+      setShowDateCleanup(false);
+      setCleanupStart(""); setCleanupEnd("");
+      toast({ title: `${data.removed} log(s) removidos no período.` });
+    },
+    onError: (e: any) => toast({ title: e.message || 'Erro ao limpar logs', variant: 'destructive' }),
+  });
+
+  const exportCSV = () => {
+    window.location.href = '/api/logs/export';
+  };
 
   const allActions = [...new Set((logs || []).map((l: any) => l.action))].sort();
   const allUsers = [...new Set((logs || []).map((l: any) => l.userEmail).filter(Boolean))].sort();
@@ -228,16 +275,26 @@ export default function DeveloperPage() {
           <h1 className="text-3xl font-display font-bold text-foreground">Área do Desenvolvedor</h1>
           <p className="text-muted-foreground mt-1">Logs, auditoria, saúde e detecção de bugs.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button data-testid="button-refresh-logs"
             onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] })}
             className="flex items-center gap-2 px-4 py-2.5 border-2 border-border rounded-xl text-sm font-bold hover:bg-muted transition-colors">
             <RefreshCw className="w-4 h-4" /> Atualizar
           </button>
+          <button data-testid="button-export-logs"
+            onClick={exportCSV}
+            className="flex items-center gap-2 px-4 py-2.5 border-2 border-border rounded-xl text-sm font-bold hover:bg-muted transition-colors">
+            <Download className="w-4 h-4" /> Exportar CSV
+          </button>
+          <button data-testid="button-cleanup-by-date"
+            onClick={() => setShowDateCleanup(true)}
+            className="flex items-center gap-2 px-4 py-2.5 border-2 border-orange-200 text-orange-600 rounded-xl text-sm font-bold hover:bg-orange-50 transition-colors">
+            <Calendar className="w-4 h-4" /> Limpar por Período
+          </button>
           {!showClearConfirm ? (
             <button onClick={() => setShowClearConfirm(true)} data-testid="button-clear-logs"
               className="flex items-center gap-2 px-4 py-2.5 border-2 border-red-200 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 transition-colors">
-              <Trash2 className="w-4 h-4" /> Limpar Histórico
+              <Trash2 className="w-4 h-4" /> Limpar Tudo
             </button>
           ) : (
             <div className="flex gap-2">
@@ -364,6 +421,28 @@ export default function DeveloperPage() {
             </div>
           </div>
 
+          {/* Bulk action toolbar */}
+          {selectedLogs.size > 0 && (
+            <div className="mb-3 p-3 bg-primary/10 border-2 border-primary/30 rounded-xl flex items-center gap-3 flex-wrap">
+              <span className="font-bold text-sm text-primary">{selectedLogs.size} log(s) selecionado(s)</span>
+              <button
+                data-testid="button-delete-selected-logs"
+                onClick={() => deleteSelectedMut.mutate([...selectedLogs])}
+                disabled={deleteSelectedMut.isPending}
+                className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deleteSelectedMut.isPending ? 'Excluindo...' : 'Excluir selecionados'}
+              </button>
+              <button
+                onClick={() => setSelectedLogs(new Set())}
+                className="flex items-center gap-1 px-3 py-1.5 border border-border rounded-lg text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-3.5 h-3.5" /> Cancelar seleção
+              </button>
+            </div>
+          )}
+
           <div className="bg-card rounded-2xl border border-border/50 premium-shadow overflow-hidden">
             <div className="p-5 border-b border-border/50 bg-muted/20 flex items-center gap-2">
               <Shield className="w-4 h-4 text-primary" />
@@ -382,6 +461,17 @@ export default function DeveloperPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border/50 bg-muted/10">
+                      <th className="p-3 w-8">
+                        <input type="checkbox"
+                          data-testid="checkbox-select-all-logs"
+                          checked={filtered.length > 0 && filtered.every((l: any) => selectedLogs.has(l.id))}
+                          onChange={e => {
+                            if (e.target.checked) setSelectedLogs(new Set(filtered.map((l: any) => l.id)));
+                            else setSelectedLogs(new Set());
+                          }}
+                          className="w-4 h-4 accent-primary cursor-pointer"
+                        />
+                      </th>
                       <th className="text-left p-3 font-semibold text-muted-foreground">Data/Hora</th>
                       <th className="text-left p-3 font-semibold text-muted-foreground">Nível</th>
                       <th className="text-left p-3 font-semibold text-muted-foreground">Ação</th>
@@ -393,8 +483,28 @@ export default function DeveloperPage() {
                   <tbody>
                     {filtered.map((log: any) => {
                       const lvl = LEVEL_CONFIG[log.level] || LEVEL_CONFIG.INFO;
+                      const isSelected = selectedLogs.has(log.id);
                       return (
-                        <tr key={log.id} data-testid={`row-log-${log.id}`} className="border-b border-border/30 hover:bg-muted/10 transition-colors">
+                        <tr key={log.id} data-testid={`row-log-${log.id}`}
+                          className={`border-b border-border/30 hover:bg-muted/10 transition-colors cursor-pointer ${isSelected ? 'bg-primary/5' : ''}`}
+                          onClick={() => {
+                            const next = new Set(selectedLogs);
+                            if (next.has(log.id)) next.delete(log.id); else next.add(log.id);
+                            setSelectedLogs(next);
+                          }}
+                        >
+                          <td className="p-3 w-8" onClick={e => e.stopPropagation()}>
+                            <input type="checkbox"
+                              data-testid={`checkbox-log-${log.id}`}
+                              checked={isSelected}
+                              onChange={() => {
+                                const next = new Set(selectedLogs);
+                                if (next.has(log.id)) next.delete(log.id); else next.add(log.id);
+                                setSelectedLogs(next);
+                              }}
+                              className="w-4 h-4 accent-primary cursor-pointer"
+                            />
+                          </td>
                           <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(log.createdAt)}</td>
                           <td className="p-3"><span className={`px-2 py-0.5 rounded-full text-xs font-bold ${lvl.color}`}>{lvl.label}</span></td>
                           <td className="p-3 font-mono text-xs font-bold text-foreground">{log.action}</td>
@@ -410,6 +520,54 @@ export default function DeveloperPage() {
             )}
           </div>
         </>
+      )}
+
+      {/* Date cleanup modal */}
+      {showDateCleanup && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex items-start gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+                <Calendar className="w-5 h-5 text-orange-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-lg text-foreground">Limpar Logs por Período</h3>
+                <p className="text-sm text-muted-foreground mt-1">Todos os logs no período selecionado serão excluídos permanentemente.</p>
+              </div>
+              <button onClick={() => setShowDateCleanup(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              <div>
+                <label className="block text-sm font-semibold mb-1">Data inicial</label>
+                <input type="date" data-testid="input-cleanup-start-date"
+                  value={cleanupStart} onChange={e => setCleanupStart(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Data final</label>
+                <input type="date" data-testid="input-cleanup-end-date"
+                  value={cleanupEnd} onChange={e => setCleanupEnd(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowDateCleanup(false)}
+                className="px-4 py-2 border-2 border-border rounded-xl font-bold text-sm hover:bg-muted transition-colors">
+                Cancelar
+              </button>
+              <button
+                data-testid="button-confirm-cleanup-by-date"
+                onClick={() => cleanByDateMut.mutate({ start: cleanupStart, end: cleanupEnd })}
+                disabled={cleanByDateMut.isPending || !cleanupStart || !cleanupEnd}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-xl font-bold text-sm hover:bg-orange-700 transition-colors disabled:opacity-50"
+              >
+                {cleanByDateMut.isPending ? 'Limpando...' : 'Confirmar limpeza'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Tab: Audit */}

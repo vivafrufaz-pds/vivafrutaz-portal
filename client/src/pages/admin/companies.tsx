@@ -24,6 +24,7 @@ const emptyForm = {
   contactName: "",
   email: "",
   password: "",
+  notificationEmail: "",
   phone: "",
   cnpj: "",
   addressStreet: "",
@@ -52,6 +53,7 @@ function companyToForm(c: Company): typeof emptyForm {
     contactName: c.contactName,
     email: c.email,
     password: "",
+    notificationEmail: ca.notificationEmail || "",
     phone: c.phone || "",
     cnpj: ca.cnpj || "",
     addressStreet: ca.addressStreet || "",
@@ -151,6 +153,7 @@ export default function CompaniesPage() {
       billingFormat: formData.billingFormat || null,
       paymentDates: formData.paymentDates || null,
       financialNotes: formData.financialNotes || null,
+      notificationEmail: formData.notificationEmail || null,
     };
 
     if (editingCompany) {
@@ -386,8 +389,9 @@ export default function CompaniesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold mb-1">Email (Login) *</label>
+                  <label className="block text-sm font-semibold mb-1">LOGIN (e-mail de acesso) *</label>
                   <input required type="email" value={formData.email} onChange={e => set("email", e.target.value)}
+                    data-testid="input-company-email"
                     className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" />
                 </div>
                 <div>
@@ -396,6 +400,17 @@ export default function CompaniesPage() {
                     placeholder="(11) 99999-9999"
                     className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-1">E-mail de Notificações</label>
+                  <input type="email" value={formData.notificationEmail} onChange={e => set("notificationEmail", e.target.value)}
+                    placeholder="notificacoes@empresa.com.br (opcional)"
+                    data-testid="input-company-notification-email"
+                    className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" />
+                  <p className="text-xs text-muted-foreground mt-1">E-mail alternativo para receber notificações de pedidos.</p>
+                </div>
+                <div />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

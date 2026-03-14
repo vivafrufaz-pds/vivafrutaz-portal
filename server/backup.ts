@@ -106,6 +106,32 @@ export function getBackupPath(filename: string): string | null {
   return fs.existsSync(filepath) ? filepath : null;
 }
 
+export function deleteBackup(filename: string): boolean {
+  const safe = path.basename(filename);
+  if (!safe.startsWith("backup_") || !safe.endsWith(".json")) return false;
+  const filepath = path.join(BACKUP_DIR, safe);
+  if (!fs.existsSync(filepath)) return false;
+  fs.unlinkSync(filepath);
+  console.log(`[BACKUP] Backup excluído: ${safe}`);
+  return true;
+}
+
+export function cleanOldBackups(olderThanDays = 30): number {
+  ensureBackupDir();
+  const cutoff = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
+  const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith("backup_") && f.endsWith(".json"));
+  let removed = 0;
+  for (const f of files) {
+    const stat = fs.statSync(path.join(BACKUP_DIR, f));
+    if (stat.mtimeMs < cutoff) {
+      fs.unlinkSync(path.join(BACKUP_DIR, f));
+      console.log(`[BACKUP] Backup antigo removido: ${f}`);
+      removed++;
+    }
+  }
+  return removed;
+}
+
 export function scheduleBackups() {
   ensureBackupDir();
   // Run every day at 17:00 (server time)
