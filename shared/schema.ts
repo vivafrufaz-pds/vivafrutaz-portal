@@ -376,6 +376,20 @@ export const insertSpecialOrderRequestSchema = createInsertSchema(specialOrderRe
 export const insertContractScopeSchema = createInsertSchema(contractScopes).omit({ id: true });
 export const insertPasswordResetRequestSchema = createInsertSchema(passwordResetRequests).omit({ id: true, createdAt: true, resolvedAt: true });
 
+// ─── DANFE Records ───────────────────────────────────────────
+export const danfeRecords = pgTable("danfe_records", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").references(() => orders.id).notNull(),
+  orderCode: text("order_code"),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  generatedByUserId: integer("generated_by_user_id"),
+  generatedByEmail: text("generated_by_email"),
+});
+
+export const insertDanfeRecordSchema = createInsertSchema(danfeRecords).omit({ id: true, generatedAt: true });
+export type DanfeRecord = typeof danfeRecords.$inferSelect;
+export type InsertDanfeRecord = z.infer<typeof insertDanfeRecordSchema>;
+
 // ─── Types ────────────────────────────────────────────────────
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;

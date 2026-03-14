@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -11,7 +11,8 @@ import {
   type PasswordResetRequest, type SystemLog, type TestOrder,
   type Task, type ClientIncident, type IncidentMessage, type InternalIncident,
   type LogisticsDriver, type LogisticsVehicle, type LogisticsRoute, type LogisticsMaintenance, type CompanyQuotation,
-  type ContractScope, type InsertContractScope
+  type ContractScope, type InsertContractScope,
+  type DanfeRecord, type InsertDanfeRecord
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -33,6 +34,10 @@ export interface IStorage {
   getContractScopes(companyId: number): Promise<ContractScope[]>;
   createContractScope(scope: InsertContractScope): Promise<ContractScope>;
   deleteContractScope(id: number): Promise<void>;
+
+  // DANFE Records
+  getDanfeRecordsByOrderId(orderId: number): Promise<DanfeRecord[]>;
+  createDanfeRecord(record: InsertDanfeRecord): Promise<DanfeRecord>;
 
   // Price Groups
   getPriceGroups(): Promise<PriceGroup[]>;
@@ -197,6 +202,15 @@ export class DatabaseStorage implements IStorage {
 
   async deleteContractScope(id: number): Promise<void> {
     await db.delete(contractScopes).where(eq(contractScopes.id, id));
+  }
+
+  async getDanfeRecordsByOrderId(orderId: number): Promise<DanfeRecord[]> {
+    return await db.select().from(danfeRecords).where(eq(danfeRecords.orderId, orderId)).orderBy(desc(danfeRecords.generatedAt));
+  }
+
+  async createDanfeRecord(record: InsertDanfeRecord): Promise<DanfeRecord> {
+    const [newRecord] = await db.insert(danfeRecords).values(record).returning();
+    return newRecord;
   }
 
   async getPriceGroups(): Promise<PriceGroup[]> {

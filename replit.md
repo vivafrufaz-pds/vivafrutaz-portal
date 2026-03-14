@@ -60,6 +60,8 @@ Preferred communication style: Simple, everyday language.
 - **Maintenance/Test Modes**: System-wide toggles with bypass for privileged roles.
 - **Tab-Level Permissions**: `tabPermissions jsonb` on users; admin UI checkboxes per-role; `Layout.tsx` filters sidebar; `ProtectedRoute` enforces per-tab access. ADMIN/DIRECTOR/DEVELOPER can configure.
 - **Order Date-Lock & Reopen Workflow**: New orders start as `CONFIRMED` (locked). Clients request reopening from history page; admins (ADMIN/DIRECTOR/OPERATIONS_MANAGER/LOGISTICS) approve/deny from `/admin/orders`; approved orders enter `OPEN_FOR_EDITING` state, client edits via `/client/order/edit/:id`, and finalizes back to `CONFIRMED`. Status flow: `CONFIRMED → REOPEN_REQUESTED → OPEN_FOR_EDITING → CONFIRMED`. Date-lock blocks duplicate delivery date orders on create page.
+- **Company Contract Types**: Companies can be `semanal`, `mensal`, `pontual`, or `contratual`. Contratual companies have a `contractModel` (fixo/variável/alternado) and a contract scope (`contract_scopes` table) defining weekly product quantities per day/week rotation. Managed via the "Escopo Contratual" tab in the admin companies panel.
+- **DANFE Internal PDF Generator**: Client-side PDF generation using jsPDF + jspdf-autotable + QRCode. Available in the expanded order view on `/admin/orders` for ADMIN, DIRECTOR, FINANCEIRO, LOGISTICS, DEVELOPER, OPERATIONS_MANAGER roles. Generates a styled DANFE Interno document with company info, client info, product table, totals, logistics info, and a QR code linking to the order. Generation history is logged in the `danfe_records` table. Library at `client/src/lib/danfe-generator.ts`.
 
 ## External Dependencies
 
@@ -79,6 +81,8 @@ Preferred communication style: Simple, everyday language.
 - `date-fns`: Date utility library.
 - `lucide-react`: Icon library.
 - `nanoid`: ID generation.
+- `jspdf`, `jspdf-autotable`: Client-side PDF generation for DANFE documents.
+- `qrcode`: QR code generation embedded in DANFE PDFs.
 
 ### Fonts
 - Plus Jakarta Sans (body) and Outfit (display/headings) via Google Fonts CDN.

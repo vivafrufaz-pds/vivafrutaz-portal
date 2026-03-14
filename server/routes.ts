@@ -2017,6 +2017,34 @@ export async function registerRoutes(
     } catch (e: any) { res.status(500).json({ message: e?.message }); }
   });
 
+  // ─── DANFE Records ───────────────────────────────────────────
+  app.get('/api/orders/:id/danfe-logs', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      const allowed = ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'LOGISTICS', 'DEVELOPER', 'OPERATIONS_MANAGER'];
+      if (!user || !allowed.includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const records = await storage.getDanfeRecordsByOrderId(Number(req.params.id));
+      res.json(records);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post('/api/orders/:id/danfe-log', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      const allowed = ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'LOGISTICS', 'DEVELOPER', 'OPERATIONS_MANAGER'];
+      if (!user || !allowed.includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const record = await storage.createDanfeRecord({
+        orderId: Number(req.params.id),
+        orderCode: req.body.orderCode ?? null,
+        generatedByUserId: user.id,
+        generatedByEmail: user.email,
+      });
+      res.status(201).json(record);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // ─── DASHBOARD EXECUTIVO ─────────────────────────────────────
   app.get('/api/executive-dashboard', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useOrders, useOrderDetail } from "@/hooks/use-ordering";
 import { useCompanies } from "@/hooks/use-admin";
 import { useProducts } from "@/hooks/use-catalog";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
@@ -11,9 +11,11 @@ import { ptBR } from "date-fns/locale";
 import {
   Receipt, Search, ChevronDown, ChevronUp, MessageSquare, Package, FileText,
   XCircle, Edit3, AlertTriangle, CheckCircle, StickyNote, Save, Trash2, Calendar,
-  Lock, Unlock, ThumbsUp, ThumbsDown, ClipboardEdit, Bell, Building2
+  Lock, Unlock, ThumbsUp, ThumbsDown, ClipboardEdit, Bell, Building2,
+  Download, Eye, History, Loader2, FileDown
 } from "lucide-react";
 import { api } from "@shared/routes";
+import { downloadDanfe, openDanfe, type DanfeData } from "@/lib/danfe-generator";
 
 type Order = any;
 
@@ -210,11 +212,178 @@ function CancelModal({ order, onClose, onConfirm }: { order: Order; onClose: () 
   );
 }
 
+// ─── DANFE Panel ──────────────────────────────────────────────
+function DanfePanel({ order, company, products }: { order: Order; company: any; products: any[] }) {
+  const { toast } = useToast();
+  const [generating, setGenerating] = useState<"download" | "view" | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const { data: danfeLogs, refetch: refetchLogs } = useQuery({
+    queryKey: ["/api/orders", order.id, "danfe-logs"],
+    queryFn: async () => {
+      const res = await fetch(`/api/orders/${order.id}/danfe-logs`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: showHistory,
+  });
+
+  const buildDanfeData = async (): Promise<DanfeData> => {
+    const detail = await fetch(`/api/orders/${order.id}`, { credentials: "include" }).then(r => r.json());
+    const items = (detail.items || []).map((item: any) => {
+      const product = products.find((p: any) => p.id === Number(item.productId));
+      return {
+        productName: product?.name || `Produto #${item.productId}`,
+        quantity: item.quantity,
+        unit: product?.unit || "un",
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+      };
+    });
+
+    return {
+      order: {
+        id: order.id,
+        orderCode: order.orderCode,
+        status: order.status,
+        orderDate: order.orderDate || order.createdAt,
+        deliveryDate: order.deliveryDate,
+        weekReference: order.weekReference,
+        totalValue: order.totalValue,
+        orderNote: order.orderNote,
+        adminNote: order.adminNote,
+        companyId: order.companyId,
+      },
+      items,
+      company: {
+        companyName: company?.companyName || "Cliente",
+        cnpj: company?.cnpj,
+        contactName: company?.contactName,
+        phone: company?.phone,
+        addressStreet: company?.addressStreet,
+        addressNumber: company?.addressNumber,
+        addressNeighborhood: company?.addressNeighborhood,
+        addressCity: company?.addressCity,
+        addressZip: company?.addressZip,
+      },
+      vivaFrutaz: {
+        cnpj: null,
+        address: null,
+        phone: null,
+      },
+    };
+  };
+
+  const logGeneration = async () => {
+    await fetch(`/api/orders/${order.id}/danfe-log`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderCode: order.orderCode }),
+    });
+    if (showHistory) refetchLogs();
+  };
+
+  const handleDownload = async () => {
+    setGenerating("download");
+    try {
+      const data = await buildDanfeData();
+      await downloadDanfe(data);
+      await logGeneration();
+      toast({ title: "DANFE gerado e baixado com sucesso!" });
+    } catch (e: any) {
+      toast({ title: "Erro ao gerar DANFE", description: e.message, variant: "destructive" });
+    } finally {
+      setGenerating(null);
+    }
+  };
+
+  const handleView = async () => {
+    setGenerating("view");
+    try {
+      const data = await buildDanfeData();
+      await openDanfe(data);
+      await logGeneration();
+    } catch (e: any) {
+      toast({ title: "Erro ao visualizar DANFE", description: e.message, variant: "destructive" });
+    } finally {
+      setGenerating(null);
+    }
+  };
+
+  return (
+    <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/80">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
+          <FileDown className="w-4 h-4 text-emerald-700" />
+        </div>
+        <p className="text-sm font-bold text-emerald-800 uppercase tracking-wider">DANFE Interno</p>
+        <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full font-medium">Documento Auxiliar de Entrega</span>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          data-testid={`button-danfe-download-${order.id}`}
+          onClick={handleDownload}
+          disabled={!!generating}
+          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50"
+        >
+          {generating === "download" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          {generating === "download" ? "Gerando..." : "Baixar DANFE"}
+        </button>
+        <button
+          data-testid={`button-danfe-view-${order.id}`}
+          onClick={handleView}
+          disabled={!!generating}
+          className="flex items-center gap-1.5 px-4 py-2 bg-white border-2 border-emerald-600 text-emerald-700 text-sm font-bold rounded-xl hover:bg-emerald-50 transition-colors disabled:opacity-50"
+        >
+          {generating === "view" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+          {generating === "view" ? "Abrindo..." : "Visualizar DANFE"}
+        </button>
+        <button
+          data-testid={`button-danfe-history-${order.id}`}
+          onClick={() => setShowHistory(!showHistory)}
+          className="flex items-center gap-1.5 px-4 py-2 bg-white border-2 border-border text-muted-foreground text-sm font-bold rounded-xl hover:bg-muted/30 transition-colors"
+        >
+          <History className="w-4 h-4" />
+          Histórico
+        </button>
+      </div>
+
+      {showHistory && (
+        <div className="mt-3 pt-3 border-t border-emerald-200">
+          <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-2">Histórico de geração</p>
+          {!danfeLogs ? (
+            <p className="text-xs text-muted-foreground">Carregando...</p>
+          ) : danfeLogs.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">Nenhum DANFE gerado para este pedido.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {danfeLogs.map((log: any) => (
+                <div key={log.id} className="flex items-center gap-3 px-3 py-1.5 bg-white rounded-lg border border-emerald-100 text-xs">
+                  <FileDown className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  <span className="text-foreground font-medium">
+                    {format(new Date(log.generatedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                  </span>
+                  {log.generatedByEmail && (
+                    <span className="text-muted-foreground">por {log.generatedByEmail.replace("@vivafrutaz.com", "")}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Order Row ────────────────────────────────────────────────
 function OrderRow({
-  order, companyName, products, onNoteEdit, onEdit, onCancel, onRestore, onPatchNimbi, onApproveReopen, onDenyReopen
+  order, company, companyName, products, onNoteEdit, onEdit, onCancel, onRestore, onPatchNimbi, onApproveReopen, onDenyReopen
 }: {
   order: Order;
+  company: any;
   companyName: string;
   products: any[];
   onNoteEdit: (order: Order) => void;
@@ -442,6 +611,8 @@ function OrderRow({
                   </div>
                 </div>
               )}
+              {/* DANFE Panel */}
+              <DanfePanel order={order} company={company} products={products} />
             </div>
           </td>
         </tr>
@@ -689,6 +860,7 @@ export default function OrdersPage() {
                     <OrderRow
                       key={order.id}
                       order={order}
+                      company={company || null}
                       companyName={company?.companyName || 'Desconhecido'}
                       products={products || []}
                       onNoteEdit={setNoteOrder}
