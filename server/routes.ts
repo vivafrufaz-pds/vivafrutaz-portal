@@ -273,11 +273,18 @@ export async function registerRoutes(
     } catch { res.status(500).json({ message: "Erro interno" }); }
   });
 
-  // Admin: approve/reject
+  // Admin: approve/reject (ADMIN, DIRECTOR, DEVELOPER only)
   app.put('/api/special-order-requests/:id', async (req, res) => {
     try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const actingUser = await storage.getUser(req.session.userId);
+      if (!actingUser || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(actingUser.role)) {
+        return res.status(403).json({ message: 'Apenas Administrador, Diretor ou Desenvolvedor podem aprovar/recusar pedidos pontuais.' });
+      }
       const id = Number(req.params.id);
       const { status, adminNote } = req.body;
+      if (!status || !['APPROVED', 'REJECTED'].includes(status)) return res.status(400).json({ message: 'Status inválido.' });
+      if (status === 'REJECTED' && !adminNote?.trim()) return res.status(400).json({ message: 'Informe o motivo da recusa.' });
       const allSpecial = await storage.getSpecialOrderRequests();
       const sr = allSpecial.find(r => r.id === id);
       const updated = await storage.updateSpecialOrderRequest(id, { status, adminNote, resolvedAt: new Date() });

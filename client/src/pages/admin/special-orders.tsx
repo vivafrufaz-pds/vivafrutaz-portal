@@ -6,7 +6,7 @@ import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Star, Building2, CheckCircle, XCircle, Clock, Eye, Calendar } from "lucide-react";
+import { Star, Building2, CheckCircle, XCircle, Clock, Eye, Calendar, AlertTriangle } from "lucide-react";
 
 type SpecialOrderRequest = {
   id: number; companyId: number; requestedDay: string; description: string;
@@ -20,12 +20,23 @@ const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = 
   REJECTED: { label: "Recusado", color: "bg-red-100 text-red-700", icon: XCircle },
 };
 
+const REJECTION_PRESETS = [
+  "Produto indisponível",
+  "Fora da janela de entrega",
+  "Estoque insuficiente",
+  "Pedido fora do contrato",
+  "Data solicitada inválida",
+  "Quantidade acima do limite",
+];
+
 export default function SpecialOrdersAdminPage() {
   const { data: companies } = useCompanies();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [reviewing, setReviewing] = useState<SpecialOrderRequest | null>(null);
-  const [adminNote, setAdminNote] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [approvalNote, setApprovalNote] = useState("");
+  const [action, setAction] = useState<'APPROVE' | 'REJECT' | null>(null);
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ['/api/special-order-requests'],
@@ -48,12 +59,28 @@ export default function SpecialOrdersAdminPage() {
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['/api/special-order-requests'] });
-      toast({ title: vars.status === 'APPROVED' ? "Pedido pontual aprovado!" : "Pedido recusado." });
+      toast({ title: vars.status === 'APPROVED' ? "Pedido pontual aprovado! E-mail enviado ao cliente." : "Pedido recusado. Cliente notificado por e-mail." });
       setReviewing(null);
-      setAdminNote("");
+      setRejectionReason("");
+      setApprovalNote("");
+      setAction(null);
     },
     onError: () => toast({ title: "Erro ao processar", variant: "destructive" }),
   });
+
+  const handleReject = () => {
+    if (!reviewing) return;
+    if (!rejectionReason.trim()) {
+      toast({ title: "Informe o motivo da recusa", variant: "destructive" });
+      return;
+    }
+    resolve.mutate({ id: reviewing.id, status: 'REJECTED', adminNote: rejectionReason.trim() });
+  };
+
+  const handleApprove = () => {
+    if (!reviewing) return;
+    resolve.mutate({ id: reviewing.id, status: 'APPROVED', adminNote: approvalNote.trim() || 'Pedido pontual aprovado!' });
+  };
 
   const pending = requests?.filter(r => r.status === 'PENDING') || [];
 
@@ -99,14 +126,15 @@ export default function SpecialOrdersAdminPage() {
                 <th className="px-6 py-4 font-semibold">Qtd.</th>
                 <th className="px-6 py-4 font-semibold">Data</th>
                 <th className="px-6 py-4 font-semibold">Status</th>
+                <th className="px-6 py-4 font-semibold">Nota / Motivo</th>
                 <th className="px-6 py-4 font-semibold"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {isLoading ? (
-                <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">Carregando...</td></tr>
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">Carregando...</td></tr>
               ) : !requests?.length ? (
-                <tr><td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
                   <Star className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
                   <p>Nenhum pedido pontual recebido.</p>
                 </td></tr>
@@ -116,7 +144,7 @@ export default function SpecialOrdersAdminPage() {
                   const status = STATUS_MAP[req.status] || { label: req.status, color: 'bg-muted text-muted-foreground', icon: Clock };
                   const StatusIcon = status.icon;
                   return (
-                    <tr key={req.id} className={`hover:bg-muted/10 transition-colors ${req.status === 'PENDING' ? 'border-l-4 border-yellow-400' : ''}`}>
+                    <tr key={req.id} data-testid={`special-order-row-${req.id}`} className={`hover:bg-muted/10 transition-colors ${req.status === 'PENDING' ? 'border-l-4 border-yellow-400' : req.status === 'REJECTED' ? 'border-l-4 border-red-400' : ''}`}>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -142,15 +170,22 @@ export default function SpecialOrdersAdminPage() {
                           <StatusIcon className="w-3 h-3" /> {status.label}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-sm max-w-xs">
+                        {req.adminNote ? (
+                          <span className={`${req.status === 'REJECTED' ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                            {req.adminNote}
+                          </span>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
                       <td className="px-6 py-4">
                         {req.status === 'PENDING' ? (
-                          <button onClick={() => { setReviewing(req); setAdminNote(""); }}
+                          <button
+                            data-testid={`button-review-special-order-${req.id}`}
+                            onClick={() => { setReviewing(req); setRejectionReason(""); setApprovalNote(""); setAction(null); }}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl font-bold text-xs hover:bg-primary/90 transition-colors">
                             <Eye className="w-3.5 h-3.5" /> Revisar
                           </button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">{req.adminNote || "—"}</span>
-                        )}
+                        ) : null}
                       </td>
                     </tr>
                   );
@@ -163,13 +198,13 @@ export default function SpecialOrdersAdminPage() {
 
       {/* Review modal */}
       {reviewing && (
-        <Modal isOpen onClose={() => setReviewing(null)} title="Revisar Pedido Pontual" maxWidth="max-w-lg">
+        <Modal isOpen onClose={() => { setReviewing(null); setAction(null); }} title="Revisar Pedido Pontual" maxWidth="max-w-lg">
           <div className="space-y-4">
             {(() => {
               const company = companies?.find(c => c.id === reviewing.companyId);
               return (
                 <div className="p-4 bg-muted/30 rounded-xl border border-border/50">
-                  <p className="font-bold text-foreground">{company?.companyName}</p>
+                  <p className="font-bold text-foreground">{company?.companyName || `Empresa #${reviewing.companyId}`}</p>
                   <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <span className="text-muted-foreground font-semibold">Dia desejado:</span>
@@ -193,24 +228,91 @@ export default function SpecialOrdersAdminPage() {
                 </div>
               );
             })()}
-            <div>
-              <label className="block text-sm font-semibold mb-1.5">Mensagem para o cliente</label>
-              <textarea value={adminNote} onChange={e => setAdminNote(e.target.value)} rows={3}
-                placeholder="Informe o cliente sobre a aprovação, data confirmada, preço estimado, ou motivo da recusa..."
-                className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none resize-none" />
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => resolve.mutate({ id: reviewing.id, status: 'REJECTED', adminNote: adminNote || 'Pedido pontual recusado.' })}
-                disabled={resolve.isPending}
-                className="flex-1 py-2.5 border-2 border-red-300 text-red-600 font-bold rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50">
-                <XCircle className="w-4 h-4 inline mr-1" /> Recusar
-              </button>
-              <button onClick={() => resolve.mutate({ id: reviewing.id, status: 'APPROVED', adminNote: adminNote || 'Pedido pontual aprovado!' })}
-                disabled={resolve.isPending}
-                className="flex-1 py-2.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50">
-                <CheckCircle className="w-4 h-4 inline mr-1" /> Aprovar
-              </button>
-            </div>
+
+            {/* Action selector */}
+            {!action && (
+              <div className="flex gap-3">
+                <button
+                  data-testid="button-select-reject"
+                  onClick={() => setAction('REJECT')}
+                  className="flex-1 py-2.5 border-2 border-red-300 text-red-600 font-bold rounded-xl hover:bg-red-50 transition-colors flex items-center justify-center gap-2">
+                  <XCircle className="w-4 h-4" /> Recusar Pedido
+                </button>
+                <button
+                  data-testid="button-select-approve"
+                  onClick={() => setAction('APPROVE')}
+                  className="flex-1 py-2.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
+                  <CheckCircle className="w-4 h-4" /> Aprovar Pedido
+                </button>
+              </div>
+            )}
+
+            {/* REJECT form */}
+            {action === 'REJECT' && (
+              <div className="space-y-3 border border-red-200 rounded-xl p-4 bg-red-50">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600" />
+                  <label className="text-sm font-bold text-red-800">Motivo da recusa (obrigatório)</label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {REJECTION_PRESETS.map(preset => (
+                    <button
+                      key={preset}
+                      onClick={() => setRejectionReason(preset)}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${rejectionReason === preset ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-700 border-red-200 hover:bg-red-100'}`}>
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  data-testid="input-rejection-reason"
+                  value={rejectionReason}
+                  onChange={e => setRejectionReason(e.target.value)}
+                  rows={3}
+                  placeholder="Descreva o motivo da recusa..."
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-red-200 focus:border-red-400 outline-none resize-none text-sm bg-white"
+                />
+                <div className="flex gap-3">
+                  <button onClick={() => setAction(null)} className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-muted transition-colors">
+                    Voltar
+                  </button>
+                  <button
+                    data-testid="button-confirm-reject"
+                    onClick={handleReject}
+                    disabled={resolve.isPending || !rejectionReason.trim()}
+                    className="flex-1 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 text-sm flex items-center justify-center gap-2">
+                    <XCircle className="w-4 h-4" /> Confirmar Recusa
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* APPROVE form */}
+            {action === 'APPROVE' && (
+              <div className="space-y-3 border border-green-200 rounded-xl p-4 bg-green-50">
+                <label className="block text-sm font-bold text-green-800">Mensagem para o cliente (opcional)</label>
+                <textarea
+                  data-testid="input-approval-note"
+                  value={approvalNote}
+                  onChange={e => setApprovalNote(e.target.value)}
+                  rows={3}
+                  placeholder="Ex.: Pedido aprovado! Entrega confirmada para quinta-feira. Preço estimado: R$ 250,00."
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-green-200 focus:border-green-400 outline-none resize-none text-sm bg-white"
+                />
+                <div className="flex gap-3">
+                  <button onClick={() => setAction(null)} className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-muted transition-colors">
+                    Voltar
+                  </button>
+                  <button
+                    data-testid="button-confirm-approve"
+                    onClick={handleApprove}
+                    disabled={resolve.isPending}
+                    className="flex-1 py-2 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50 text-sm flex items-center justify-center gap-2">
+                    <CheckCircle className="w-4 h-4" /> Confirmar Aprovação
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </Modal>
       )}

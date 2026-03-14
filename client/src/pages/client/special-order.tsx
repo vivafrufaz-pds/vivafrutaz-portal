@@ -168,9 +168,11 @@ export default function SpecialOrderPage() {
                     <p className="text-sm text-muted-foreground mt-1">Quantidade: {req.quantity}</p>
                     {req.observations && <p className="text-sm text-muted-foreground mt-1 italic">{req.observations}</p>}
                     {req.adminNote && (
-                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                        <p className="text-sm font-bold text-blue-800">Resposta VivaFrutaz:</p>
-                        <p className="text-sm text-blue-700 mt-0.5">{req.adminNote}</p>
+                      <div className={`mt-3 p-3 rounded-xl border ${req.status === 'REJECTED' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
+                        <p className={`text-sm font-bold ${req.status === 'REJECTED' ? 'text-red-800' : 'text-blue-800'}`}>
+                          {req.status === 'REJECTED' ? 'Motivo da recusa:' : 'Resposta VivaFrutaz:'}
+                        </p>
+                        <p className={`text-sm mt-0.5 ${req.status === 'REJECTED' ? 'text-red-700' : 'text-blue-700'}`}>{req.adminNote}</p>
                       </div>
                     )}
                   </div>
