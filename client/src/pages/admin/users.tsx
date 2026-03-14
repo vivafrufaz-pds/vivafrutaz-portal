@@ -4,15 +4,15 @@ import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code, Crown, BarChart3, KeyRound, AlertTriangle, Lock, Unlock } from "lucide-react";
+import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code, Crown, BarChart3, KeyRound, AlertTriangle, Lock, Unlock, FlaskConical } from "lucide-react";
 
 type AdminUser = { id: number; name: string; email: string; password: string; role: string; active: boolean; tabPermissions: string[] | null; };
 
 // All system tabs with labels and role access
 const ALL_TABS: { key: string; label: string; roles: string[] }[] = [
   { key: 'dashboard', label: 'Dashboard (Painel)', roles: ['ADMIN', 'DIRECTOR', 'LOGISTICS', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO'] },
-  { key: 'orders', label: 'Pedidos', roles: ['ADMIN', 'DIRECTOR', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'LOGISTICS'] },
-  { key: 'special-orders', label: 'Pedidos Pontuais', roles: ['ADMIN', 'DIRECTOR', 'OPERATIONS_MANAGER', 'DEVELOPER', 'LOGISTICS'] },
+  { key: 'orders', label: 'Pedidos', roles: ['ADMIN', 'DIRECTOR', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'LOGISTICS', 'SISTEMA_TESTE'] },
+  { key: 'special-orders', label: 'Pedidos Pontuais', roles: ['ADMIN', 'DIRECTOR', 'OPERATIONS_MANAGER', 'DEVELOPER', 'LOGISTICS', 'SISTEMA_TESTE'] },
   { key: 'companies', label: 'Empresas', roles: ['ADMIN', 'DIRECTOR'] },
   { key: 'products', label: 'Produtos', roles: ['ADMIN', 'DIRECTOR'] },
   { key: 'categories', label: 'Categorias', roles: ['ADMIN', 'DIRECTOR'] },
@@ -42,6 +42,7 @@ const ROLES = [
   { value: "FINANCEIRO", label: "Financeiro", desc: "Pedidos, painel financeiro e exportações", icon: BarChart3, color: "text-emerald-600 bg-emerald-100" },
   { value: "DEVELOPER", label: "Desenvolvedor", desc: "Acesso técnico + logs + backups", icon: Code, color: "text-purple-600 bg-purple-100" },
   { value: "LOGISTICS", label: "Logística", desc: "Pedidos, rotas, motoristas e ocorrências", icon: AlertTriangle, color: "text-orange-600 bg-orange-100" },
+  { value: "SISTEMA_TESTE", label: "Usuário de Teste", desc: "Acesso para testes — pedidos marcados como TESTE", icon: FlaskConical, color: "text-cyan-700 bg-cyan-100" },
 ];
 
 const PRIVILEGED_ROLES = ['ADMIN', 'DIRECTOR', 'DEVELOPER'];
