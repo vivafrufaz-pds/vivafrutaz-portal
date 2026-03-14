@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -14,7 +14,9 @@ import {
   type ContractScope, type InsertContractScope,
   type DanfeRecord, type InsertDanfeRecord,
   type CompanyConfig, type InsertCompanyConfig,
-  type Announcement, type InsertAnnouncement
+  type Announcement, type InsertAnnouncement,
+  type WasteControl, type InsertWasteControl,
+  type PurchasePlanStatus, type InsertPurchasePlanStatus
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -158,6 +160,15 @@ export interface IStorage {
   createQuotation(data: Partial<CompanyQuotation>): Promise<CompanyQuotation>;
   updateQuotation(id: number, data: Partial<CompanyQuotation>): Promise<CompanyQuotation>;
   deleteQuotation(id: number): Promise<void>;
+  // Waste Control
+  getWasteRecords(): Promise<WasteControl[]>;
+  createWasteRecord(data: InsertWasteControl): Promise<WasteControl>;
+  updateWasteRecord(id: number, data: Partial<InsertWasteControl>): Promise<WasteControl>;
+  deleteWasteRecord(id: number): Promise<void>;
+  // Purchase Plan Status
+  getPurchasePlanStatuses(weekRef: string): Promise<PurchasePlanStatus[]>;
+  upsertPurchasePlanStatus(data: Partial<InsertPurchasePlanStatus> & { weekRef: string; productName: string }): Promise<PurchasePlanStatus>;
+  deletePurchasePlanStatus(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -924,6 +935,43 @@ export class DatabaseStorage implements IStorage {
     const before = await db.select().from(systemLogs).where(ltOp(systemLogs.createdAt, cutoff));
     await db.delete(systemLogs).where(ltOp(systemLogs.createdAt, cutoff));
     return before.length;
+  }
+
+  // ─── Waste Control ────────────────────────────────────────────
+  async getWasteRecords(): Promise<WasteControl[]> {
+    return db.select().from(wasteControl).orderBy(desc(wasteControl.createdAt));
+  }
+  async createWasteRecord(data: InsertWasteControl): Promise<WasteControl> {
+    const [rec] = await db.insert(wasteControl).values(data).returning();
+    return rec;
+  }
+  async updateWasteRecord(id: number, data: Partial<InsertWasteControl>): Promise<WasteControl> {
+    const [rec] = await db.update(wasteControl).set(data).where(eq(wasteControl.id, id)).returning();
+    return rec;
+  }
+  async deleteWasteRecord(id: number): Promise<void> {
+    await db.delete(wasteControl).where(eq(wasteControl.id, id));
+  }
+
+  // ─── Purchase Plan Status ─────────────────────────────────────
+  async getPurchasePlanStatuses(weekRef: string): Promise<PurchasePlanStatus[]> {
+    return db.select().from(purchasePlanStatus).where(eq(purchasePlanStatus.weekRef, weekRef)).orderBy(purchasePlanStatus.productName);
+  }
+  async upsertPurchasePlanStatus(data: Partial<InsertPurchasePlanStatus> & { weekRef: string; productName: string }): Promise<PurchasePlanStatus> {
+    const existing = await db.select().from(purchasePlanStatus)
+      .where(and(eq(purchasePlanStatus.weekRef, data.weekRef), eq(purchasePlanStatus.productName, data.productName)));
+    if (existing.length > 0) {
+      const [rec] = await db.update(purchasePlanStatus)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(purchasePlanStatus.id, existing[0].id))
+        .returning();
+      return rec;
+    }
+    const [rec] = await db.insert(purchasePlanStatus).values({ ...data, updatedAt: new Date() } as any).returning();
+    return rec;
+  }
+  async deletePurchasePlanStatus(id: number): Promise<void> {
+    await db.delete(purchasePlanStatus).where(eq(purchasePlanStatus.id, id));
   }
 }
 

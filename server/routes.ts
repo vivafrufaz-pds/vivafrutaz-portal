@@ -2450,6 +2450,120 @@ export async function registerRoutes(
     res.status(204).end();
   });
 
+  // ─── Controle de Desperdício ──────────────────────────────────
+  app.get('/api/waste-control', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const records = await storage.getWasteRecords();
+    res.json(records);
+  });
+
+  app.post('/api/waste-control', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const user = await storage.getUser(session.userId);
+    try {
+      const rec = await storage.createWasteRecord({
+        ...req.body,
+        registeredBy: user?.name || 'Sistema',
+        registeredById: session.userId,
+      });
+      res.status(201).json(rec);
+    } catch (e: any) { res.status(400).json({ message: e.message }); }
+  });
+
+  app.patch('/api/waste-control/:id', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    try {
+      const rec = await storage.updateWasteRecord(Number(req.params.id), req.body);
+      res.json(rec);
+    } catch (e: any) { res.status(400).json({ message: e.message }); }
+  });
+
+  app.delete('/api/waste-control/:id', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    await storage.deleteWasteRecord(Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // ─── Planejamento de Compras ──────────────────────────────────
+  app.get('/api/purchase-planning', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    try {
+      const { startDate, endDate, weekRef } = req.query as Record<string, string>;
+      const allOrders = await storage.getOrders();
+
+      const filtered = allOrders.filter(o => {
+        if (['CANCELLED'].includes(o.status)) return false;
+        const d = new Date(o.deliveryDate).toISOString().split('T')[0];
+        if (startDate && d < startDate) return false;
+        if (endDate && d > endDate) return false;
+        return true;
+      });
+
+      // Aggregate items by product
+      const productMap: Map<string, { productId: number | null; productName: string; totalQty: number; unit: string; companies: { companyId: number; companyName: string; quantity: number; deliveryDate: string; orderId: number; orderCode: string }[] }> = new Map();
+
+      for (const order of filtered) {
+        const items = await storage.getOrderItems(order.id);
+        for (const item of items) {
+          const key = item.productName || `produto-${item.productId}`;
+          if (!productMap.has(key)) {
+            productMap.set(key, { productId: item.productId || null, productName: key, totalQty: 0, unit: item.unit || 'un', companies: [] });
+          }
+          const entry = productMap.get(key)!;
+          entry.totalQty += Number(item.quantity || 0);
+          entry.companies.push({
+            companyId: order.companyId,
+            companyName: order.companyName || `Empresa #${order.companyId}`,
+            quantity: Number(item.quantity || 0),
+            deliveryDate: new Date(order.deliveryDate).toISOString().split('T')[0],
+            orderId: order.id,
+            orderCode: order.orderCode,
+          });
+        }
+      }
+
+      const result = Array.from(productMap.values()).sort((a, b) => b.totalQty - a.totalQty);
+
+      // Attach plan statuses if weekRef provided
+      let statuses: any[] = [];
+      if (weekRef) {
+        statuses = await storage.getPurchasePlanStatuses(weekRef);
+      }
+
+      const statusMap = new Map(statuses.map(s => [s.productName, s]));
+      const enriched = result.map(p => ({ ...p, planStatus: statusMap.get(p.productName) || null }));
+
+      res.json({ items: enriched, totalOrders: filtered.length, period: { startDate, endDate } });
+    } catch (e: any) {
+      console.error('Purchase planning error:', e);
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post('/api/purchase-planning/status', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const user = await storage.getUser(session.userId);
+    try {
+      const rec = await storage.upsertPurchasePlanStatus({ ...req.body, updatedBy: user?.name || 'Sistema' });
+      res.json(rec);
+    } catch (e: any) { res.status(400).json({ message: e.message }); }
+  });
+
+  app.get('/api/purchase-planning/statuses', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const weekRef = req.query.weekRef as string;
+    if (!weekRef) return res.status(400).json({ message: 'weekRef required' });
+    const statuses = await storage.getPurchasePlanStatuses(weekRef);
+    res.json(statuses);
+  });
+
   // Seed DB Function
   await seedDatabase();
 

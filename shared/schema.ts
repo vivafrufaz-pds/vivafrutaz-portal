@@ -473,3 +473,41 @@ export const companyConfig = pgTable("company_config", {
 export type CompanyConfig = typeof companyConfig.$inferSelect;
 export const insertCompanyConfigSchema = createInsertSchema(companyConfig).omit({ id: true, updatedAt: true });
 export type InsertCompanyConfig = z.infer<typeof insertCompanyConfigSchema>;
+
+// ─── Controle de Desperdício ───────────────────────────────────
+export const wasteControl = pgTable("waste_control", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id"),
+  productName: text("product_name").notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
+  unit: text("unit").notNull().default("kg"),
+  reason: text("reason").notNull(), // expired | damaged | overripe | separation_error | logistics_error | other
+  notes: text("notes"),
+  date: date("date").notNull(),
+  registeredBy: text("registered_by").notNull(),
+  registeredById: integer("registered_by_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertWasteControlSchema = createInsertSchema(wasteControl).omit({ id: true, createdAt: true });
+export type WasteControl = typeof wasteControl.$inferSelect;
+export type InsertWasteControl = z.infer<typeof insertWasteControlSchema>;
+
+// ─── Planejamento de Compras — Status de Item ──────────────────
+export const purchasePlanStatus = pgTable("purchase_plan_status", {
+  id: serial("id").primaryKey(),
+  weekRef: text("week_ref").notNull(), // e.g. "2026-W12"
+  productId: integer("product_id"),
+  productName: text("product_name").notNull(),
+  status: text("status").notNull().default("PENDING"), // PENDING | BUYING | BOUGHT | UNAVAILABLE
+  supplier: text("supplier"),
+  expectedArrival: date("expected_arrival"),
+  notes: text("notes"),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPurchasePlanStatusSchema = createInsertSchema(purchasePlanStatus).omit({ id: true, createdAt: true, updatedAt: true });
+export type PurchasePlanStatus = typeof purchasePlanStatus.$inferSelect;
+export type InsertPurchasePlanStatus = z.infer<typeof insertPurchasePlanStatusSchema>;

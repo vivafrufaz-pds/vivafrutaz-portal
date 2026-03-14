@@ -1,8 +1,11 @@
+import { useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useOrders } from "@/hooks/use-ordering";
 import { useCompanies } from "@/hooks/use-admin";
 import { Layout } from "@/components/Layout";
-import { ShoppingCart, Users, TrendingUp, Package, Wrench, CheckCircle2, AlertTriangle, FlaskConical, Shield } from "lucide-react";
+import { ShoppingCart, Users, TrendingUp, Package, Wrench, CheckCircle2, AlertTriangle, FlaskConical, Shield, CalendarDays, Filter } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -273,20 +276,80 @@ function SystemStatusBanner() {
   );
 }
 
+/* ── Date helpers ────────────────────────────────────────────── */
+function toDateStr(d: Date) { return d.toISOString().split('T')[0]; }
+function getPreset(preset: string): { start: string; end: string } {
+  const now = new Date();
+  const today = toDateStr(now);
+  switch (preset) {
+    case 'today': return { start: today, end: today };
+    case 'week': {
+      const day = now.getDay();
+      const diff = (day === 0 ? -6 : 1 - day);
+      const mon = new Date(now); mon.setDate(now.getDate() + diff);
+      const fri = new Date(mon); fri.setDate(mon.getDate() + 6);
+      return { start: toDateStr(mon), end: toDateStr(fri) };
+    }
+    case 'month': {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { start: toDateStr(start), end: toDateStr(end) };
+    }
+    case 'year': {
+      return { start: `${now.getFullYear()}-01-01`, end: `${now.getFullYear()}-12-31` };
+    }
+    default: return { start: toDateStr(new Date(now.getFullYear(), now.getMonth(), 1)), end: today };
+  }
+}
+
 /* ── Main dashboard ──────────────────────────────────────────── */
 export default function AdminDashboard() {
   const { user } = useAuth();
   const { data: orders } = useOrders();
   const { data: companies } = useCompanies();
+  const today = toDateStr(new Date());
 
-  const totalValue = orders?.reduce((acc, o) => acc + Number(o.totalValue), 0) || 0;
+  const [preset, setPreset] = useState<string>('month');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
+
+  const dateRange = useMemo(() => {
+    if (preset === 'custom' && customStart && customEnd) return { start: customStart, end: customEnd };
+    return getPreset(preset);
+  }, [preset, customStart, customEnd]);
+
+  const filteredOrders = useMemo(() => {
+    if (!orders) return [];
+    return orders.filter(o => {
+      const d = new Date(o.deliveryDate).toISOString().split('T')[0];
+      return d >= dateRange.start && d <= dateRange.end && o.status !== 'CANCELLED';
+    });
+  }, [orders, dateRange]);
+
+  const pendingDeliveries = useMemo(() =>
+    filteredOrders.filter(o => {
+      const d = new Date(o.deliveryDate).toISOString().split('T')[0];
+      return d >= today && ['CONFIRMED', 'OPEN_FOR_EDITING', 'ACTIVE'].includes(o.status);
+    }).length, [filteredOrders, today]);
+
+  const totalValue = filteredOrders.reduce((acc, o) => acc + Number(o.totalValue), 0);
   const activeCompanies = companies?.filter((c) => c.active).length || 0;
+  const uniqueClients = new Set(filteredOrders.map(o => o.companyId)).size;
+
+  const presets = [
+    { key: 'today', label: 'Hoje' },
+    { key: 'week', label: 'Esta Semana' },
+    { key: 'month', label: 'Este Mês' },
+    { key: 'year', label: 'Este Ano' },
+    { key: 'custom', label: 'Período' },
+  ];
 
   const stats = [
-    { label: "Total de Pedidos", value: orders?.length || 0, icon: ShoppingCart, color: "text-blue-500", bg: "bg-blue-500/10" },
-    { label: "Receita Total", value: `R$ ${totalValue.toFixed(2)}`, icon: TrendingUp, color: "text-green-500", bg: "bg-green-500/10" },
+    { label: "Pedidos no Período", value: filteredOrders.length, icon: ShoppingCart, color: "text-blue-500", bg: "bg-blue-500/10" },
+    { label: "Receita no Período", value: `R$ ${totalValue.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`, icon: TrendingUp, color: "text-green-500", bg: "bg-green-500/10" },
     { label: "Clientes Ativos", value: activeCompanies, icon: Users, color: "text-orange-500", bg: "bg-orange-500/10" },
-    { label: "Entregas Pendentes", value: orders?.length || 0, icon: Package, color: "text-purple-500", bg: "bg-purple-500/10" },
+    { label: "Entregas Pendentes", value: pendingDeliveries, icon: Package, color: "text-purple-500", bg: "bg-purple-500/10" },
   ];
 
   const canToggleMaintenance = ["ADMIN", "DIRECTOR", "DEVELOPER"].includes(user?.role || "");
@@ -296,11 +359,42 @@ export default function AdminDashboard() {
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">Olá, {user?.name}!</h1>
-          <p className="text-muted-foreground mt-1 text-lg">Veja o resumo de hoje no VivaFrutaz.</p>
+          <p className="text-muted-foreground mt-1 text-lg">Veja o resumo do VivaFrutaz.</p>
         </div>
 
         {/* System status banner — always visible for allowed roles */}
         {canToggleMaintenance && <SystemStatusBanner />}
+
+        {/* Analytics Filter Bar */}
+        <div className="bg-card rounded-2xl border border-border/50 premium-shadow p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Filter className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">Filtro Analítico</span>
+            <span className="text-xs text-muted-foreground ml-auto">{new Date(dateRange.start + 'T12:00').toLocaleDateString('pt-BR')} – {new Date(dateRange.end + 'T12:00').toLocaleDateString('pt-BR')}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {presets.map(p => (
+              <Button key={p.key} size="sm" variant={preset === p.key ? "default" : "outline"}
+                className={`h-8 text-xs ${preset === p.key ? 'bg-primary text-white' : ''}`}
+                onClick={() => { setPreset(p.key); if (p.key === 'custom') setShowCustom(true); else setShowCustom(false); }}
+                data-testid={`btn-preset-${p.key}`}>
+                <CalendarDays className="w-3 h-3 mr-1" />{p.label}
+              </Button>
+            ))}
+          </div>
+          {showCustom && (
+            <div className="flex gap-3 mt-3 items-center">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">De</span>
+                <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-8 text-xs w-36" data-testid="input-custom-start" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Até</span>
+                <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-8 text-xs w-36" data-testid="input-custom-end" />
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -310,6 +404,9 @@ export default function AdminDashboard() {
                 <div>
                   <p className="text-sm font-semibold text-muted-foreground">{stat.label}</p>
                   <p className="text-3xl font-display font-bold mt-2 text-foreground">{stat.value}</p>
+                  {stat.label === "Pedidos no Período" && uniqueClients > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">{uniqueClients} cliente(s) distintos</p>
+                  )}
                 </div>
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stat.bg}`}>
                   <stat.icon className={`w-6 h-6 ${stat.color}`} />
@@ -331,13 +428,29 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <div className="bg-card rounded-2xl p-8 border border-border/50 premium-shadow flex items-center justify-center min-h-[200px]">
-          <div className="text-center">
-            <Package className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-            <h3 className="text-xl font-bold text-foreground">Sistema Ativo</h3>
-            <p className="text-muted-foreground mt-2">Use o menu lateral para gerenciar catálogo, clientes e pedidos.</p>
+        {/* Recent pending deliveries */}
+        {filteredOrders.length > 0 && (
+          <div className="bg-card rounded-2xl border border-border/50 premium-shadow p-6">
+            <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
+              <Package className="w-5 h-5 text-primary" /> Pedidos no Período ({filteredOrders.length})
+            </h2>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {filteredOrders.slice(0, 10).map(o => (
+                <div key={o.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+                  <div>
+                    <p className="text-sm font-semibold">{o.orderCode || `#${o.id}`}</p>
+                    <p className="text-xs text-muted-foreground">{o.companyName} — {new Date(o.deliveryDate).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-green-600">R$ {Number(o.totalValue).toFixed(2).replace('.', ',')}</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${o.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' : o.status === 'CANCELLED' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>{o.status}</span>
+                  </div>
+                </div>
+              ))}
+              {filteredOrders.length > 10 && <p className="text-xs text-center text-muted-foreground pt-2">+ {filteredOrders.length - 10} outros pedidos</p>}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </Layout>
   );

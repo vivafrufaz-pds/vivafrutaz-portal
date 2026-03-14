@@ -306,12 +306,27 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   }
 
   // ── Notes ──────────────────────────────────────────────────
-  if (data.order.orderNote) {
+  if (data.order.orderNote || data.order.adminNote) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...DARK);
+    doc.text("Observações da Nota:", margin, y);
+    y += 5;
     doc.setFontSize(7.5);
-    doc.setFont("helvetica", "italic");
-    doc.setTextColor([120, 120, 130] as unknown as string);
-    doc.text(`Observação do pedido: ${data.order.orderNote}`, margin, y);
-    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor([80, 80, 90] as unknown as string);
+    if (data.order.orderNote) {
+      const lines = doc.splitTextToSize(`Obs. do pedido: ${data.order.orderNote}`, pageW - margin * 2);
+      doc.text(lines, margin, y);
+      y += lines.length * 5;
+    }
+    if (data.order.adminNote) {
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor([180, 60, 60] as unknown as string);
+      const alines = doc.splitTextToSize(`Obs. administrativa: ${data.order.adminNote}`, pageW - margin * 2);
+      doc.text(alines, margin, y);
+      y += alines.length * 5;
+    }
   }
 
   // ── Footer ─────────────────────────────────────────────────

@@ -6,7 +6,7 @@ import {
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
-  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone
+  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag
 } from 'lucide-react';
 import { VirtualAssistant } from './VirtualAssistant';
 
@@ -46,6 +46,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/executive', label: 'Dashboard Executivo', icon: TrendingUp, roles: ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER'], tabKey: 'executive' },
     { href: '/admin/support', label: 'Configuração de Suporte', icon: ShieldCheck, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'support' },
     { href: '/admin/announcements', label: 'Painel de Avisos', icon: Megaphone, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'announcements' },
+    { href: '/admin/waste-control', label: 'Controle de Desperdício', icon: TrendingDown, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'], tabKey: 'waste-control' },
+    { href: '/admin/purchase-planning', label: 'Planejamento de Compras', icon: ShoppingBag, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'PURCHASE_MANAGER', 'OPERATIONS_MANAGER'], tabKey: 'purchase-planning' },
   ];
 
   const clientLinks = [

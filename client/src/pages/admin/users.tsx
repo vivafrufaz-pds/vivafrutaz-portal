@@ -33,6 +33,8 @@ const ALL_TABS: { key: string; label: string; roles: string[] }[] = [
   { key: 'developer', label: 'Área do Desenvolvedor', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'] },
   { key: 'executive', label: 'Dashboard Executivo', roles: ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER'] },
   { key: 'announcements', label: 'Painel de Avisos', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'] },
+  { key: 'waste-control', label: 'Controle de Desperdício', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'] },
+  { key: 'purchase-planning', label: 'Planejamento de Compras', roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'PURCHASE_MANAGER', 'OPERATIONS_MANAGER'] },
 ];
 
 const ROLES = [

@@ -145,7 +145,7 @@ function ContractScopeManager({ company, contractModel }: { company: any | null;
         productId: Number(newItem.productId),
         quantity: Number(newItem.quantity),
       };
-      if (contractModel === 'alternado' && newItem.weekNumber) {
+      if ((contractModel === 'alternado' || contractModel === 'rotacao4') && newItem.weekNumber) {
         body.weekNumber = Number(newItem.weekNumber);
       }
       const res = await fetch(`/api/companies/${company.id}/contract-scopes`, {
@@ -177,15 +177,25 @@ function ContractScopeManager({ company, contractModel }: { company: any | null;
     );
   }
 
-  // Group scopes by dayOfWeek (and weekNumber for alternated)
+  // Group scopes by dayOfWeek (and weekNumber for alternated/rotacao4)
   const grouped = (scopes || []).reduce((acc: any, s: any) => {
-    const key = contractModel === 'alternado' ? `${s.dayOfWeek}__week${s.weekNumber || 0}` : s.dayOfWeek;
+    const key = (contractModel === 'alternado' || contractModel === 'rotacao4') ? `${s.dayOfWeek}__week${s.weekNumber || 0}` : s.dayOfWeek;
     if (!acc[key]) acc[key] = [];
     acc[key].push(s);
     return acc;
   }, {} as Record<string, any[]>);
 
   const isAlternado = contractModel === 'alternado';
+  const isRotacao4 = contractModel === 'rotacao4';
+  const hasWeekRotation = isAlternado || isRotacao4;
+
+  const WEEK_LABELS: Record<string, string> = {
+    week0: 'Todas as semanas',
+    week1: 'Semana 1 (Lista A)',
+    week2: 'Semana 2 (Lista B)',
+    week3: 'Semana 3 (Lista C)',
+    week4: 'Semana 4 (Lista D)',
+  };
 
   return (
     <div className="space-y-4">
@@ -196,6 +206,7 @@ function ContractScopeManager({ company, contractModel }: { company: any | null;
           {contractModel === 'fixo' ? 'Contrato Fixo — Escopo imutável por semana'
            : contractModel === 'variavel' ? 'Contrato Variável — Escopo base com ajustes permitidos'
            : contractModel === 'alternado' ? 'Contrato Alternado — Rotação quinzenal (Semana 1 / Semana 2)'
+           : contractModel === 'rotacao4' ? 'Rotação 4 Semanas — Ciclo mensal (Semanas 1–4)'
            : 'Defina o modelo de contrato na aba Configurações'}
         </p>
       </div>
@@ -209,12 +220,16 @@ function ContractScopeManager({ company, contractModel }: { company: any | null;
             <option value="">Dia da semana...</option>
             {WEEK_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
-          {isAlternado && (
+          {hasWeekRotation && (
             <select data-testid="select-scope-week" value={newItem.weekNumber} onChange={e => setNewItem(p => ({ ...p, weekNumber: e.target.value }))}
               className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
               <option value="">Semana...</option>
               <option value="1">Semana 1 (Lista A)</option>
               <option value="2">Semana 2 (Lista B)</option>
+              {isRotacao4 && <>
+                <option value="3">Semana 3 (Lista C)</option>
+                <option value="4">Semana 4 (Lista D)</option>
+              </>}
             </select>
           )}
           <select data-testid="select-scope-product" value={newItem.productId} onChange={e => setNewItem(p => ({ ...p, productId: e.target.value }))}
@@ -252,7 +267,7 @@ function ContractScopeManager({ company, contractModel }: { company: any | null;
                   <CalendarDays className="w-4 h-4 text-primary" />
                   <p className="font-bold text-sm text-foreground">{day}</p>
                   {weekLabel && <span className="px-2 py-0.5 bg-secondary/20 text-secondary text-xs font-bold rounded-full">
-                    {weekLabel === 'week1' ? 'Semana 1 (Lista A)' : weekLabel === 'week2' ? 'Semana 2 (Lista B)' : 'Todas as semanas'}
+                    {WEEK_LABELS[weekLabel] || weekLabel}
                   </span>}
                 </div>
                 <div className="divide-y divide-border/50">
@@ -758,6 +773,7 @@ export default function CompaniesPage() {
                         { value: "fixo", label: "Contrato Fixo", desc: "Escopo fixo, pedidos automáticos" },
                         { value: "variavel", label: "Contrato Variável", desc: "Escopo base com ajustes permitidos" },
                         { value: "alternado", label: "Contrato Alternado", desc: "Rotação quinzenal (Lista A / Lista B)" },
+                        { value: "rotacao4", label: "Rotação 4 Semanas", desc: "Ciclo mensal (Listas A-D)" },
                       ].map(opt => (
                         <button key={opt.value} type="button" data-testid={`button-contractmodel-${opt.value}`} onClick={() => set("contractModel", opt.value)}
                           className={`flex-1 min-w-[120px] px-4 py-3 rounded-xl font-bold text-sm border-2 transition-all text-left ${formData.contractModel === opt.value ? 'bg-secondary text-secondary-foreground border-secondary' : 'border-border text-muted-foreground hover:border-secondary/50'}`}>

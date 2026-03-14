@@ -234,10 +234,12 @@ function RoutesTab() {
   const [filterDriver, setFilterDriver] = useState('ALL');
   const [filterDate, setFilterDate] = useState('');
   const [form, setForm] = useState({ name: '', driverId: '', driverName: '', vehicleId: '', vehiclePlate: '', deliveryDate: '', notes: '', companyNames: '', startTime: '', endTime: '' });
+  const [companyPickerVal, setCompanyPickerVal] = useState('_none');
 
   const { data: routes = [], isLoading } = useQuery<LogisticsRoute[]>({ queryKey: ['/api/logistics/routes'] });
   const { data: drivers = [] } = useQuery<LogisticsDriver[]>({ queryKey: ['/api/logistics/drivers'] });
   const { data: vehicles = [] } = useQuery<LogisticsVehicle[]>({ queryKey: ['/api/logistics/vehicles'] });
+  const { data: allCompanies = [] } = useQuery<any[]>({ queryKey: ['/api/companies'] });
 
   const saveMut = useMutation({
     mutationFn: (data: any) => editItem
@@ -257,8 +259,8 @@ function RoutesTab() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/logistics/routes'] }); toast({ title: 'Rota excluída' }); },
   });
 
-  const openCreate = () => { setEditItem(undefined); setForm({ name: '', driverId: '', driverName: '', vehicleId: '', vehiclePlate: '', deliveryDate: '', notes: '', companyNames: '', startTime: '', endTime: '' }); setShowForm(true); };
-  const openEdit = (r: LogisticsRoute) => { setEditItem(r); setForm({ name: r.name, driverId: r.driverId?.toString() || '', driverName: r.driverName || '', vehicleId: r.vehicleId?.toString() || '', vehiclePlate: r.vehiclePlate || '', deliveryDate: r.deliveryDate || '', notes: r.notes || '', companyNames: r.companyNames || '', startTime: r.startTime || '', endTime: r.endTime || '' }); setShowForm(true); };
+  const openCreate = () => { setEditItem(undefined); setForm({ name: '', driverId: '', driverName: '', vehicleId: '', vehiclePlate: '', deliveryDate: '', notes: '', companyNames: '', startTime: '', endTime: '' }); setCompanyPickerVal('_none'); setShowForm(true); };
+  const openEdit = (r: LogisticsRoute) => { setEditItem(r); setForm({ name: r.name, driverId: r.driverId?.toString() || '', driverName: r.driverName || '', vehicleId: r.vehicleId?.toString() || '', vehiclePlate: r.vehiclePlate || '', deliveryDate: r.deliveryDate || '', notes: r.notes || '', companyNames: r.companyNames || '', startTime: r.startTime || '', endTime: r.endTime || '' }); setCompanyPickerVal('_none'); setShowForm(true); };
 
   const filtered = routes.filter(r => {
     if (filterDriver !== 'ALL' && r.driverId?.toString() !== filterDriver) return false;
@@ -376,7 +378,32 @@ function RoutesTab() {
                 <Input type="time" value={form.startTime} onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))} />
               </div>
             </div>
-            <div><Label>Empresas na rota</Label><Input value={form.companyNames} onChange={e => setForm(p => ({ ...p, companyNames: e.target.value }))} placeholder="ex: Empresa A, Empresa B" /></div>
+            <div>
+              <Label>Empresas na rota</Label>
+              <div className="space-y-2 mt-1">
+                <Select value={companyPickerVal} onValueChange={v => {
+                  if (v === '_none') return;
+                  const co = allCompanies.find((c: any) => c.id.toString() === v);
+                  if (!co) return;
+                  const addr = [co.addressStreet, co.addressNumber, co.addressNeighborhood, co.addressCity].filter(Boolean).join(', ');
+                  toast({ title: `${co.companyName} adicionada${addr ? ` — ${addr}` : ''}` });
+                  setForm(p => ({ ...p, companyNames: p.companyNames ? p.companyNames + ', ' + co.companyName : co.companyName }));
+                  setCompanyPickerVal('_none');
+                }}>
+                  <SelectTrigger data-testid="select-add-company-to-route">
+                    <SelectValue placeholder="+ Adicionar empresa da lista..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Selecionar empresa...</SelectItem>
+                    {(allCompanies as any[]).filter(c => c.active).map(c => {
+                      const addr = [c.addressStreet, c.addressNumber, c.addressCity].filter(Boolean).join(', ');
+                      return <SelectItem key={c.id} value={c.id.toString()}>{c.companyName}{addr ? ` — ${addr}` : ''}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+                <Input value={form.companyNames} onChange={e => setForm(p => ({ ...p, companyNames: e.target.value }))} placeholder="ex: Empresa A, Empresa B" data-testid="input-route-companies" />
+              </div>
+            </div>
             <div><Label>Observações</Label><Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} /></div>
           </div>
           <DialogFooter>

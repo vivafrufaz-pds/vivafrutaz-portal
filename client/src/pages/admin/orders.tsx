@@ -296,8 +296,8 @@ function DanfePanel({ order, company, products }: { order: Order; company: any; 
     try {
       const data = await buildDanfeData();
       await downloadDanfe(data);
-      await logGeneration();
       toast({ title: "DANFE gerado e baixado com sucesso!" });
+      logGeneration().catch(() => {});
     } catch (e: any) {
       toast({ title: "Erro ao gerar DANFE", description: e.message, variant: "destructive" });
     } finally {
@@ -310,7 +310,8 @@ function DanfePanel({ order, company, products }: { order: Order; company: any; 
     try {
       const data = await buildDanfeData();
       await openDanfe(data);
-      await logGeneration();
+      toast({ title: "DANFE aberto com sucesso!" });
+      logGeneration().catch(() => {});
     } catch (e: any) {
       toast({ title: "Erro ao visualizar DANFE", description: e.message, variant: "destructive" });
     } finally {

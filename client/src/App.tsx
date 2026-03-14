@@ -47,6 +47,8 @@ import AdminInternalIncidents from "@/pages/admin/internal-incidents";
 import AdminLogistics from "@/pages/admin/logistics";
 import AdminQuotations from "@/pages/admin/quotations";
 import AdminExecutiveDashboard from "@/pages/admin/executive-dashboard";
+import AdminWasteControl from "@/pages/admin/waste-control";
+import AdminPurchasePlanning from "@/pages/admin/purchase-planning";
 
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
@@ -253,6 +255,12 @@ function Router() {
       </Route>
       <Route path="/admin/executive">
         {() => <ProtectedRoute component={AdminExecutiveDashboard} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER']} tabKey="executive" />}
+      </Route>
+      <Route path="/admin/waste-control">
+        {() => <ProtectedRoute component={AdminWasteControl} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS']} tabKey="waste-control" />}
+      </Route>
+      <Route path="/admin/purchase-planning">
+        {() => <ProtectedRoute component={AdminPurchasePlanning} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'PURCHASE_MANAGER', 'OPERATIONS_MANAGER']} tabKey="purchase-planning" />}
       </Route>
 
       {/* Client Routes */}
