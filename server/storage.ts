@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -9,7 +9,7 @@ import {
   type OrderException, type InsertOrderException,
   type Order, type InsertOrder, type OrderItem, type InsertOrderItem,
   type PasswordResetRequest, type SystemLog, type TestOrder,
-  type Task, type ClientIncident, type InternalIncident,
+  type Task, type ClientIncident, type IncidentMessage, type InternalIncident,
   type LogisticsDriver, type LogisticsVehicle, type LogisticsRoute, type LogisticsMaintenance, type CompanyQuotation
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
@@ -652,10 +652,43 @@ export class DatabaseStorage implements IStorage {
 
   async respondToClientIncident(id: number, responseMessage: string, respondedByName: string): Promise<ClientIncident> {
     const [updated] = await db.update(clientIncidents)
-      .set({ responseMessage, respondedByName, respondedAt: new Date(), status: 'RESPONDED' })
+      .set({ responseMessage, respondedByName, respondedAt: new Date(), status: 'RESPONDED', hasUnreadAdminReply: true, updatedAt: new Date() })
       .where(eq(clientIncidents.id, id))
       .returning();
     return updated;
+  }
+
+  async updateClientIncidentStatus(id: number, status: string): Promise<ClientIncident> {
+    const [updated] = await db.update(clientIncidents)
+      .set({ status, updatedAt: new Date() } as any)
+      .where(eq(clientIncidents.id, id))
+      .returning();
+    return updated;
+  }
+
+  async markIncidentReadByClient(id: number): Promise<void> {
+    await db.update(clientIncidents)
+      .set({ hasUnreadAdminReply: false } as any)
+      .where(eq(clientIncidents.id, id));
+  }
+
+  // ─── Mensagens de Ocorrências ─────────────────────────────────
+  async getIncidentMessages(incidentId: number): Promise<IncidentMessage[]> {
+    return db.select().from(incidentMessages).where(eq(incidentMessages.incidentId, incidentId)).orderBy(incidentMessages.createdAt);
+  }
+
+  async createIncidentMessage(data: { incidentId: number; senderType: string; senderName: string; message: string; photosJson?: string }): Promise<IncidentMessage> {
+    const [msg] = await db.insert(incidentMessages).values(data).returning();
+    if (data.senderType === 'ADMIN') {
+      await db.update(clientIncidents)
+        .set({ hasUnreadAdminReply: true, status: 'RESPONDED', updatedAt: new Date() } as any)
+        .where(eq(clientIncidents.id, data.incidentId));
+    } else {
+      await db.update(clientIncidents)
+        .set({ updatedAt: new Date() } as any)
+        .where(eq(clientIncidents.id, data.incidentId));
+    }
+    return msg;
   }
 
   // ─── Ocorrências Internas ─────────────────────────────────────

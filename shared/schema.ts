@@ -209,8 +209,23 @@ export const clientIncidents = pgTable("client_incidents", {
   respondedByName: text("responded_by_name"),   // staff member who responded
   respondedAt: timestamp("responded_at"),        // when response was sent
   resolvedAt: timestamp("resolved_at"),
+  hasUnreadAdminReply: boolean("has_unread_admin_reply").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ─── Mensagens de Ocorrências de Clientes ─────────────────────
+export const incidentMessages = pgTable("incident_messages", {
+  id: serial("id").primaryKey(),
+  incidentId: integer("incident_id").references(() => clientIncidents.id).notNull(),
+  senderType: text("sender_type").notNull(), // ADMIN | CLIENT
+  senderName: text("sender_name").notNull(),
+  message: text("message").notNull(),
+  photosJson: text("photos_json"), // JSON array of {base64, mime, name}
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export type IncidentMessage = typeof incidentMessages.$inferSelect;
 
 // ─── Ocorrências Internas ──────────────────────────────────────
 export const internalIncidents = pgTable("internal_incidents", {

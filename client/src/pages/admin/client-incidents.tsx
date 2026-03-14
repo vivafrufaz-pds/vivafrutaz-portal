@@ -5,13 +5,12 @@ import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Eye, ImageIcon, MessageSquareReply, CheckCircle2 } from 'lucide-react';
-import type { ClientIncident } from '@shared/schema';
+import { AlertTriangle, Eye, ImageIcon, MessageSquareReply, Send, Building2 } from 'lucide-react';
+import type { ClientIncident, IncidentMessage } from '@shared/schema';
 
 const TYPE_LABELS: Record<string, string> = {
   DELIVERY_PROBLEM: 'Problema de entrega',
@@ -21,7 +20,6 @@ const TYPE_LABELS: Record<string, string> = {
   COMPLAINT: 'Reclamação geral',
   OTHER: 'Outro',
 };
-
 const STATUS_LABEL: Record<string, string> = {
   OPEN: 'Aberta',
   ANALYZING: 'Em análise',
@@ -36,126 +34,159 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 function IncidentDetail({ incident, onClose }: { incident: ClientIncident; onClose: () => void }) {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [status, setStatus] = useState(incident.status);
   const [adminNote, setAdminNote] = useState(incident.adminNote || '');
-  const [showRespondForm, setShowRespondForm] = useState(false);
-  const [responseMessage, setResponseMessage] = useState('');
+  const [newMsg, setNewMsg] = useState('');
+
+  // Parse photos
+  let parsedPhotos: Array<{ base64: string; mime: string; name: string }> = [];
+  try { if ((incident as any).photosJson) parsedPhotos = JSON.parse((incident as any).photosJson); } catch {}
+
+  const { data: messages = [], isLoading: msgsLoading } = useQuery<IncidentMessage[]>({
+    queryKey: ['/api/client-incidents', incident.id, 'messages'],
+    queryFn: async () => {
+      const res = await fetch(`/api/client-incidents/${incident.id}/messages`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Erro ao carregar mensagens');
+      return res.json();
+    },
+  });
 
   const updateMut = useMutation({
     mutationFn: (data: any) => apiRequest('PATCH', `/api/client-incidents/${incident.id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/client-incidents'] });
       toast({ title: 'Ocorrência atualizada!' });
-      onClose();
     },
-    onError: () => toast({ title: 'Erro ao atualizar ocorrência', variant: 'destructive' }),
+    onError: () => toast({ title: 'Erro ao atualizar', variant: 'destructive' }),
   });
 
+  const sendMut = useMutation({
+    mutationFn: async (msg: string) => {
+      const res = await fetch(`/api/client-incidents/${incident.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ message: msg }),
+      });
+      if (!res.ok) throw new Error('Erro');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/client-incidents', incident.id, 'messages'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/client-incidents'] });
+      setNewMsg('');
+      toast({ title: 'Mensagem enviada ao cliente!' });
+    },
+    onError: () => toast({ title: 'Erro ao enviar mensagem', variant: 'destructive' }),
+  });
+
+  // Also use old respond endpoint for backward compat
   const respondMut = useMutation({
     mutationFn: (data: any) => apiRequest('POST', `/api/client-incidents/${incident.id}/respond`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/client-incidents'] });
-      toast({ title: 'Resposta enviada ao cliente!' });
-      onClose();
+      queryClient.invalidateQueries({ queryKey: ['/api/client-incidents', incident.id, 'messages'] });
+      setNewMsg('');
     },
-    onError: () => toast({ title: 'Erro ao enviar resposta', variant: 'destructive' }),
+    onError: () => toast({ title: 'Erro ao responder', variant: 'destructive' }),
   });
 
-  const handleRespond = () => {
-    if (!responseMessage.trim()) return toast({ title: 'Escreva a mensagem de resposta', variant: 'destructive' });
-    respondMut.mutate({ responseMessage });
+  const handleSend = () => {
+    if (!newMsg.trim()) return;
+    sendMut.mutate(newMsg);
   };
 
   return (
     <div className="space-y-4">
+      {/* Meta */}
       <div className="grid grid-cols-2 gap-3 text-sm">
-        <div><span className="font-medium text-muted-foreground">Empresa:</span><p className="font-semibold">{incident.companyName}</p></div>
-        <div><span className="font-medium text-muted-foreground">Tipo:</span><p className="font-semibold">{TYPE_LABELS[incident.type] || incident.type}</p></div>
-        <div><span className="font-medium text-muted-foreground">Contato:</span><p>{incident.contactPhone || '—'}</p></div>
-        <div><span className="font-medium text-muted-foreground">Email:</span><p>{incident.contactEmail || '—'}</p></div>
-        <div className="col-span-2"><span className="font-medium text-muted-foreground">Data:</span><p>{new Date(incident.createdAt).toLocaleString('pt-BR')}</p></div>
+        <div><span className="text-muted-foreground text-xs">Empresa</span><p className="font-semibold flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{incident.companyName}</p></div>
+        <div><span className="text-muted-foreground text-xs">Tipo</span><p className="font-semibold">{TYPE_LABELS[incident.type] || incident.type}</p></div>
+        <div><span className="text-muted-foreground text-xs">Contato</span><p>{incident.contactPhone || '—'}</p></div>
+        <div><span className="text-muted-foreground text-xs">Email</span><p>{incident.contactEmail || '—'}</p></div>
+        <div className="col-span-2"><span className="text-muted-foreground text-xs">Abertura</span><p>{new Date(incident.createdAt).toLocaleString('pt-BR')}</p></div>
       </div>
 
+      {/* Description */}
       <div>
-        <Label className="text-muted-foreground font-medium text-sm">Descrição do cliente</Label>
+        <Label className="text-muted-foreground text-xs">Descrição do cliente</Label>
         <div className="mt-1 p-3 bg-muted/40 rounded-lg text-sm">{incident.description}</div>
       </div>
 
-      {incident.photoBase64 && (
+      {/* Photos gallery */}
+      {(parsedPhotos.length > 0 || incident.photoBase64) && (
         <div>
-          <Label className="text-muted-foreground font-medium text-sm">Foto anexada</Label>
-          <img
-            src={`data:${incident.photoMime};base64,${incident.photoBase64}`}
-            alt="Foto da ocorrência"
-            className="mt-1 rounded-lg max-h-48 object-contain border"
-          />
-        </div>
-      )}
-
-      {/* Show existing response if already responded */}
-      {(incident as any).responseMessage && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-center gap-2 mb-1">
-            <MessageSquareReply className="w-4 h-4 text-blue-600" />
-            <span className="text-xs font-semibold text-blue-700">Resposta enviada</span>
-            {(incident as any).respondedByName && (
-              <span className="text-xs text-blue-600">por {(incident as any).respondedByName}</span>
-            )}
-            {(incident as any).respondedAt && (
-              <span className="text-xs text-blue-500 ml-auto">
-                {new Date((incident as any).respondedAt).toLocaleDateString('pt-BR')}
-              </span>
-            )}
+          <Label className="text-muted-foreground text-xs">Fotos anexadas ({parsedPhotos.length || 1})</Label>
+          <div className="flex gap-2 mt-1 flex-wrap">
+            {parsedPhotos.length > 0
+              ? parsedPhotos.map((ph, i) => (
+                <a key={i} href={`data:${ph.mime};base64,${ph.base64}`} target="_blank" rel="noreferrer">
+                  <img src={`data:${ph.mime};base64,${ph.base64}`} alt={ph.name || `Foto ${i+1}`} className="w-20 h-20 object-cover rounded-lg border border-border hover:opacity-80 transition-opacity cursor-zoom-in" />
+                </a>
+              ))
+              : <img src={`data:${incident.photoMime};base64,${incident.photoBase64}`} alt="Foto" className="w-20 h-20 object-cover rounded-lg border border-border" />
+            }
           </div>
-          <p className="text-sm text-blue-900">{(incident as any).responseMessage}</p>
         </div>
       )}
 
-      {/* Respond to client section */}
-      {!showRespondForm ? (
-        <Button
-          data-testid="button-respond-incident"
-          variant="outline"
-          className="w-full gap-2 border-blue-200 text-blue-700 hover:bg-blue-50"
-          onClick={() => setShowRespondForm(true)}
-        >
-          <MessageSquareReply className="w-4 h-4" />
-          {(incident as any).responseMessage ? 'Atualizar resposta ao cliente' : 'Responder ao cliente'}
-        </Button>
-      ) : (
-        <div className="space-y-3 p-3 border border-blue-200 rounded-lg bg-blue-50/40">
-          <Label className="text-sm font-semibold text-blue-800">Resposta oficial (visível ao cliente)</Label>
+      {/* Chat Thread */}
+      <div>
+        <Label className="text-muted-foreground text-xs">Histórico de mensagens</Label>
+        <div className="mt-2 space-y-2 max-h-52 overflow-y-auto border border-border rounded-xl p-3 bg-background">
+          {msgsLoading ? (
+            <div className="h-8 bg-muted rounded animate-pulse" />
+          ) : messages.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-3">Nenhuma mensagem ainda. Use o campo abaixo para responder ao cliente.</p>
+          ) : (
+            messages.map(msg => {
+              const isAdmin = msg.senderType === 'ADMIN';
+              return (
+                <div key={msg.id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] p-2.5 rounded-xl text-sm ${isAdmin ? 'bg-green-50 border border-green-200 text-green-900' : 'bg-muted border border-border text-foreground'}`}>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`text-[11px] font-semibold ${isAdmin ? 'text-green-700' : 'text-muted-foreground'}`}>{msg.senderName}</span>
+                      <span className="text-[10px] text-muted-foreground ml-auto">{new Date(msg.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                    </div>
+                    <p>{msg.message}</p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Send message */}
+        <div className="flex gap-2 mt-2">
           <Textarea
+            value={newMsg}
+            onChange={e => setNewMsg(e.target.value)}
+            placeholder="Responder ao cliente (visível no portal do cliente)..."
+            rows={2}
+            className="resize-none flex-1 text-sm"
             data-testid="input-response-message"
-            value={responseMessage}
-            onChange={e => setResponseMessage(e.target.value)}
-            placeholder="Escreva a resposta que o cliente verá no portal..."
-            rows={3}
-            className="bg-white"
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           />
-          <div className="flex gap-2">
-            <Button
-              data-testid="button-send-response"
-              size="sm"
-              onClick={handleRespond}
-              disabled={respondMut.isPending}
-              className="gap-2"
-            >
-              <MessageSquareReply className="w-3.5 h-3.5" />
-              {respondMut.isPending ? 'Enviando...' : 'Enviar resposta'}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setShowRespondForm(false)}>Cancelar</Button>
-          </div>
+          <Button
+            size="icon"
+            data-testid="button-send-response"
+            onClick={handleSend}
+            disabled={sendMut.isPending || !newMsg.trim()}
+            className="self-end h-10 w-10 bg-primary"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
         </div>
-      )}
+      </div>
 
-      {/* Status and note section */}
+      {/* Status + Note */}
       <div className="border-t pt-4 space-y-3">
         <div>
           <Label>Status da ocorrência</Label>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger data-testid="select-incident-status">
+            <SelectTrigger data-testid="select-incident-status" className="mt-1">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -174,6 +205,7 @@ function IncidentDetail({ incident, onClose }: { incident: ClientIncident; onClo
             onChange={e => setAdminNote(e.target.value)}
             placeholder="Notas internas sobre esta ocorrência..."
             rows={2}
+            className="mt-1"
           />
         </div>
       </div>
@@ -182,7 +214,7 @@ function IncidentDetail({ incident, onClose }: { incident: ClientIncident; onClo
         <Button variant="outline" onClick={onClose}>Fechar</Button>
         <Button
           data-testid="button-save-incident"
-          onClick={() => updateMut.mutate({ status, adminNote })}
+          onClick={() => updateMut.mutate({ status, adminNote, resolvedAt: status === 'RESOLVED' ? new Date().toISOString() : undefined })}
           disabled={updateMut.isPending}
         >
           {updateMut.isPending ? 'Salvando...' : 'Salvar'}
@@ -210,11 +242,9 @@ export default function AdminClientIncidentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Ocorrências de Clientes</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {openCount > 0 ? (
-              <span className="text-red-600 font-medium">{openCount} em aberto</span>
-            ) : (
-              'Nenhuma em aberto'
-            )}
+            {openCount > 0
+              ? <span className="text-red-600 font-medium">{openCount} em aberto</span>
+              : 'Nenhuma em aberto'}
             {respondedCount > 0 && <span className="text-blue-600 font-medium ml-3">{respondedCount} respondida(s)</span>}
           </p>
         </div>
@@ -242,7 +272,10 @@ export default function AdminClientIncidentsPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map(inc => {
-            const hasResponse = !!(inc as any).responseMessage;
+            let parsedPhotos: any[] = [];
+            try { if ((inc as any).photosJson) parsedPhotos = JSON.parse((inc as any).photosJson); } catch {}
+            const photoCount = parsedPhotos.length || (inc.photoBase64 ? 1 : 0);
+
             return (
               <Card key={inc.id} data-testid={`card-client-incident-${inc.id}`} className="premium-shadow hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelected(inc)}>
                 <CardContent className="p-4">
@@ -250,16 +283,20 @@ export default function AdminClientIncidentsPage() {
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-sm">{inc.companyName}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[inc.status] || 'bg-muted text-muted-foreground'}`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[inc.status] || 'bg-muted'}`}>
                           {STATUS_LABEL[inc.status] || inc.status}
                         </span>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                           {TYPE_LABELS[inc.type] || inc.type}
                         </span>
-                        {inc.photoBase64 && <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />}
-                        {hasResponse && (
+                        {photoCount > 0 && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <ImageIcon className="w-3 h-3" /> {photoCount} foto{photoCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {(inc as any).responseMessage && (
                           <span className="flex items-center gap-1 text-xs text-blue-600">
-                            <MessageSquareReply className="w-3 h-3" /> Respondida
+                            <MessageSquareReply className="w-3 h-3" /> Com resposta
                           </span>
                         )}
                       </div>
@@ -284,7 +321,15 @@ export default function AdminClientIncidentsPage() {
           <DialogHeader>
             <DialogTitle>Ocorrência #{selected?.id?.toString().padStart(4, '0')}</DialogTitle>
           </DialogHeader>
-          {selected && <IncidentDetail incident={selected} onClose={() => setSelected(undefined)} />}
+          {selected && (
+            <IncidentDetail
+              incident={selected}
+              onClose={() => {
+                setSelected(undefined);
+                queryClient.invalidateQueries({ queryKey: ['/api/client-incidents'] });
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

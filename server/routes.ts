@@ -1308,9 +1308,58 @@ export async function registerRoutes(
       const { responseMessage } = req.body;
       if (!responseMessage || !responseMessage.trim()) return res.status(400).json({ message: 'Mensagem de resposta obrigatória' });
       const updated = await storage.respondToClientIncident(id, responseMessage.trim(), user.name);
+      await storage.createIncidentMessage({ incidentId: id, senderType: 'ADMIN', senderName: user.name, message: responseMessage.trim() });
       await storage.createLog({ action: 'CLIENT_INCIDENT_RESPONDED', description: `Ocorrência #${id} recebeu resposta de ${user.name}`, userId: user.id, userEmail: user.email, userRole: user.role });
       res.json(updated);
     } catch (e) { res.status(500).json({ message: 'Error responding to incident' }); }
+  });
+
+  // ─── MENSAGENS DE OCORRÊNCIAS ─────────────────────────────────
+  app.get('/api/client-incidents/:id/messages', async (req, res) => {
+    if (!req.session?.userId && !req.session?.companyId) return res.status(401).json({ message: 'Not authenticated' });
+    try {
+      const id = parseInt(req.params.id);
+      const messages = await storage.getIncidentMessages(id);
+      // Also mark as read if client is viewing
+      if (req.session?.companyId) {
+        await storage.markIncidentReadByClient(id);
+      }
+      res.json(messages);
+    } catch (e) { res.status(500).json({ message: 'Erro ao buscar mensagens' }); }
+  });
+
+  app.post('/api/client-incidents/:id/messages', async (req, res) => {
+    if (!req.session?.userId && !req.session?.companyId) return res.status(401).json({ message: 'Not authenticated' });
+    try {
+      const id = parseInt(req.params.id);
+      const { message, photosJson } = req.body;
+      if (!message || !message.trim()) return res.status(400).json({ message: 'Mensagem não pode estar vazia.' });
+      let senderType = 'ADMIN';
+      let senderName = 'Equipe VivaFrutaz';
+      if (req.session?.companyId) {
+        senderType = 'CLIENT';
+        // Get company name from incident
+        const incidents = await storage.getClientIncidentsByCompany(req.session.companyId);
+        const inc = incidents.find(i => i.id === id);
+        senderName = inc?.companyName || 'Cliente';
+      } else {
+        const user = await storage.getUser(req.session.userId!);
+        if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) {
+          return res.status(403).json({ message: 'Sem permissão' });
+        }
+        senderName = user.name;
+      }
+      const msg = await storage.createIncidentMessage({ incidentId: id, senderType, senderName, message: message.trim(), photosJson });
+      res.json(msg);
+    } catch (e) { res.status(500).json({ message: 'Erro ao enviar mensagem' }); }
+  });
+
+  app.post('/api/client-incidents/:id/mark-read', async (req, res) => {
+    if (!req.session?.companyId) return res.status(401).json({ message: 'Not authenticated' });
+    try {
+      await storage.markIncidentReadByClient(parseInt(req.params.id));
+      res.json({ ok: true });
+    } catch (e) { res.status(500).json({ message: 'Erro' }); }
   });
 
   // ─── OCORRÊNCIAS INTERNAS ─────────────────────────────────────
