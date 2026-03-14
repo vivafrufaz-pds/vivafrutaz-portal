@@ -4,8 +4,8 @@ import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
 import {
   Plus, Building2, Mail, Hash, Phone, Clock, Edit2,
-  CheckCircle, XCircle, CalendarDays, CreditCard, DollarSign,
-  FileText, Settings, User, Percent, Search, Filter, X, Package, Trash2, Save, MapPin, Loader2
+  CheckCircle, CheckCircle2, XCircle, CalendarDays, CreditCard, DollarSign,
+  FileText, Settings, User, Percent, Search, Filter, X, Package, Trash2, Save, MapPin, Loader2, Lock
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useProducts } from "@/hooks/use-catalog";
@@ -308,12 +308,17 @@ export default function CompaniesPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("basico");
   const [formData, setFormData] = useState(emptyForm);
   const [geocoding, setGeocoding] = useState(false);
+  const [lookingUpCep, setLookingUpCep] = useState(false);
+  const [cepFilled, setCepFilled] = useState(false);
+  const [viaCepUF, setViaCepUF] = useState("");
   const { toast } = useToast();
 
   const openCreate = () => {
     setEditingCompany(null);
     setFormData(emptyForm);
     setActiveTab("basico");
+    setCepFilled(false);
+    setViaCepUF("");
     setIsModalOpen(true);
   };
 
@@ -321,6 +326,8 @@ export default function CompaniesPage() {
     setEditingCompany(company);
     setFormData(companyToForm(company));
     setActiveTab("basico");
+    setCepFilled(false);
+    setViaCepUF("");
     setIsModalOpen(true);
   };
 
@@ -341,21 +348,48 @@ export default function CompaniesPage() {
   const set = (field: string, value: any) =>
     setFormData(prev => ({ ...prev, [field]: value }));
 
-  const buscarCoordenadas = async () => {
-    const parts = [
-      formData.addressStreet,
-      formData.addressNumber,
-      formData.addressNeighborhood,
-      formData.addressCity,
-      formData.addressZip,
-    ].filter(Boolean);
+  const buscarCep = async (cepValue: string) => {
+    const digits = cepValue.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setLookingUpCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        toast({ title: "CEP não encontrado", description: "Verifique o número do CEP e tente novamente.", variant: "destructive" });
+        setCepFilled(false);
+        setViaCepUF("");
+        return;
+      }
+      setFormData(prev => ({
+        ...prev,
+        addressStreet: data.logradouro || prev.addressStreet,
+        addressNeighborhood: data.bairro || prev.addressNeighborhood,
+        addressCity: data.localidade || prev.addressCity,
+      }));
+      setViaCepUF(data.uf || "");
+      setCepFilled(true);
+      toast({ title: "Endereço preenchido!", description: `${data.logradouro}, ${data.localidade} - ${data.uf}` });
+    } catch {
+      toast({ title: "Erro ao consultar CEP", description: "Verifique sua conexão e tente novamente.", variant: "destructive" });
+    } finally {
+      setLookingUpCep(false);
+    }
+  };
 
-    if (parts.length < 2) {
-      toast({ title: "Endereço incompleto", description: "Preencha pelo menos rua e cidade antes de buscar.", variant: "destructive" });
+  const buscarCoordenadas = async () => {
+    const rua = formData.addressStreet;
+    const numero = formData.addressNumber;
+    const cidade = formData.addressCity;
+    const uf = viaCepUF;
+
+    if (!rua || !cidade) {
+      toast({ title: "Endereço incompleto", description: "Preencha o CEP primeiro para buscar as coordenadas.", variant: "destructive" });
       return;
     }
 
-    const enderecoCompleto = parts.join(", ") + ", Brasil";
+    const partes = [rua, numero, cidade, uf, "Brasil"].filter(Boolean);
+    const enderecoCompleto = partes.join(", ");
     setGeocoding(true);
     try {
       const res = await fetch(`/api/geocode?q=${encodeURIComponent(enderecoCompleto)}`, { credentials: "include" });
@@ -366,17 +400,13 @@ export default function CompaniesPage() {
         toast({ title: "Coordenadas encontradas!", description: `Lat: ${parseFloat(lat).toFixed(5)}, Lon: ${parseFloat(lon).toFixed(5)}` });
       } else {
         toast({
-          title: "Endereço não encontrado",
-          description: "Verifique os dados ou ajuste o CEP.",
+          title: "Coordenadas não localizadas",
+          description: "Não foi possível localizar as coordenadas automaticamente. Verifique o número ou ajuste o CEP.",
           variant: "destructive",
         });
       }
     } catch {
-      toast({
-        title: "Erro ao buscar coordenadas",
-        description: "Verifique sua conexão e tente novamente.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao buscar coordenadas", description: "Verifique sua conexão e tente novamente.", variant: "destructive" });
     } finally {
       setGeocoding(false);
     }
@@ -701,46 +731,116 @@ export default function CompaniesPage() {
 
               {/* Endereço */}
               <div className="p-4 rounded-xl border-2 border-border bg-muted/10">
-                <p className="text-sm font-semibold mb-3 text-foreground">Endereço de Entrega</p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-foreground">Endereço de Entrega</p>
+                  {cepFilled && (
+                    <button type="button" onClick={() => { setCepFilled(false); setViaCepUF(""); }}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                      <Lock className="w-3 h-3" /> Editar manualmente
+                    </button>
+                  )}
+                </div>
+
+                {/* ETAPA 1: CEP com consulta automática */}
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">
+                      CEP {lookingUpCep && <span className="text-primary font-normal ml-1">consultando...</span>}
+                    </label>
+                    <div className="relative">
+                      <input
+                        data-testid="input-cep"
+                        value={formData.addressZip}
+                        onChange={e => {
+                          const v = e.target.value;
+                          set("addressZip", v);
+                          const digits = v.replace(/\D/g, "");
+                          if (digits.length === 8) buscarCep(v);
+                          else if (digits.length < 8) { setCepFilled(false); setViaCepUF(""); }
+                        }}
+                        placeholder="00000-000"
+                        maxLength={9}
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm pr-8" />
+                      {lookingUpCep && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary absolute right-2.5 top-1/2 -translate-y-1/2" />}
+                      {cepFilled && !lookingUpCep && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 absolute right-2.5 top-1/2 -translate-y-1/2" />}
+                    </div>
+                  </div>
                   <div className="col-span-2">
-                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Rua / Logradouro</label>
-                    <input value={formData.addressStreet} onChange={e => set("addressStreet", e.target.value)}
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">
+                      Rua / Logradouro {cepFilled && <Lock className="w-3 h-3 inline ml-1 text-muted-foreground/60" />}
+                    </label>
+                    <input
+                      data-testid="input-address-street"
+                      value={formData.addressStreet}
+                      onChange={e => set("addressStreet", e.target.value)}
+                      readOnly={cepFilled}
                       placeholder="Rua das Flores"
-                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Número</label>
-                    <input value={formData.addressNumber} onChange={e => set("addressNumber", e.target.value)}
-                      placeholder="123"
-                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Bairro</label>
-                    <input value={formData.addressNeighborhood} onChange={e => set("addressNeighborhood", e.target.value)}
-                      placeholder="Centro"
-                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Cidade</label>
-                    <input value={formData.addressCity} onChange={e => set("addressCity", e.target.value)}
-                      placeholder="São Paulo"
-                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">CEP</label>
-                    <input value={formData.addressZip} onChange={e => set("addressZip", e.target.value)}
-                      placeholder="00000-000"
-                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                      className={`w-full px-3 py-2 rounded-xl border-2 outline-none text-sm transition-colors ${cepFilled ? "border-border bg-muted/40 text-muted-foreground cursor-not-allowed" : "border-border focus:border-primary"}`} />
                   </div>
                 </div>
-                <div className="mt-3">
+
+                {/* ETAPA 2: Número + campos bloqueados */}
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">Número</label>
+                    <input
+                      data-testid="input-address-number"
+                      value={formData.addressNumber}
+                      onChange={e => set("addressNumber", e.target.value)}
+                      placeholder="417"
+                      className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">
+                      Bairro {cepFilled && <Lock className="w-3 h-3 inline ml-1 text-muted-foreground/60" />}
+                    </label>
+                    <input
+                      data-testid="input-address-neighborhood"
+                      value={formData.addressNeighborhood}
+                      onChange={e => set("addressNeighborhood", e.target.value)}
+                      readOnly={cepFilled}
+                      placeholder="Centro"
+                      className={`w-full px-3 py-2 rounded-xl border-2 outline-none text-sm transition-colors ${cepFilled ? "border-border bg-muted/40 text-muted-foreground cursor-not-allowed" : "border-border focus:border-primary"}`} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-muted-foreground">
+                      Cidade {cepFilled && <Lock className="w-3 h-3 inline ml-1 text-muted-foreground/60" />}
+                    </label>
+                    <input
+                      data-testid="input-address-city"
+                      value={formData.addressCity}
+                      onChange={e => set("addressCity", e.target.value)}
+                      readOnly={cepFilled}
+                      placeholder="São Paulo"
+                      className={`w-full px-3 py-2 rounded-xl border-2 outline-none text-sm transition-colors ${cepFilled ? "border-border bg-muted/40 text-muted-foreground cursor-not-allowed" : "border-border focus:border-primary"}`} />
+                  </div>
+                </div>
+
+                {/* Estado (só mostra quando preenchido pelo ViaCEP) */}
+                {cepFilled && viaCepUF && (
+                  <div className="mb-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-bold border border-primary/20">
+                      <MapPin className="w-3 h-3" /> Estado: {viaCepUF}
+                    </span>
+                  </div>
+                )}
+
+                {/* CEP hint */}
+                {!cepFilled && (
+                  <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
+                    <span className="text-primary font-bold">Dica:</span> Digite o CEP para preencher rua, bairro e cidade automaticamente.
+                  </p>
+                )}
+
+                {/* ETAPA 3: Coordenadas GPS */}
+                <div className="border-t border-border/50 pt-3">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Coordenadas GPS</p>
-                    <button type="button" data-testid="button-buscar-coordenadas" onClick={buscarCoordenadas} disabled={geocoding}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 transition-all disabled:opacity-60">
+                    <button type="button" data-testid="button-buscar-coordenadas" onClick={buscarCoordenadas}
+                      disabled={geocoding || !formData.addressStreet || !formData.addressCity}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                       {geocoding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPin className="w-3.5 h-3.5" />}
-                      {geocoding ? "Buscando..." : "Buscar Coordenadas"}
+                      {geocoding ? "Buscando..." : "Gerar Coordenadas"}
                     </button>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -757,7 +857,11 @@ export default function CompaniesPage() {
                         className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1.5">Preenchidas automaticamente pelo botão acima. Usadas pelo Assistente de Rota para agrupamento geográfico.</p>
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    {cepFilled && formData.addressNumber
+                      ? `Endereço: ${formData.addressStreet}, ${formData.addressNumber} — ${formData.addressCity}/${viaCepUF}`
+                      : "Preencha o CEP e o número para gerar as coordenadas automaticamente."}
+                  </p>
                 </div>
               </div>
 
