@@ -15,6 +15,7 @@ const ROLES = [
   { value: "PURCHASE_MANAGER", label: "Gerente de Compras", desc: "Compras e relatórios", icon: DollarSign, color: "text-green-600 bg-green-100" },
   { value: "FINANCEIRO", label: "Financeiro", desc: "Pedidos, painel financeiro e exportações", icon: BarChart3, color: "text-emerald-600 bg-emerald-100" },
   { value: "DEVELOPER", label: "Desenvolvedor", desc: "Acesso técnico + logs + backups", icon: Code, color: "text-purple-600 bg-purple-100" },
+  { value: "LOGISTICS", label: "Logística", desc: "Pedidos, rotas, motoristas e ocorrências", icon: AlertTriangle, color: "text-orange-600 bg-orange-100" },
 ];
 
 const PRIVILEGED_ROLES = ['ADMIN', 'DIRECTOR', 'DEVELOPER'];

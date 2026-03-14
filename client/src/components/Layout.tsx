@@ -22,26 +22,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const testModeActive = testModeData?.enabled ?? false;
 
   const adminLinks = [
-    { href: '/admin', label: 'Painel', icon: LayoutDashboard, roles: ['ADMIN', 'DIRECTOR'] },
+    { href: '/admin', label: 'Painel', icon: LayoutDashboard, roles: ['ADMIN', 'DIRECTOR', 'LOGISTICS'] },
     { href: '/admin/companies', label: 'Empresas', icon: Users, roles: ['ADMIN', 'DIRECTOR'] },
     { href: '/admin/products', label: 'Produtos', icon: Package, roles: ['ADMIN', 'DIRECTOR'] },
     { href: '/admin/categories', label: 'Categorias', icon: FolderOpen, roles: ['ADMIN', 'DIRECTOR'] },
     { href: '/admin/price-groups', label: 'Grupos de Preço', icon: Tag, roles: ['ADMIN', 'DIRECTOR'] },
     { href: '/admin/order-windows', label: 'Janelas de Pedido', icon: CalendarDays, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR'] },
     { href: '/admin/order-exceptions', label: 'Exceções de Pedido', icon: ShieldCheck, roles: ['ADMIN', 'DIRECTOR'] },
-    { href: '/admin/orders', label: 'Pedidos', icon: ShoppingCart, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'DIRECTOR'] },
+    { href: '/admin/orders', label: 'Pedidos', icon: ShoppingCart, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'DIRECTOR', 'LOGISTICS'] },
     { href: '/admin/purchasing', label: 'Compras', icon: BarChart3, roles: ['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR'] },
     { href: '/admin/industrialized', label: 'Industrializados', icon: Factory, roles: ['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR'] },
     { href: '/admin/financial', label: 'Painel Financeiro', icon: PieChart, roles: ['ADMIN', 'FINANCEIRO', 'DIRECTOR'] },
     { href: '/admin/password-reset-requests', label: 'Senhas de Clientes', icon: KeyRound, roles: ['ADMIN', 'DIRECTOR'] },
-    { href: '/admin/special-orders', label: 'Pedidos Pontuais', icon: Star, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR', 'DEVELOPER'] },
+    { href: '/admin/special-orders', label: 'Pedidos Pontuais', icon: Star, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR', 'DEVELOPER', 'LOGISTICS'] },
     { href: '/admin/users', label: 'Usuários do Sistema', icon: UserCog, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'] },
     { href: '/admin/backups', label: 'Backup & E-mails', icon: HardDrive, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'] },
     { href: '/admin/developer', label: 'Área do Desenvolvedor', icon: ShieldCheck, roles: ['DEVELOPER', 'ADMIN', 'DIRECTOR'] },
-    { href: '/admin/tasks', label: 'Tarefas', icon: ClipboardList, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO'] },
-    { href: '/admin/client-incidents', label: 'Ocorrências de Clientes', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
-    { href: '/admin/internal-incidents', label: 'Ocorrências Internas', icon: AlertTriangle, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
-    { href: '/admin/logistics', label: 'Logística', icon: Truck, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
+    { href: '/admin/tasks', label: 'Tarefas', icon: ClipboardList, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'] },
+    { href: '/admin/client-incidents', label: 'Ocorrências de Clientes', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'] },
+    { href: '/admin/internal-incidents', label: 'Ocorrências Internas', icon: AlertTriangle, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'] },
+    { href: '/admin/logistics', label: 'Logística', icon: Truck, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'] },
     { href: '/admin/quotations', label: 'Cotação de Empresas', icon: FileText, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'] },
     { href: '/admin/executive', label: 'Dashboard Executivo', icon: TrendingUp, roles: ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER'] },
   ];
@@ -67,6 +67,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       case 'DEVELOPER': return 'Desenvolvedor';
       case 'FINANCEIRO': return 'Financeiro';
       case 'DIRECTOR': return 'Diretor';
+      case 'LOGISTICS': return 'Logística';
       default: return role || '';
     }
   };

@@ -153,7 +153,7 @@ function Router() {
 
       {/* Admin Routes */}
       <Route path="/admin">
-        {() => <ProtectedRoute component={AdminDashboard} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO']} />}
+        {() => <ProtectedRoute component={AdminDashboard} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS']} />}
       </Route>
       <Route path="/admin/companies">
         {() => <ProtectedRoute component={AdminCompanies} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} />}
@@ -174,7 +174,7 @@ function Router() {
         {() => <ProtectedRoute component={AdminOrderExceptions} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} />}
       </Route>
       <Route path="/admin/orders">
-        {() => <ProtectedRoute component={AdminOrders} role="admin" allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'DIRECTOR']} />}
+        {() => <ProtectedRoute component={AdminOrders} role="admin" allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'DIRECTOR', 'LOGISTICS']} />}
       </Route>
       <Route path="/admin/purchasing">
         {() => <ProtectedRoute component={PurchasingReport} role="admin" allowedRoles={['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR']} />}
@@ -189,7 +189,7 @@ function Router() {
         {() => <ProtectedRoute component={PasswordResetRequestsPage} role="admin" allowedRoles={['ADMIN', 'DIRECTOR']} />}
       </Route>
       <Route path="/admin/special-orders">
-        {() => <ProtectedRoute component={AdminSpecialOrders} role="admin" allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR', 'DEVELOPER']} />}
+        {() => <ProtectedRoute component={AdminSpecialOrders} role="admin" allowedRoles={['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR', 'DEVELOPER', 'LOGISTICS']} />}
       </Route>
       <Route path="/admin/users">
         {() => <ProtectedRoute component={AdminUsers} role="admin" allowedRoles={['ADMIN', 'DEVELOPER', 'DIRECTOR']} />}
@@ -201,16 +201,16 @@ function Router() {
         {() => <ProtectedRoute component={AdminDeveloper} role="admin" allowedRoles={['DEVELOPER', 'ADMIN', 'DIRECTOR']} />}
       </Route>
       <Route path="/admin/tasks">
-        {() => <ProtectedRoute component={AdminTasks} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO']} />}
+        {() => <ProtectedRoute component={AdminTasks} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS']} />}
       </Route>
       <Route path="/admin/client-incidents">
-        {() => <ProtectedRoute component={AdminClientIncidents} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} />}
+        {() => <ProtectedRoute component={AdminClientIncidents} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS']} />}
       </Route>
       <Route path="/admin/internal-incidents">
-        {() => <ProtectedRoute component={AdminInternalIncidents} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} />}
+        {() => <ProtectedRoute component={AdminInternalIncidents} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS']} />}
       </Route>
       <Route path="/admin/logistics">
-        {() => <ProtectedRoute component={AdminLogistics} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} />}
+        {() => <ProtectedRoute component={AdminLogistics} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS']} />}
       </Route>
       <Route path="/admin/quotations">
         {() => <ProtectedRoute component={AdminQuotations} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} />}
