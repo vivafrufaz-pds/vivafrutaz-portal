@@ -31,7 +31,7 @@ export default function EditOrderPage() {
   useEffect(() => {
     if (orderDetail && !initialized) {
       const initCart: Record<number, number> = {};
-      orderDetail.items.forEach((item: any) => {
+      (orderDetail.items || []).forEach((item: any) => {
         initCart[Number(item.productId)] = item.quantity;
       });
       setCart(initCart);

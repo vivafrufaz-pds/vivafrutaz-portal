@@ -116,7 +116,7 @@ function EditItemsModal({
   const [saving, setSaving] = useState(false);
 
   if (detail && !initialized) {
-    setEditItems(detail.items.map((i: any) => ({
+    setEditItems((detail.items || []).map((i: any) => ({
       productId: i.productId,
       quantity: i.quantity,
       unitPrice: Number(i.unitPrice),
@@ -864,7 +864,7 @@ function OrderRow({
               )}
               {!detail ? (
                 <p className="text-sm text-muted-foreground">Carregando itens...</p>
-              ) : detail.items.length === 0 ? (
+              ) : (detail.items || []).length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhum item.</p>
               ) : (
                 <div>
@@ -872,7 +872,7 @@ function OrderRow({
                     <Package className="w-3.5 h-3.5" /> Itens
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {detail.items.map((item: any) => {
+                    {(detail.items || []).map((item: any) => {
                       const product = products.find(p => p.id === Number(item.productId));
                       return (
                         <div key={item.id} className="bg-card rounded-xl p-3 border border-border/50 flex justify-between items-center">

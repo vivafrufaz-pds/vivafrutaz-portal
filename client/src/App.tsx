@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorBoundary, PageBoundary } from "@/components/ErrorBoundary";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
@@ -173,7 +173,11 @@ function ProtectedRoute({
     return <MaintenanceScreen />;
   }
 
-  return <Component />;
+  return (
+    <PageBoundary name={location}>
+      <Component />
+    </PageBoundary>
+  );
 }
 
 // Initial Redirector
