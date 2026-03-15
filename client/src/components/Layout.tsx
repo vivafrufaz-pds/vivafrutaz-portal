@@ -21,6 +21,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   });
   const testModeActive = testModeData?.enabled ?? false;
 
+  const { data: logoData } = useQuery<{ logoBase64: string; logoType: string }>({
+    queryKey: ['/api/company-config/logo'],
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
   const adminLinks = [
     { href: '/admin', label: 'Painel', icon: LayoutDashboard, roles: ['ADMIN', 'DIRECTOR', 'LOGISTICS'], tabKey: 'dashboard' },
     { href: '/admin/companies', label: 'Empresas', icon: Users, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'companies' },
@@ -91,8 +97,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       <aside className="w-full md:w-64 bg-card border-r border-border/50 flex-shrink-0 flex flex-col z-10 premium-shadow relative">
         <div className="p-6 flex items-center gap-3 border-b border-border/50">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25">
-            <Leaf className="w-6 h-6 text-primary-foreground" />
+          <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center shadow-lg shadow-primary/25">
+            {logoData?.logoBase64 ? (
+              <img
+                src={`data:${logoData.logoType};base64,${logoData.logoBase64}`}
+                alt="Logo"
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+                <Leaf className="w-6 h-6 text-primary-foreground" />
+              </div>
+            )}
           </div>
           <div>
             <h1 className="font-display font-bold text-xl tracking-tight text-foreground leading-none">VivaFrutaz</h1>

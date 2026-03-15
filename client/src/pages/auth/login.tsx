@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
 import { Redirect } from "wouter";
 import { Leaf, Building2, UserCircle, KeyRound, ArrowLeft, CheckCircle2 } from "lucide-react";
 
@@ -18,6 +19,12 @@ function usernameFromEmail(email: string): string {
 export default function Login() {
   const { login, isLoggingIn, isAuthenticated, isStaff, isClient } = useAuth();
   const [type, setType] = useState<'admin' | 'company'>('company');
+
+  const { data: logoData } = useQuery<{ logoBase64: string; logoType: string }>({
+    queryKey: ['/api/company-config/logo'],
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 
   // Both tabs use username only — @vivafrutaz.com is added automatically
   const [companyUsername, setCompanyUsername] = useState("");
@@ -77,8 +84,18 @@ export default function Login() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-xl shadow-primary/25 transform -rotate-6">
-            <Leaf className="w-10 h-10 text-primary-foreground transform rotate-6" />
+          <div className="w-20 h-20 rounded-2xl overflow-hidden flex items-center justify-center shadow-xl shadow-primary/25 transform -rotate-6">
+            {logoData?.logoBase64 ? (
+              <img
+                src={`data:${logoData.logoType};base64,${logoData.logoBase64}`}
+                alt="Logo VivaFrutaz"
+                className="w-full h-full object-contain transform rotate-6 p-1"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+                <Leaf className="w-10 h-10 text-primary-foreground transform rotate-6" />
+              </div>
+            )}
           </div>
         </div>
         <h2 className="mt-6 text-center text-3xl font-display font-extrabold text-foreground">VivaFrutaz</h2>

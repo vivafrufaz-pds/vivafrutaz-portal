@@ -493,6 +493,9 @@ export const companyConfig = pgTable("company_config", {
   // Dados fiscais padrão
   defaultCfop: text("default_cfop").default("5102"),
   defaultNatureza: text("default_natureza").default("Venda de mercadoria adquirida"),
+  // Logo da empresa
+  logoBase64: text("logo_base64"),
+  logoType: text("logo_type").default("image/png"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
@@ -714,3 +717,21 @@ export const smtpConfig = pgTable("smtp_config", {
 export const insertSmtpConfigSchema = createInsertSchema(smtpConfig).omit({ id: true, updatedAt: true });
 export type SmtpConfig = typeof smtpConfig.$inferSelect;
 export type InsertSmtpConfig = z.infer<typeof insertSmtpConfigSchema>;
+
+// ─── IA Interações ─────────────────────────────────────────────────────────
+export const aiInteractions = pgTable("ai_interactions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id"),
+  companyId: integer("company_id"),
+  userRole: text("user_role"),
+  userName: text("user_name"),
+  message: text("message").notNull(),
+  response: text("response").notNull(),
+  intent: text("intent"),
+  actionExecuted: text("action_executed"),
+  actionData: jsonb("action_data"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type AiInteraction = typeof aiInteractions.$inferSelect;
+export const insertAiInteractionSchema = createInsertSchema(aiInteractions).omit({ id: true, createdAt: true });
+export type InsertAiInteraction = z.infer<typeof insertAiInteractionSchema>;

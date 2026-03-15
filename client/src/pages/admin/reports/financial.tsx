@@ -71,14 +71,14 @@ export default function FinancialReportPage() {
 
     let csv = "";
     if (format === 'nf') {
-      csv = "Código VF;Empresa;CNPJ;Endereço;Valor Total;Status;Data de Entrega;Tipo Faturamento;Prazo Pagamento;Expiração Nimbi\n";
+      csv = "Código VF;Empresa;CNPJ;Endereço;Valor Total;Status;Data de Entrega;Tipo Faturamento;Prazo Pagamento;Expiração Bling\n";
       filteredOrders.forEach((o: any) => {
         const total = (o.items || []).reduce((s: number, i: any) => s + (parseFloat(i.finalPrice || 0) * (i.quantity || 0)), 0);
         const addr = [o.addressStreet, o.addressNumber, o.addressNeighborhood, o.addressCity].filter(Boolean).join(', ');
         csv += `${o.vfCode || ''};${o.companyName || ''};${o.cnpj || ''};${addr};${total.toFixed(2)};${statusFmt(o.status)};${o.deliveryDate?.slice(0,10) || ''};${o.billingType || ''};${o.billingTerm || ''};${o.nimbiExpiration || ''}\n`;
       });
     } else {
-      csv = "Empresa;CNPJ;Produto;Descrição;Quantidade;Unidade;Valor Unitário;Valor Total;Observação do Cliente;Tipo Faturamento;Prazo Pagamento;Expiração Nimbi\n";
+      csv = "Empresa;CNPJ;Produto;Descrição;Quantidade;Unidade;Valor Unitário;Valor Total;Observação do Cliente;Tipo Faturamento;Prazo Pagamento;Expiração Bling\n";
       filteredOrders.forEach((o: any) => {
         (o.items || []).forEach((item: any) => {
           const unitPrice = parseFloat(item.finalPrice || 0);
@@ -94,7 +94,7 @@ export default function FinancialReportPage() {
     const a = document.createElement('a');
     a.href = url;
     const period = `${from.toISOString().slice(0,10)}_a_${to.toISOString().slice(0,10)}`;
-    a.download = `vivafrutaz_${format === 'nf' ? 'NF' : 'Nimbi'}_${period}.csv`;
+    a.download = `vivafrutaz_${format === 'nf' ? 'NF' : 'Bling'}_${period}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -115,9 +115,9 @@ export default function FinancialReportPage() {
             className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:-translate-y-0.5 transition-transform shadow-lg shadow-primary/20">
             <FileDown className="w-4 h-4" /> Exportar NF
           </button>
-          <button data-testid="button-export-nimbi" onClick={() => exportCSV('nimbi')}
+          <button data-testid="button-export-bling" onClick={() => exportCSV('nimbi')}
             className="flex items-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground font-bold rounded-xl text-sm hover:-translate-y-0.5 transition-transform shadow-lg shadow-secondary/20">
-            <FileDown className="w-4 h-4" /> Exportar Nimbi
+            <FileDown className="w-4 h-4" /> Exportar Bling
           </button>
         </div>
       </div>
@@ -154,9 +154,9 @@ export default function FinancialReportPage() {
         )}
         <div className="mt-3 flex flex-wrap gap-4 items-center">
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Expiração Nimbi (mostrar até)</label>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Expiração Bling (mostrar até)</label>
             <input type="date" value={nimbiExpFilter} onChange={e => setNimbiExpFilter(e.target.value)}
-              data-testid="input-nimbi-exp-filter"
+              data-testid="input-bling-exp-filter"
               className="px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
           </div>
           <div className="ml-auto text-right">
@@ -219,7 +219,7 @@ export default function FinancialReportPage() {
                       <th className="p-4 text-left font-semibold">Entrega</th>
                       <th className="p-4 text-left font-semibold">Tipo Fat.</th>
                       <th className="p-4 text-left font-semibold">Prazo</th>
-                      <th className="p-4 text-left font-semibold">Exp. Nimbi</th>
+                      <th className="p-4 text-left font-semibold">Exp. Bling</th>
                       <th className="p-4 text-right font-semibold">Total</th>
                     </tr>
                   </thead>

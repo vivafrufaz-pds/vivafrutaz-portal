@@ -319,6 +319,8 @@ function DanfePanel({ order, company, products, queryClient }: { order: Order; c
         stateRegistration: configRes?.stateRegistration || null,
         defaultCfop: configRes?.defaultCfop || null,
         defaultNatureza: configRes?.defaultNatureza || null,
+        logoBase64: configRes?.logoBase64 || null,
+        logoType: configRes?.logoType || null,
       },
     };
   };

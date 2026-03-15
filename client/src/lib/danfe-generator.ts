@@ -68,6 +68,8 @@ export interface DanfeData {
     stateRegistration?: string | null;
     defaultCfop?: string | null;
     defaultNatureza?: string | null;
+    logoBase64?: string | null;
+    logoType?: string | null;
   };
 }
 
@@ -153,18 +155,28 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   doc.text("Este documento não substitui a Nota Fiscal Eletrônica.", margin, 23);
 
   // VivaFrutaz brand block (right side of header)
+  if (data.vivaFrutaz.logoBase64) {
+    try {
+      const imgType = (data.vivaFrutaz.logoType || "image/png").replace("image/", "").toUpperCase() as any;
+      const logoX = pageW - margin - 22;
+      doc.addImage(data.vivaFrutaz.logoBase64, imgType, logoX, 3, 20, 20);
+    } catch {
+      // fallback: render text only
+    }
+  }
+  const brandTextX = data.vivaFrutaz.logoBase64 ? pageW - margin - 26 : pageW - margin - 2;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.text(safeText(data.vivaFrutaz.companyName) || "VivaFrutaz", pageW - margin - 2, 12, { align: "right" });
+  doc.text(safeText(data.vivaFrutaz.companyName) || "VivaFrutaz", brandTextX, 12, { align: "right" });
   if (data.vivaFrutaz.fantasyName && data.vivaFrutaz.fantasyName !== data.vivaFrutaz.companyName) {
     doc.setFontSize(7.5);
     doc.setFont("helvetica", "italic");
-    doc.text(safeText(data.vivaFrutaz.fantasyName), pageW - margin - 2, 17, { align: "right" });
+    doc.text(safeText(data.vivaFrutaz.fantasyName), brandTextX, 17, { align: "right" });
   }
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  if (data.vivaFrutaz.cnpj) doc.text(`CNPJ: ${safeText(data.vivaFrutaz.cnpj)}`, pageW - margin - 2, 20, { align: "right" });
-  if (data.vivaFrutaz.phone) doc.text(`Tel: ${safeText(data.vivaFrutaz.phone)}`, pageW - margin - 2, 24, { align: "right" });
+  if (data.vivaFrutaz.cnpj) doc.text(`CNPJ: ${safeText(data.vivaFrutaz.cnpj)}`, brandTextX, 20, { align: "right" });
+  if (data.vivaFrutaz.phone) doc.text(`Tel: ${safeText(data.vivaFrutaz.phone)}`, brandTextX, 24, { align: "right" });
 
   y = 32;
 

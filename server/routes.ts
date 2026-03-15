@@ -19,7 +19,7 @@ import multer from "multer";
 import { createRequire } from "module";
 const _require = createRequire(import.meta.url);
 const pdfParse = _require("pdf-parse");
-import { orders, orderItems, companies, products } from "@shared/schema";
+import { orders, orderItems, companies, products, aiInteractions } from "@shared/schema";
 import { sql, gte, lte, and, eq, desc, isNull } from "drizzle-orm";
 
 const SessionStore = MemoryStore(expressSession);
@@ -1555,6 +1555,17 @@ export async function registerRoutes(
     if (typeof value !== 'string') return res.status(400).json({ message: 'value required' });
     await storage.setSetting(req.params.key, value);
     res.json({ key: req.params.key, value });
+  });
+
+  // ─── COMPANY CONFIG LOGO (public — no auth needed) ────────────
+  app.get('/api/company-config/logo', async (_req, res) => {
+    try {
+      const config = await storage.getCompanyConfig();
+      if (!config || !(config as any).logoBase64) {
+        return res.status(404).json({ message: 'No logo set' });
+      }
+      res.json({ logoBase64: (config as any).logoBase64, logoType: (config as any).logoType || 'image/png' });
+    } catch { res.status(500).json({ message: 'Error' }); }
   });
 
   // ─── COMPANY CONFIG (Support, DANFE info) ─────────────────────
@@ -3864,6 +3875,309 @@ export async function registerRoutes(
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
+  });
+
+  // ─── IA ASSISTENTE VIRTUAL (Interactive AI Chat) ──────────────
+  app.get('/api/assistant/history', async (req: any, res) => {
+    if (!req.session?.userId && !req.session?.companyId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const rows = await db.select().from(aiInteractions)
+        .orderBy(desc(aiInteractions.createdAt))
+        .limit(50);
+      const filtered = req.session?.companyId
+        ? rows.filter((r: any) => r.companyId === req.session.companyId)
+        : rows.filter((r: any) => r.userId === req.session.userId);
+      res.json(filtered);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post('/api/assistant/chat', async (req: any, res) => {
+    const isUser = !!req.session?.userId;
+    const isCompany = !!req.session?.companyId;
+    if (!isUser && !isCompany) return res.status(401).json({ message: 'Não autenticado' });
+
+    const { message, sessionContext } = req.body;
+    if (!message || typeof message !== 'string') return res.status(400).json({ message: 'Mensagem inválida' });
+
+    const msg = message.trim().toLowerCase();
+
+    let user: any = null;
+    let company: any = null;
+    if (isUser) user = await storage.getUser(req.session.userId);
+    if (isCompany) company = await storage.getCompany(req.session.companyId);
+
+    const isAdmin = user && ['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role);
+    const isInternal = !!user;
+
+    let intent = 'unknown';
+    let response = '';
+    let newContext: any = null;
+    let actionExecuted: string | null = null;
+    let actionData: any = null;
+
+    // ── Multi-turn: create company flow ────────────────────────────
+    if (sessionContext?.action === 'create_company') {
+      const step = sessionContext.step;
+      const data = sessionContext.data || {};
+
+      if (msg === 'cancelar' || msg === 'cancela' || msg === 'não' || msg === 'nao') {
+        intent = 'cancel';
+        response = '❌ Criação de empresa cancelada.';
+        newContext = null;
+      } else if (step === 'name') {
+        data.name = message.trim();
+        newContext = { action: 'create_company', step: 'cnpj', data };
+        intent = 'create_company';
+        response = `✅ Nome: **${data.name}**\n\nAgora informe o **CNPJ** da empresa (ou "pular" para deixar em branco):`;
+      } else if (step === 'cnpj') {
+        data.cnpj = msg === 'pular' ? null : message.trim();
+        newContext = { action: 'create_company', step: 'email', data };
+        intent = 'create_company';
+        response = `✅ CNPJ: ${data.cnpj || '(em branco)'}\n\nAgora informe o **e-mail de acesso** da empresa (ex: empresa01):`;
+      } else if (step === 'email') {
+        const emailInput = message.trim().toLowerCase();
+        const email = emailInput.endsWith('@vivafrutaz.com') ? emailInput : emailInput + '@vivafrutaz.com';
+        data.email = email;
+        newContext = { action: 'create_company', step: 'contact', data };
+        intent = 'create_company';
+        response = `✅ E-mail: **${email}**\n\nInforme o **nome do contato** responsável (ou "pular"):`;
+      } else if (step === 'contact') {
+        data.contactName = msg === 'pular' ? data.name : message.trim();
+        newContext = { action: 'create_company', step: 'confirm', data };
+        intent = 'create_company';
+        response = `📋 **Resumo da nova empresa:**\n\n• Nome: ${data.name}\n• CNPJ: ${data.cnpj || '—'}\n• E-mail: ${data.email}\n• Contato: ${data.contactName}\n\nDigite **"confirmar"** para criar ou **"cancelar"** para desistir.`;
+      } else if (step === 'confirm' && (msg === 'confirmar' || msg === 'sim' || msg === 'ok')) {
+        try {
+          const existing = await storage.getCompanyByEmail(data.email);
+          if (existing) {
+            response = `⚠️ Já existe uma empresa com o e-mail **${data.email}**. Tente outro e-mail.`;
+            newContext = { action: 'create_company', step: 'email', data };
+          } else {
+            const newComp = await storage.createCompany({
+              companyName: data.name,
+              contactName: data.contactName || data.name,
+              email: data.email,
+              password: '123456',
+              cnpj: data.cnpj || null,
+              priceGroupId: 1,
+              allowedOrderDays: [],
+              active: true,
+              clientType: 'semanal',
+            });
+            actionExecuted = 'create_company';
+            actionData = { companyId: newComp.id, companyName: data.name };
+            intent = 'create_company_done';
+            response = `✅ **Empresa criada com sucesso!**\n\n• ID: #${newComp.id}\n• Nome: ${data.name}\n• E-mail: ${data.email}\n• Senha padrão: **123456**\n\nA empresa já pode fazer login no portal. Acesse Empresas para configurar preços, dias de entrega e demais dados.`;
+            newContext = null;
+          }
+        } catch (e: any) {
+          response = `❌ Erro ao criar empresa: ${e.message}`;
+          newContext = null;
+        }
+      } else {
+        response = 'Por favor responda à pergunta anterior ou digite **"cancelar"** para desistir.';
+        newContext = sessionContext;
+      }
+    }
+
+    // ── Single-turn intents ─────────────────────────────────────────
+    else if (/^(oi|olá|ola|bom dia|boa tarde|boa noite|oi tudo|tudo bem|olá assistente)/.test(msg)) {
+      intent = 'greeting';
+      const name = user?.name?.split(' ')[0] || company?.companyName?.split(' ')[0] || '';
+      response = `Olá${name ? `, ${name}` : ''}! 👋 Sou o Assistente IA VivaFrutaz. Como posso ajudar você hoje?\n\nVocê pode me perguntar sobre:\n• Pedidos e entregas\n• Empresas e cadastros\n• Estoque e produtos\n• Clima para entregas\n• Criar cadastros (admin)`;
+    }
+
+    else if (/clima|tempo|previsão do tempo|previsao do tempo|chuva|temperatura|vai chover|como está o tempo/.test(msg)) {
+      intent = 'weather';
+      try {
+        const city = msg.match(/em\s+([a-záàâãéèêíïóôõöúçñü\s]+)/i)?.[1]?.trim() || 'São Paulo';
+        const cityEncoded = encodeURIComponent(city);
+        const weatherRes = await fetch(`https://wttr.in/${cityEncoded}?format=%l:+%C,+%t+(sensação+%f),+umidade+%h&lang=pt`, {
+          headers: { 'User-Agent': 'VivaFrutaz/1.0' },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (weatherRes.ok) {
+          const weatherText = await weatherRes.text();
+          response = `🌤️ **Previsão do Tempo**\n\n${weatherText.trim()}\n\n_Fonte: wttr.in — dados em tempo real_`;
+        } else {
+          response = '⚠️ Não consegui obter a previsão do tempo agora. Tente novamente em instantes.';
+        }
+      } catch {
+        response = '⚠️ Serviço de clima temporariamente indisponível. Tente novamente mais tarde.';
+      }
+    }
+
+    else if (isInternal && /criar empresa|adicionar empresa|nova empresa|cadastrar empresa/.test(msg)) {
+      if (!isAdmin) {
+        intent = 'permission_denied';
+        response = '⚠️ Apenas Administradores e Diretores podem criar empresas pelo assistente.';
+      } else {
+        intent = 'create_company';
+        newContext = { action: 'create_company', step: 'name', data: {} };
+        response = '🏢 **Criar Nova Empresa**\n\nVou te guiar pelo cadastro. Digite **"cancelar"** a qualquer momento para desistir.\n\nPrimeiro, informe o **nome da empresa**:';
+      }
+    }
+
+    else if (isInternal && /pedido|pedidos/.test(msg)) {
+      intent = 'query_orders';
+      try {
+        const allOrders = await storage.getOrders();
+        const today = new Date().toISOString().split('T')[0];
+        const todayOrders = allOrders.filter((o: any) => o.deliveryDate?.toString().startsWith(today) || o.orderDate?.toString().startsWith(today));
+        const pending = allOrders.filter((o: any) => o.status === 'PENDING' || o.status === 'ACTIVE');
+        const confirmed = allOrders.filter((o: any) => o.status === 'CONFIRMED');
+        const cancelled = allOrders.filter((o: any) => o.status === 'CANCELLED');
+
+        if (/hoje|movimento hoje|resumo de hoje/.test(msg)) {
+          response = `📦 **Pedidos de Hoje (${today})**\n\n• Entrega hoje: ${todayOrders.length}\n• Pendentes/Ativos: ${pending.length}\n• Confirmados: ${confirmed.length}\n• Cancelados: ${cancelled.length}\n• Total no sistema: ${allOrders.length}`;
+        } else if (/pendente|pendentes/.test(msg)) {
+          if (pending.length === 0) {
+            response = '✅ Nenhum pedido pendente no momento.';
+          } else {
+            const lines = pending.slice(0, 10).map((o: any) => `• ${o.orderCode || `#${o.id}`} — ${o.status}`).join('\n');
+            response = `⏳ **Pedidos Pendentes (${pending.length} total)**\n\n${lines}${pending.length > 10 ? `\n\n...e mais ${pending.length - 10} pedidos. Acesse o painel de pedidos para ver todos.` : ''}`;
+          }
+        } else if (/quantos|total|quantidade/.test(msg)) {
+          response = `📊 **Total de Pedidos no Sistema**\n\n• Total: ${allOrders.length}\n• Confirmados: ${confirmed.length}\n• Pendentes/Ativos: ${pending.length}\n• Cancelados: ${cancelled.length}`;
+        } else {
+          response = `📦 **Resumo de Pedidos**\n\n• Total: ${allOrders.length}\n• Confirmados: ${confirmed.length}\n• Pendentes: ${pending.length}\n• Cancelados: ${cancelled.length}\n\nPara detalhes específicos, pergunte: "pedidos hoje", "pedidos pendentes", "quantos pedidos".`;
+        }
+      } catch { response = '⚠️ Não foi possível consultar os pedidos agora.'; }
+    }
+
+    else if (isInternal && /empresa|empresas/.test(msg)) {
+      intent = 'query_companies';
+      try {
+        const allCompanies = await storage.getCompanies();
+        const active = allCompanies.filter((c: any) => c.active);
+        const inactive = allCompanies.filter((c: any) => !c.active);
+
+        if (/não pediram|nao pediram|sem pedido|não fizeram pedido|nao fizeram/.test(msg)) {
+          const allOrders = await storage.getOrders();
+          const activeWindow = await storage.getActiveOrderWindow();
+          const weekRef = activeWindow?.weekReference;
+          const companiesWithOrders = new Set(
+            allOrders
+              .filter((o: any) => weekRef ? o.weekReference === weekRef : true)
+              .filter((o: any) => o.status !== 'CANCELLED')
+              .map((o: any) => o.companyId)
+          );
+          const noPedido = active.filter((c: any) => !companiesWithOrders.has(c.id));
+          if (noPedido.length === 0) {
+            response = `✅ Todas as empresas ativas já fizeram pedido${weekRef ? ` na ${weekRef}` : ''}.`;
+          } else {
+            const lines = noPedido.slice(0, 15).map((c: any) => `• ${c.companyName}`).join('\n');
+            response = `⚠️ **Empresas sem pedido${weekRef ? ` (${weekRef})` : ''}:** ${noPedido.length}\n\n${lines}${noPedido.length > 15 ? `\n\n...e mais ${noPedido.length - 15}` : ''}`;
+          }
+        } else if (/inativa|inativas/.test(msg)) {
+          if (inactive.length === 0) {
+            response = '✅ Nenhuma empresa inativa.';
+          } else {
+            const lines = inactive.slice(0, 10).map((c: any) => `• ${c.companyName}`).join('\n');
+            response = `🔴 **Empresas Inativas (${inactive.length})**\n\n${lines}`;
+          }
+        } else {
+          response = `🏢 **Empresas no Sistema**\n\n• Total: ${allCompanies.length}\n• Ativas: ${active.length}\n• Inativas: ${inactive.length}\n\nDicas:\n• "Empresas que não fizeram pedido"\n• "Empresas inativas"\n• "Criar empresa"`;
+        }
+      } catch { response = '⚠️ Não foi possível consultar as empresas agora.'; }
+    }
+
+    else if (isInternal && /estoque|inventário|inventario|produto/.test(msg)) {
+      intent = 'query_stock';
+      try {
+        const prods = await storage.getProducts();
+        const active = prods.filter((p: any) => p.active !== false);
+        response = `📦 **Produtos Cadastrados**\n\n• Total: ${prods.length}\n• Ativos: ${active.length}\n\nPara ver estoque detalhado, acesse → Menu → Estoque → Painel.\nPara alertas preditivos → Menu → IA Operacional.`;
+      } catch { response = '⚠️ Não foi possível consultar os produtos agora.'; }
+    }
+
+    else if (isInternal && /rota|rotas|logística|logistica|entrega|entregas/.test(msg)) {
+      intent = 'query_routes';
+      try {
+        const routes = await (storage as any).getLogisticsRoutes?.() || [];
+        response = `🚚 **Logística e Rotas**\n\n• Rotas cadastradas: ${(routes as any[]).length}\n\nPara gerenciar rotas → Menu → Logística → Rotas\nPara o assistente de rotas → Menu → Logística → Aba "Assistente"`;
+      } catch { response = '🚚 Acesse **Menu → Logística** para ver rotas, motoristas e veículos.'; }
+    }
+
+    else if (isInternal && /sistema|auditoria|saúde|saude|erros|alertas|status do sistema/.test(msg)) {
+      intent = 'system_status';
+      try {
+        const allOrders = await storage.getOrders();
+        const confirmed = allOrders.filter((o: any) => o.status === 'CONFIRMED').length;
+        const pending = allOrders.filter((o: any) => o.status === 'PENDING' || o.status === 'ACTIVE').length;
+        response = `🔧 **Status do Sistema**\n\n• Pedidos confirmados: ${confirmed}\n• Pedidos pendentes: ${pending}\n• Total de pedidos: ${allOrders.length}\n\nPara auditoria completa → Menu → Área do Desenvolvedor → Auditoria\nPara alertas preditivos → Menu → IA Operacional`;
+      } catch { response = '🔧 Para auditoria completa acesse → Menu → Área do Desenvolvedor → Auditoria.'; }
+    }
+
+    else if (!isInternal && company) {
+      // Client-specific queries
+      if (/pedido|meu pedido|meus pedidos|status/.test(msg)) {
+        intent = 'client_orders';
+        try {
+          const compOrders = await storage.getCompanyOrders(company.id);
+          const recent = compOrders.slice(0, 5);
+          if (recent.length === 0) {
+            response = '📦 Você ainda não tem pedidos registrados. Acesse "Novo Pedido" para fazer seu primeiro pedido.';
+          } else {
+            const statusMap: Record<string, string> = {
+              CONFIRMED: '✅ Confirmado', ACTIVE: '🟡 Em andamento', CANCELLED: '❌ Cancelado',
+              PENDING: '⏳ Pendente', OPEN_FOR_EDITING: '✏️ Em edição', REOPEN_REQUESTED: '🔄 Solicitando reabertura'
+            };
+            const lines = recent.map((o: any) => `• ${o.orderCode || `#${o.id}`} — ${statusMap[o.status] || o.status} — Entrega: ${o.deliveryDate?.toString().split('T')[0] || '—'}`).join('\n');
+            response = `📦 **Seus Pedidos Recentes**\n\n${lines}\n\nPara ver o histórico completo acesse "Histórico de Pedidos" no menu.`;
+          }
+        } catch { response = '⚠️ Não foi possível consultar seus pedidos agora.'; }
+      } else if (/entrega|quando chega|previsão|previsao/.test(msg)) {
+        intent = 'client_delivery';
+        try {
+          const win = await storage.getActiveOrderWindow();
+          if (win) {
+            response = `📅 **Janela de Pedidos Ativa**\n\n• Semana: ${win.weekReference}\n• Pedidos até: ${new Date(win.orderCloseDate).toLocaleDateString('pt-BR')}\n• Entrega: ${new Date(win.deliveryStartDate).toLocaleDateString('pt-BR')} a ${new Date(win.deliveryEndDate).toLocaleDateString('pt-BR')}`;
+          } else {
+            response = '📅 Não há janela de pedidos aberta no momento. Aguarde a abertura da próxima janela.';
+          }
+        } catch { response = '⚠️ Não foi possível consultar a janela de entrega agora.'; }
+      } else {
+        intent = 'client_general';
+        response = `Olá! Posso ajudar com:\n• **"meus pedidos"** — ver status dos pedidos\n• **"previsão de entrega"** — ver datas da janela atual\n• **"clima"** — previsão do tempo\n• **"suporte"** — contato com a equipe\n\nOu fale diretamente com nossa equipe pelo WhatsApp! 📱`;
+      }
+    }
+
+    else if (/ajuda|menu|opções|opcoes|o que (você|voce) (faz|pode)/.test(msg)) {
+      intent = 'help';
+      if (isInternal) {
+        const extras = isAdmin ? '\n• "Criar empresa" — cadastrar nova empresa' : '';
+        response = `🤖 **O que posso fazer:**\n\n📦 Consultas:\n• "Pedidos hoje" / "pedidos pendentes"\n• "Empresas que não fizeram pedido"\n• "Empresas inativas"\n• "Status do sistema"\n• "Estoque"${extras}\n\n🌤️ Clima:\n• "Qual o clima em São Paulo?"\n\n💡 Dica: Você também pode acessar a **IA Operacional** no menu para alertas preditivos automáticos.`;
+      } else {
+        response = `🤖 **Posso ajudar com:**\n\n• "Meus pedidos" — ver status\n• "Previsão de entrega" — datas da janela\n• "Clima" — previsão do tempo\n• "Suporte" — contato com a equipe`;
+      }
+    }
+
+    else {
+      intent = 'unknown';
+      if (isInternal) {
+        response = `Não entendi completamente. Posso ajudar com:\n\n• **Pedidos**: "pedidos hoje", "pedidos pendentes", "quantos pedidos"\n• **Empresas**: "empresas que não fizeram pedido", "empresas inativas"\n• **Clima**: "qual o clima em São Paulo?"\n• **Sistema**: "status do sistema"${isAdmin ? '\n• **Criar**: "criar empresa"' : ''}\n\nTente reformular sua pergunta!`;
+      } else {
+        response = `Não entendi. Tente:\n• "meus pedidos"\n• "previsão de entrega"\n• "clima"\n• "suporte"`;
+      }
+    }
+
+    // Save interaction to history
+    try {
+      await db.insert(aiInteractions).values({
+        userId: user?.id || null,
+        companyId: company?.id || null,
+        userRole: user?.role || (company ? 'CLIENT' : null),
+        userName: user?.name || company?.companyName || null,
+        message: message.trim(),
+        response,
+        intent,
+        actionExecuted,
+        actionData: actionData ? actionData : null,
+      });
+    } catch { /* ignore history save errors */ }
+
+    res.json({ response, intent, sessionContext: newContext || null });
   });
 
   // Seed DB Function

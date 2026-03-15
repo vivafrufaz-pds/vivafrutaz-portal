@@ -9,12 +9,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Phone, Mail, MessageSquare, Save, Receipt } from 'lucide-react';
+import { Phone, Mail, MessageSquare, Save, Receipt, Upload, ImageIcon, Trash2 } from 'lucide-react';
 import type { CompanyConfig } from '@shared/schema';
 
 export default function SupportConfigPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+
+  const [logoBase64, setLogoBase64] = useState<string | null>(null);
+  const [logoType, setLogoType] = useState<string>('image/png');
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     companyName: '',
@@ -62,14 +66,43 @@ export default function SupportConfigPage() {
         supportEmail: config.supportEmail || '',
         supportMessage: config.supportMessage || '',
       });
+      if ((config as any).logoBase64) {
+        setLogoBase64((config as any).logoBase64);
+        setLogoType((config as any).logoType || 'image/png');
+        setLogoPreview(`data:${(config as any).logoType || 'image/png'};base64,${(config as any).logoBase64}`);
+      }
     }
   }, [config]);
 
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ['image/png', 'image/jpeg', 'image/svg+xml'];
+    if (!allowed.includes(file.type)) {
+      toast({ title: 'Formato inválido. Use PNG, JPG ou SVG.', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: 'Arquivo muito grande. Máximo 2MB.', variant: 'destructive' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      const base64 = result.split(',')[1];
+      setLogoBase64(base64);
+      setLogoType(file.type);
+      setLogoPreview(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const saveMut = useMutation({
     mutationFn: (data: typeof formData) =>
-      apiRequest('PATCH', '/api/company-config', data),
+      apiRequest('PATCH', '/api/company-config', { ...data, logoBase64, logoType }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/company-config'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/company-config/logo'] });
       toast({ title: 'Configurações salvas com sucesso!' });
     },
     onError: () => toast({ title: 'Erro ao salvar', variant: 'destructive' }),
@@ -276,6 +309,61 @@ export default function SupportConfigPage() {
                       />
                     </div>
                     <MessageSquare className="w-4 h-4 text-gray-400 mt-8" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Logo Upload */}
+              <div className="border-t pt-6">
+                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5 text-primary" />
+                  Logo da Empresa
+                </h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  A logo é usada no portal de login, cabeçalho do sistema e documentos PDF. Formatos: PNG, JPG, SVG. Máximo 2MB.
+                </p>
+                <div className="flex items-start gap-6 flex-wrap">
+                  {/* Preview */}
+                  <div className="w-32 h-32 rounded-2xl border-2 border-border/50 flex items-center justify-center bg-muted/30 overflow-hidden flex-shrink-0">
+                    {logoPreview ? (
+                      <img src={logoPreview} alt="Logo preview" className="max-w-full max-h-full object-contain p-2" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <ImageIcon className="w-10 h-10" />
+                        <span className="text-xs text-center">Sem logo</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Actions */}
+                  <div className="flex flex-col gap-3">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.svg"
+                        className="hidden"
+                        onChange={handleLogoUpload}
+                        data-testid="input-logo-upload"
+                      />
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors cursor-pointer">
+                        <Upload className="w-4 h-4" />
+                        Enviar Logo
+                      </div>
+                    </label>
+                    {logoPreview && (
+                      <button
+                        onClick={() => { setLogoBase64(null); setLogoPreview(null); setLogoType('image/png'); }}
+                        className="flex items-center gap-2 px-4 py-2.5 border border-destructive/50 text-destructive font-semibold rounded-xl text-sm hover:bg-destructive/5 transition-colors"
+                        data-testid="button-remove-logo"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Remover Logo
+                      </button>
+                    )}
+                    {logoPreview && (
+                      <p className="text-xs text-muted-foreground">
+                        Clique em "Salvar Configurações" para aplicar a logo.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
