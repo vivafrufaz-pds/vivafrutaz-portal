@@ -3,10 +3,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, Pencil, Save, Image, Eye, X, Upload } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
+
+const EDIT_ROLES = ['ADMIN', 'DIRECTOR', 'DEVELOPER'];
 
 export default function AdminAboutUs() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const canEdit = EDIT_ROLES.includes(user?.role || '');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery<any>({
@@ -88,14 +93,16 @@ export default function AdminAboutUs() {
           </div>
         </div>
         {!editing ? (
-          <button
-            onClick={startEdit}
-            data-testid="button-edit-about-us"
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-colors"
-          >
-            <Pencil className="w-4 h-4" />
-            Editar Informações
-          </button>
+          canEdit && (
+            <button
+              onClick={startEdit}
+              data-testid="button-edit-about-us"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-colors"
+            >
+              <Pencil className="w-4 h-4" />
+              Editar Informações
+            </button>
+          )
         ) : (
           <div className="flex gap-2">
             <button

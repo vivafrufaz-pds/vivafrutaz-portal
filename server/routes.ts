@@ -3797,7 +3797,7 @@ export async function registerRoutes(
   // ─── About Us Routes ────────────────────────────────────────────────────────
   app.get('/api/about-us', async (req: any, res) => {
     try {
-      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      if (!req.session?.userId && !req.session?.companyId) return res.status(401).json({ message: 'Não autenticado' });
       const data = await storage.getAboutUs();
       res.json(data || { title: 'Quem Somos Nós', content: '', foundingYear: null, mission: null, vision: null, values: null, imageBase64: null, imageType: null });
     } catch (e: any) {
