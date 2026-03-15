@@ -119,6 +119,29 @@ const getBillingFormatLabel = (f: string | null) => {
 
 const WEEK_DAYS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
 
+// ─── Scope Category Constants ─────────────────────────────────────
+const SCOPE_CATEGORIES = [
+  "Pote 100g",
+  "Pote Mix",
+  "Frutas da Estação",
+  "Fruta Individual",
+  "Editável",
+];
+
+// Color coding per category
+const CATEGORY_COLORS: Record<string, string> = {
+  "Pote 100g":         "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  "Pote Mix":          "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+  "Frutas da Estação": "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+  "Fruta Individual":  "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+  "Editável":          "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
+};
+
+function getCategoryColor(cat: string | null | undefined) {
+  if (!cat) return "bg-muted text-muted-foreground";
+  return CATEGORY_COLORS[cat] || "bg-muted text-muted-foreground";
+}
+
 // ─── Contract Scope Manager ──────────────────────────────────────
 function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
   company: any | null;
@@ -128,7 +151,14 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
 }) {
   const { data: products } = useProducts();
   const queryClient = useQueryClient();
-  const [newItem, setNewItem] = useState({ dayOfWeek: "", weekNumber: "", productId: "", quantity: "1" });
+  const [newItem, setNewItem] = useState({
+    dayOfWeek: "",
+    weekNumber: "",
+    scopeCategory: "",
+    customCategory: "",
+    productId: "",
+    quantity: "1",
+  });
   const [saving, setSaving] = useState(false);
 
   const { data: scopes, isLoading } = useQuery<any[]>({
@@ -141,6 +171,17 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
     enabled: !!company?.id,
   });
 
+  // Effective category value (custom if "Editável" is chosen and custom is filled)
+  const effectiveCategory = newItem.scopeCategory === "Editável" && newItem.customCategory.trim()
+    ? newItem.customCategory.trim()
+    : newItem.scopeCategory || null;
+
+  // Filter active products; optionally filter by category (matches product's own category field)
+  const filteredProducts = (products || []).filter((p: any) => {
+    if (!p.active) return false;
+    return true; // Products are always shown; category is a scope-level label, not a product filter
+  });
+
   const addScope = async () => {
     if (!company?.id || !newItem.dayOfWeek || !newItem.productId || !newItem.quantity) return;
     setSaving(true);
@@ -148,6 +189,7 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
       const body: any = {
         companyId: company.id,
         dayOfWeek: newItem.dayOfWeek,
+        scopeCategory: effectiveCategory,
         productId: Number(newItem.productId),
         quantity: Number(newItem.quantity),
       };
@@ -161,7 +203,7 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
       });
       if (!res.ok) throw new Error('Erro ao adicionar item');
       queryClient.invalidateQueries({ queryKey: ['/api/companies', company.id, 'contract-scopes'] });
-      setNewItem({ dayOfWeek: "", weekNumber: "", productId: "", quantity: "1" });
+      setNewItem({ dayOfWeek: newItem.dayOfWeek, weekNumber: newItem.weekNumber, scopeCategory: newItem.scopeCategory, customCategory: newItem.customCategory, productId: "", quantity: "1" });
     } finally {
       setSaving(false);
     }
@@ -176,14 +218,8 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
     );
   }
 
-  // Group scopes by dayOfWeek — filtering out locally staged deletes
+  // Group scopes by dayOfWeek + week + category — filtering out locally staged deletes
   const visibleScopes = (scopes || []).filter((s: any) => !hiddenIds.includes(s.id));
-  const grouped = visibleScopes.reduce((acc: any, s: any) => {
-    const key = (contractModel === 'alternado' || contractModel === 'rotacao4') ? `${s.dayOfWeek}__week${s.weekNumber || 0}` : s.dayOfWeek;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(s);
-    return acc;
-  }, {} as Record<string, any[]>);
 
   const isAlternado = contractModel === 'alternado';
   const isRotacao4 = contractModel === 'rotacao4';
@@ -196,6 +232,32 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
     week3: 'Semana 3 (Lista C)',
     week4: 'Semana 4 (Lista D)',
   };
+
+  // Build hierarchy: { dayKey: { weekKey: { category: [items] } } }
+  type ScopeGroup = { day: string; weekKey: string; weekLabel: string; byCategory: Record<string, any[]> };
+  const groups: ScopeGroup[] = [];
+  const groupMap: Record<string, ScopeGroup> = {};
+
+  visibleScopes.forEach((s: any) => {
+    const day = s.dayOfWeek;
+    const weekKey = hasWeekRotation ? `week${s.weekNumber || 0}` : 'week0';
+    const mapKey = `${day}__${weekKey}`;
+    if (!groupMap[mapKey]) {
+      groupMap[mapKey] = { day, weekKey, weekLabel: WEEK_LABELS[weekKey] || weekKey, byCategory: {} };
+      groups.push(groupMap[mapKey]);
+    }
+    const cat = s.scopeCategory || '(Sem categoria)';
+    if (!groupMap[mapKey].byCategory[cat]) groupMap[mapKey].byCategory[cat] = [];
+    groupMap[mapKey].byCategory[cat].push(s);
+  });
+
+  // Sort days in order
+  const DAY_ORDER = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
+  groups.sort((a, b) => {
+    const di = DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day);
+    if (di !== 0) return di;
+    return a.weekKey.localeCompare(b.weekKey);
+  });
 
   return (
     <div className="space-y-4">
@@ -215,15 +277,27 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
       <div className="p-4 bg-muted/20 rounded-xl border border-border space-y-3">
         <p className="text-sm font-bold text-foreground">Adicionar item ao escopo</p>
         <div className="flex flex-wrap gap-3">
-          <select data-testid="select-scope-day" value={newItem.dayOfWeek} onChange={e => setNewItem(p => ({ ...p, dayOfWeek: e.target.value }))}
-            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none min-w-[160px]">
+
+          {/* 1. Dia da semana */}
+          <select
+            data-testid="select-scope-day"
+            value={newItem.dayOfWeek}
+            onChange={e => setNewItem(p => ({ ...p, dayOfWeek: e.target.value }))}
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none min-w-[160px]"
+          >
             <option value="">Dia da semana...</option>
             {WEEK_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
+
+          {/* 2. Semana do ciclo (if applicable) */}
           {hasWeekRotation && (
-            <select data-testid="select-scope-week" value={newItem.weekNumber} onChange={e => setNewItem(p => ({ ...p, weekNumber: e.target.value }))}
-              className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
-              <option value="">Semana...</option>
+            <select
+              data-testid="select-scope-week"
+              value={newItem.weekNumber}
+              onChange={e => setNewItem(p => ({ ...p, weekNumber: e.target.value }))}
+              className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none"
+            >
+              <option value="">Semana do ciclo...</option>
               <option value="1">Semana 1 (Lista A)</option>
               <option value="2">Semana 2 (Lista B)</option>
               {isRotacao4 && <>
@@ -232,64 +306,145 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
               </>}
             </select>
           )}
-          <select data-testid="select-scope-product" value={newItem.productId} onChange={e => setNewItem(p => ({ ...p, productId: e.target.value }))}
-            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none min-w-[180px]">
+
+          {/* 3. Categoria */}
+          <select
+            data-testid="select-scope-category"
+            value={newItem.scopeCategory}
+            onChange={e => setNewItem(p => ({ ...p, scopeCategory: e.target.value, customCategory: "" }))}
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none min-w-[160px]"
+          >
+            <option value="">Categoria (opcional)...</option>
+            {SCOPE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+
+          {/* Custom category text input — shown when "Editável" is selected */}
+          {newItem.scopeCategory === "Editável" && (
+            <input
+              data-testid="input-scope-category-custom"
+              type="text"
+              value={newItem.customCategory}
+              onChange={e => setNewItem(p => ({ ...p, customCategory: e.target.value }))}
+              placeholder="Nome da categoria..."
+              className="px-3 py-2 rounded-xl border-2 border-yellow-400 text-sm focus:border-yellow-500 outline-none min-w-[160px]"
+            />
+          )}
+
+          {/* 4. Produto */}
+          <select
+            data-testid="select-scope-product"
+            value={newItem.productId}
+            onChange={e => setNewItem(p => ({ ...p, productId: e.target.value }))}
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none min-w-[180px]"
+          >
             <option value="">Produto...</option>
-            {(products || []).filter((p: any) => p.active).map((p: any) => (
+            {filteredProducts.map((p: any) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <input data-testid="input-scope-quantity" type="number" min="1" value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))}
+
+          {/* 5. Quantidade */}
+          <input
+            data-testid="input-scope-quantity"
+            type="number"
+            min="1"
+            value={newItem.quantity}
+            onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))}
             placeholder="Qtd"
-            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none w-20" />
-          <button data-testid="button-add-scope" onClick={addScope} disabled={saving || !newItem.dayOfWeek || !newItem.productId}
-            className="px-4 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5 text-sm">
+            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none w-20"
+          />
+
+          <button
+            data-testid="button-add-scope"
+            onClick={addScope}
+            disabled={saving || !newItem.dayOfWeek || !newItem.productId}
+            className="px-4 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5 text-sm"
+          >
             <Save className="w-3.5 h-3.5" /> Adicionar
           </button>
         </div>
+
+        {/* Preview of what will be added */}
+        {newItem.dayOfWeek && newItem.productId && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+            <span className="font-medium text-foreground">{newItem.dayOfWeek}</span>
+            {newItem.weekNumber && hasWeekRotation && <><span>·</span><span>{WEEK_LABELS[`week${newItem.weekNumber}`]}</span></>}
+            {effectiveCategory && <><span>·</span><span className={`px-2 py-0.5 rounded-full font-semibold ${getCategoryColor(effectiveCategory)}`}>{effectiveCategory}</span></>}
+            <span>·</span>
+            <span>{(filteredProducts.find((p: any) => p.id === Number(newItem.productId)) as any)?.name || '—'}</span>
+            <span>·</span>
+            <span className="font-bold">{newItem.quantity}x</span>
+          </div>
+        )}
       </div>
 
       {/* Current scopes */}
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando escopo...</p>
-      ) : (scopes || []).length === 0 ? (
+      ) : visibleScopes.length === 0 ? (
         <div className="py-8 text-center text-muted-foreground border border-dashed border-border rounded-xl">
           <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
           <p className="text-sm">Nenhum produto no escopo. Adicione itens acima.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {Object.entries(grouped).map(([key, items]: [string, any]) => {
-            const [day, weekLabel] = key.includes('__') ? key.split('__') : [key, ''];
-            return (
-              <div key={key} className="border border-border/50 rounded-xl overflow-hidden">
-                <div className="px-4 py-2.5 bg-primary/5 border-b border-border/50 flex items-center gap-2">
-                  <CalendarDays className="w-4 h-4 text-primary" />
-                  <p className="font-bold text-sm text-foreground">{day}</p>
-                  {weekLabel && <span className="px-2 py-0.5 bg-secondary/20 text-secondary text-xs font-bold rounded-full">
-                    {WEEK_LABELS[weekLabel] || weekLabel}
-                  </span>}
-                </div>
-                <div className="divide-y divide-border/50">
-                  {items.map((s: any) => {
-                    const product = (products || []).find((p: any) => p.id === Number(s.productId));
-                    return (
-                      <div key={s.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-muted/20">
-                        <div className="flex items-center gap-3">
-                          <span className="w-7 h-7 bg-primary/10 text-primary text-xs font-bold rounded-lg flex items-center justify-center">{s.quantity}x</span>
-                          <p className="text-sm font-medium text-foreground">{product?.name || `Produto #${s.productId}`}</p>
-                        </div>
-                        <button type="button" data-testid={`button-remove-scope-${s.id}`} onClick={() => onDelete(s.id)}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+          {groups.map((group) => (
+            <div key={`${group.day}__${group.weekKey}`} className="border border-border/50 rounded-xl overflow-hidden">
+              {/* Day + Week header */}
+              <div className="px-4 py-2.5 bg-primary/5 border-b border-border/50 flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-primary" />
+                <p className="font-bold text-sm text-foreground">{group.day}</p>
+                {hasWeekRotation && group.weekKey !== 'week0' && (
+                  <span className="px-2 py-0.5 bg-secondary/20 text-secondary text-xs font-bold rounded-full">
+                    {group.weekLabel}
+                  </span>
+                )}
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {Object.values(group.byCategory).reduce((acc, items) => acc + items.length, 0)} {Object.values(group.byCategory).reduce((acc, items) => acc + items.length, 0) === 1 ? 'item' : 'itens'}
+                </span>
               </div>
-            );
-          })}
+
+              {/* Category sections within this day/week */}
+              {Object.entries(group.byCategory).map(([cat, catItems]: [string, any[]]) => (
+                <div key={cat}>
+                  {/* Category sub-header */}
+                  <div className="px-4 py-1.5 bg-muted/30 border-b border-border/30 flex items-center gap-2">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getCategoryColor(cat === '(Sem categoria)' ? null : cat)}`}>
+                      {cat}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{catItems.length} {catItems.length === 1 ? 'produto' : 'produtos'}</span>
+                  </div>
+                  {/* Items in this category */}
+                  <div className="divide-y divide-border/50">
+                    {catItems.map((s: any) => {
+                      const product = (filteredProducts || []).find((p: any) => p.id === Number(s.productId));
+                      return (
+                        <div key={s.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-muted/20 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <span className="w-7 h-7 bg-primary/10 text-primary text-xs font-bold rounded-lg flex items-center justify-center flex-shrink-0">
+                              {s.quantity}x
+                            </span>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{product?.name || `Produto #${s.productId}`}</p>
+                              {product?.unit && <p className="text-xs text-muted-foreground">{product.unit}</p>}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            data-testid={`button-remove-scope-${s.id}`}
+                            onClick={() => onDelete(s.id)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </div>

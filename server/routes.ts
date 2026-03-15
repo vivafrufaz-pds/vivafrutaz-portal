@@ -1261,6 +1261,7 @@ export async function registerRoutes(
         companyId: Number(req.params.id),
         dayOfWeek: req.body.dayOfWeek,
         weekNumber: req.body.weekNumber ?? null,
+        scopeCategory: req.body.scopeCategory ?? null,
         productId: Number(req.body.productId),
         quantity: Number(req.body.quantity) || 1,
         observation: req.body.observation ?? null,
