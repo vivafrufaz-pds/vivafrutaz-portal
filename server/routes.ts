@@ -2220,6 +2220,101 @@ export async function registerRoutes(
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ── Fiscal: atualizar status fiscal e pré-nota ────────────────
+  app.patch('/api/orders/:id/fiscal', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      const allowed = ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER', 'PURCHASE_MANAGER'];
+      if (!user || !allowed.includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const id = Number(req.params.id);
+      const { fiscalStatus, preNotaNumber } = req.body;
+      const updates: any = {};
+      if (fiscalStatus) updates.fiscalStatus = fiscalStatus;
+      if (preNotaNumber !== undefined) updates.preNotaNumber = preNotaNumber;
+      const order = await storage.updateOrder(id, updates);
+      res.json(order);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Fiscal: gerar número de pré-nota automático ───────────────
+  app.post('/api/orders/:id/generate-prenota', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      const allowed = ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER', 'PURCHASE_MANAGER'];
+      if (!user || !allowed.includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const id = Number(req.params.id);
+      const orderData = await storage.getOrder(id);
+      if (!orderData) return res.status(404).json({ message: 'Pedido não encontrado' });
+      if ((orderData.order as any).preNotaNumber) return res.json({ preNotaNumber: (orderData.order as any).preNotaNumber });
+      // Generate VF-NF-XXXXXX based on order id
+      const preNotaNumber = `VF-NF-${id.toString().padStart(6, '0')}`;
+      const updated = await storage.updateOrder(id, { preNotaNumber } as any);
+      res.json({ preNotaNumber, order: updated });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ── Fiscal: exportar dados para ERP (JSON com estrutura Excel/XML) ──
+  app.get('/api/orders/:id/export-erp', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      const allowed = ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER', 'PURCHASE_MANAGER'];
+      if (!user || !allowed.includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const id = Number(req.params.id);
+      const orderData = await storage.getOrder(id);
+      if (!orderData) return res.status(404).json({ message: 'Pedido não encontrado' });
+      const company = await storage.getCompany((orderData.order as any).companyId);
+      const allProducts = await storage.getProducts();
+      const productMap = new Map(allProducts.map(p => [p.id, p]));
+      const config = await storage.getCompanyConfig();
+      const o = orderData.order as any;
+      const fmtDate = (d: any) => { try { return new Date(d).toISOString().split('T')[0]; } catch { return ''; } };
+      const items = orderData.items.map(item => {
+        const prod = productMap.get(item.productId);
+        return {
+          produto: prod?.name || `Produto #${item.productId}`,
+          ncm: (prod as any)?.ncm || '',
+          cfop: (prod as any)?.cfop || (config as any)?.defaultCfop || '5102',
+          quantidade: item.quantity,
+          unidade: (prod as any)?.commercialUnit || prod?.unit || 'UN',
+          valor_unitario: parseFloat(item.unitPrice || '0'),
+          valor_total: parseFloat(item.totalPrice || '0'),
+        };
+      });
+      const exportData = {
+        numero_pedido: o.orderCode || `VF-${id}`,
+        numero_pre_nota: o.preNotaNumber || '',
+        data_pedido: fmtDate(o.orderDate),
+        data_entrega: fmtDate(o.deliveryDate),
+        semana_referencia: o.weekReference || '',
+        cliente_nome: company?.companyName || '',
+        cliente_cnpj: company?.cnpj || '',
+        cliente_ie: (company as any)?.stateRegistration || '',
+        cliente_endereco: [company?.addressStreet, company?.addressNumber].filter(Boolean).join(', '),
+        cidade: company?.addressCity || '',
+        estado: (company as any)?.addressState || '',
+        cep: company?.addressZip || '',
+        contato: company?.contactName || '',
+        natureza_operacao: (config as any)?.defaultNatureza || 'Venda de mercadoria adquirida',
+        cfop_geral: (config as any)?.defaultCfop || '5102',
+        remetente_nome: (config as any)?.companyName || 'VivaFrutaz',
+        remetente_cnpj: (config as any)?.cnpj || '',
+        remetente_ie: (config as any)?.stateRegistration || '',
+        remetente_endereco: (config as any)?.address || '',
+        remetente_cidade: (config as any)?.city || '',
+        remetente_estado: (config as any)?.state || '',
+        remetente_cep: (config as any)?.cep || '',
+        itens: items,
+        valor_total_nota: parseFloat(o.totalValue || '0'),
+        observacoes: [o.orderNote, o.adminNote].filter(Boolean).join(' | '),
+        status_fiscal: o.fiscalStatus || 'nota_pendente',
+      };
+      res.json(exportData);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // ─── DASHBOARD EXECUTIVO ─────────────────────────────────────
   app.get('/api/executive-dashboard', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });

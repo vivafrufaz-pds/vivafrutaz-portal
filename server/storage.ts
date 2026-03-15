@@ -92,7 +92,7 @@ export interface IStorage {
   getOrder(id: number): Promise<{ order: Order, items: OrderItem[] } | undefined>;
   getCompanyOrders(companyId: number): Promise<Order[]>;
   createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order>;
-  updateOrder(id: number, updates: { status?: string; adminNote?: string; reopenReason?: string | null; reopenRequestedAt?: Date | null; totalValue?: string }): Promise<Order>;
+  updateOrder(id: number, updates: { status?: string; adminNote?: string; reopenReason?: string | null; reopenRequestedAt?: Date | null; totalValue?: string; fiscalStatus?: string | null; preNotaNumber?: string | null; nimbiExpiration?: string | null; orderNote?: string | null; deliveryDate?: string; [key: string]: any }): Promise<Order>;
   updateOrderItems(orderId: number, newItems: { productId: number; quantity: number; unitPrice: string; totalPrice: string }[]): Promise<void>;
   getPurchasingReport(filters: { dateFrom?: string; dateTo?: string; companyId?: number; productId?: number }): Promise<any>;
   getIndustrializedReport(filters: { dateFrom?: string; dateTo?: string; companyId?: number; productId?: number }): Promise<any>;
@@ -386,7 +386,7 @@ export class DatabaseStorage implements IStorage {
     return { order, items };
   }
 
-  async updateOrder(id: number, updates: { status?: string; adminNote?: string; reopenReason?: string | null; reopenRequestedAt?: Date | null; totalValue?: string }): Promise<Order> {
+  async updateOrder(id: number, updates: { status?: string; adminNote?: string; reopenReason?: string | null; reopenRequestedAt?: Date | null; totalValue?: string; fiscalStatus?: string | null; preNotaNumber?: string | null; nimbiExpiration?: string | null; orderNote?: string | null; deliveryDate?: string; [key: string]: any }): Promise<Order> {
     const [updated] = await db.update(orders).set(updates).where(eq(orders.id, id)).returning();
     return updated;
   }

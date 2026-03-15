@@ -12,10 +12,25 @@ import {
   Receipt, Search, ChevronDown, ChevronUp, MessageSquare, Package, FileText,
   XCircle, Edit3, AlertTriangle, CheckCircle, StickyNote, Save, Trash2, Calendar,
   Lock, Unlock, ThumbsUp, ThumbsDown, ClipboardEdit, Bell, Building2,
-  Download, Eye, History, Loader2, FileDown
+  Download, Eye, History, Loader2, FileDown, FileSpreadsheet, Code2,
+  FileCheck, FileX, FileClock, Tag
 } from "lucide-react";
 import { api } from "@shared/routes";
-import { downloadDanfe, openDanfe, type DanfeData } from "@/lib/danfe-generator";
+import { downloadDanfe, openDanfe, exportToExcel, exportToXML, type DanfeData } from "@/lib/danfe-generator";
+
+const FISCAL_LABEL: Record<string, string> = {
+  nota_pendente: "Nota Pendente",
+  nota_exportada: "Nota Exportada",
+  nota_emitida: "Nota Emitida",
+  nota_cancelada: "Nota Cancelada",
+};
+
+const FISCAL_BADGE: Record<string, string> = {
+  nota_pendente: "bg-yellow-100 text-yellow-700 border-yellow-300",
+  nota_exportada: "bg-blue-100 text-blue-700 border-blue-300",
+  nota_emitida: "bg-green-100 text-green-700 border-green-300",
+  nota_cancelada: "bg-red-100 text-red-700 border-red-300",
+};
 
 type Order = any;
 
@@ -213,10 +228,12 @@ function CancelModal({ order, onClose, onConfirm }: { order: Order; onClose: () 
 }
 
 // ─── DANFE Panel ──────────────────────────────────────────────
-function DanfePanel({ order, company, products }: { order: Order; company: any; products: any[] }) {
+function DanfePanel({ order, company, products, queryClient }: { order: Order; company: any; products: any[]; queryClient: any }) {
   const { toast } = useToast();
-  const [generating, setGenerating] = useState<"download" | "view" | null>(null);
+  const [generating, setGenerating] = useState<"download" | "view" | "excel" | "xml" | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [updatingFiscal, setUpdatingFiscal] = useState(false);
+  const [genNota, setGenNota] = useState(false);
 
   const { data: danfeLogs, refetch: refetchLogs } = useQuery({
     queryKey: ["/api/orders", order.id, "danfe-logs"],
@@ -241,9 +258,11 @@ function DanfePanel({ order, company, products }: { order: Order; company: any; 
         unit: product?.unit || "un",
         unitPrice: item.unitPrice,
         totalPrice: item.totalPrice,
+        ncm: (product as any)?.ncm || null,
+        cfop: (product as any)?.cfop || null,
       };
     });
-
+    const detailOrder = detail.order || detail;
     return {
       order: {
         id: order.id,
@@ -256,6 +275,8 @@ function DanfePanel({ order, company, products }: { order: Order; company: any; 
         orderNote: order.orderNote,
         adminNote: order.adminNote,
         companyId: order.companyId,
+        preNotaNumber: detailOrder?.preNotaNumber || order.preNotaNumber || null,
+        fiscalStatus: detailOrder?.fiscalStatus || order.fiscalStatus || null,
       },
       items,
       company: {
@@ -268,15 +289,22 @@ function DanfePanel({ order, company, products }: { order: Order; company: any; 
         addressNeighborhood: company?.addressNeighborhood,
         addressCity: company?.addressCity,
         addressZip: company?.addressZip,
+        addressState: (company as any)?.addressState || null,
+        stateRegistration: (company as any)?.stateRegistration || null,
       },
       vivaFrutaz: {
         companyName: configRes?.companyName || "VivaFrutaz",
+        fantasyName: configRes?.fantasyName || null,
         cnpj: configRes?.cnpj || null,
         address: configRes?.address || null,
         city: configRes?.city || null,
         state: configRes?.state || null,
+        cep: configRes?.cep || null,
         phone: configRes?.phone || null,
         email: configRes?.email || null,
+        stateRegistration: configRes?.stateRegistration || null,
+        defaultCfop: configRes?.defaultCfop || null,
+        defaultNatureza: configRes?.defaultNatureza || null,
       },
     };
   };
@@ -319,69 +347,225 @@ function DanfePanel({ order, company, products }: { order: Order; company: any; 
     }
   };
 
+  const handleExcel = async () => {
+    setGenerating("excel");
+    try {
+      const data = await buildDanfeData();
+      exportToExcel(data);
+      toast({ title: "Exportado para Excel com sucesso!" });
+    } catch (e: any) {
+      toast({ title: "Erro ao exportar Excel", description: e.message, variant: "destructive" });
+    } finally {
+      setGenerating(null);
+    }
+  };
+
+  const handleXML = async () => {
+    setGenerating("xml");
+    try {
+      const data = await buildDanfeData();
+      exportToXML(data);
+      toast({ title: "Exportado para XML com sucesso!" });
+    } catch (e: any) {
+      toast({ title: "Erro ao exportar XML", description: e.message, variant: "destructive" });
+    } finally {
+      setGenerating(null);
+    }
+  };
+
+  const handleGeneratePreNota = async () => {
+    setGenNota(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/generate-prenota`, { method: "POST", credentials: "include" });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || "Erro ao gerar pré-nota");
+      toast({ title: `Pré-nota gerada: ${result.preNotaNumber}` });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+    } catch (e: any) {
+      toast({ title: "Erro ao gerar pré-nota", description: e.message, variant: "destructive" });
+    } finally {
+      setGenNota(false);
+    }
+  };
+
+  const handleUpdateFiscal = async (fiscalStatus: string) => {
+    setUpdatingFiscal(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/fiscal`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fiscalStatus }),
+      });
+      if (!res.ok) throw new Error("Erro ao atualizar status fiscal");
+      toast({ title: `Status fiscal atualizado: ${FISCAL_LABEL[fiscalStatus] || fiscalStatus}` });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+    } catch (e: any) {
+      toast({ title: "Erro ao atualizar fiscal", description: e.message, variant: "destructive" });
+    } finally {
+      setUpdatingFiscal(false);
+    }
+  };
+
+  const currentFiscal = order.fiscalStatus || "nota_pendente";
+
   return (
-    <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/80">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
-          <FileDown className="w-4 h-4 text-emerald-700" />
+    <div className="space-y-3">
+      {/* DANFE section */}
+      <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200/80">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
+            <FileDown className="w-4 h-4 text-emerald-700" />
+          </div>
+          <p className="text-sm font-bold text-emerald-800 uppercase tracking-wider">DANFE Interno</p>
+          <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full font-medium">Documento Auxiliar de Entrega</span>
         </div>
-        <p className="text-sm font-bold text-emerald-800 uppercase tracking-wider">DANFE Interno</p>
-        <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full font-medium">Documento Auxiliar de Entrega</span>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            data-testid={`button-danfe-download-${order.id}`}
+            onClick={handleDownload}
+            disabled={!!generating}
+            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50"
+          >
+            {generating === "download" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {generating === "download" ? "Gerando..." : "Baixar DANFE"}
+          </button>
+          <button
+            data-testid={`button-danfe-view-${order.id}`}
+            onClick={handleView}
+            disabled={!!generating}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white border-2 border-emerald-600 text-emerald-700 text-sm font-bold rounded-xl hover:bg-emerald-50 transition-colors disabled:opacity-50"
+          >
+            {generating === "view" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+            {generating === "view" ? "Abrindo..." : "Visualizar DANFE"}
+          </button>
+          <button
+            data-testid={`button-danfe-history-${order.id}`}
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white border-2 border-border text-muted-foreground text-sm font-bold rounded-xl hover:bg-muted/30 transition-colors"
+          >
+            <History className="w-4 h-4" />
+            Histórico
+          </button>
+        </div>
+
+        {showHistory && (
+          <div className="mt-3 pt-3 border-t border-emerald-200">
+            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-2">Histórico de geração</p>
+            {!danfeLogs ? (
+              <p className="text-xs text-muted-foreground">Carregando...</p>
+            ) : danfeLogs.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">Nenhum DANFE gerado para este pedido.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {danfeLogs.map((log: any) => (
+                  <div key={log.id} className="flex items-center gap-3 px-3 py-1.5 bg-white rounded-lg border border-emerald-100 text-xs">
+                    <FileDown className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                    <span className="text-foreground font-medium">
+                      {format(new Date(log.generatedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </span>
+                    {log.generatedByEmail && (
+                      <span className="text-muted-foreground">por {log.generatedByEmail.replace("@vivafrutaz.com", "")}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          data-testid={`button-danfe-download-${order.id}`}
-          onClick={handleDownload}
-          disabled={!!generating}
-          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50"
-        >
-          {generating === "download" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          {generating === "download" ? "Gerando..." : "Baixar DANFE"}
-        </button>
-        <button
-          data-testid={`button-danfe-view-${order.id}`}
-          onClick={handleView}
-          disabled={!!generating}
-          className="flex items-center gap-1.5 px-4 py-2 bg-white border-2 border-emerald-600 text-emerald-700 text-sm font-bold rounded-xl hover:bg-emerald-50 transition-colors disabled:opacity-50"
-        >
-          {generating === "view" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-          {generating === "view" ? "Abrindo..." : "Visualizar DANFE"}
-        </button>
-        <button
-          data-testid={`button-danfe-history-${order.id}`}
-          onClick={() => setShowHistory(!showHistory)}
-          className="flex items-center gap-1.5 px-4 py-2 bg-white border-2 border-border text-muted-foreground text-sm font-bold rounded-xl hover:bg-muted/30 transition-colors"
-        >
-          <History className="w-4 h-4" />
-          Histórico
-        </button>
+      {/* ERP Export section */}
+      <div className="p-4 bg-blue-50/60 rounded-xl border border-blue-200/80">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+            <FileText className="w-4 h-4 text-blue-700" />
+          </div>
+          <p className="text-sm font-bold text-blue-800 uppercase tracking-wider">Exportação ERP</p>
+          <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full font-medium">Excel + XML</span>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            data-testid={`button-erp-excel-${order.id}`}
+            onClick={handleExcel}
+            disabled={!!generating}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            {generating === "excel" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            {generating === "excel" ? "Exportando..." : "Excel (.xlsx)"}
+          </button>
+          <button
+            data-testid={`button-erp-xml-${order.id}`}
+            onClick={handleXML}
+            disabled={!!generating}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white border-2 border-blue-600 text-blue-700 text-sm font-bold rounded-xl hover:bg-blue-50 transition-colors disabled:opacity-50"
+          >
+            {generating === "xml" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Code2 className="w-4 h-4" />}
+            {generating === "xml" ? "Exportando..." : "XML NF"}
+          </button>
+        </div>
       </div>
 
-      {showHistory && (
-        <div className="mt-3 pt-3 border-t border-emerald-200">
-          <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-2">Histórico de geração</p>
-          {!danfeLogs ? (
-            <p className="text-xs text-muted-foreground">Carregando...</p>
-          ) : danfeLogs.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">Nenhum DANFE gerado para este pedido.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {danfeLogs.map((log: any) => (
-                <div key={log.id} className="flex items-center gap-3 px-3 py-1.5 bg-white rounded-lg border border-emerald-100 text-xs">
-                  <FileDown className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                  <span className="text-foreground font-medium">
-                    {format(new Date(log.generatedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                  </span>
-                  {log.generatedByEmail && (
-                    <span className="text-muted-foreground">por {log.generatedByEmail.replace("@vivafrutaz.com", "")}</span>
-                  )}
-                </div>
-              ))}
+      {/* Fiscal status section */}
+      <div className="p-4 bg-violet-50/60 rounded-xl border border-violet-200/80">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 bg-violet-100 rounded-lg flex items-center justify-center">
+              <Tag className="w-4 h-4 text-violet-700" />
             </div>
-          )}
+            <p className="text-sm font-bold text-violet-800 uppercase tracking-wider">Status Fiscal</p>
+          </div>
+          <div className={`px-3 py-1 rounded-full text-xs font-bold border ${FISCAL_BADGE[currentFiscal] || "bg-gray-100 text-gray-600 border-gray-300"}`}>
+            {FISCAL_LABEL[currentFiscal] || currentFiscal}
+          </div>
         </div>
-      )}
+
+        <div className="flex flex-wrap gap-2 mb-3">
+          {Object.entries(FISCAL_LABEL).map(([key, label]) => (
+            <button
+              key={key}
+              data-testid={`button-fiscal-${key}-${order.id}`}
+              onClick={() => handleUpdateFiscal(key)}
+              disabled={updatingFiscal || currentFiscal === key}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-colors disabled:opacity-60 ${
+                currentFiscal === key
+                  ? "border-violet-500 bg-violet-100 text-violet-700"
+                  : "border-border bg-white text-muted-foreground hover:border-violet-400 hover:text-violet-700"
+              }`}
+            >
+              {updatingFiscal ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                key === "nota_pendente" ? <FileClock className="w-3 h-3" /> :
+                key === "nota_exportada" ? <FileDown className="w-3 h-3" /> :
+                key === "nota_emitida" ? <FileCheck className="w-3 h-3" /> :
+                <FileX className="w-3 h-3" />
+              }
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="pt-2 border-t border-violet-200">
+          <div className="flex items-center gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Pré-Nota</p>
+              <p className="text-sm font-bold text-foreground">{order.preNotaNumber || "—"}</p>
+            </div>
+            {!order.preNotaNumber && (
+              <button
+                data-testid={`button-generate-prenota-${order.id}`}
+                onClick={handleGeneratePreNota}
+                disabled={genNota}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white text-xs font-bold rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50"
+              >
+                {genNota ? <Loader2 className="w-3 h-3 animate-spin" /> : <Tag className="w-3 h-3" />}
+                Gerar Pré-Nota
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -406,6 +590,7 @@ function OrderRow({
   const [nimbiDate, setNimbiDate] = useState(order.nimbiExpiration || '');
   const [savingNimbi, setSavingNimbi] = useState(false);
   const { data: detail } = useOrderDetail(expanded ? order.id : undefined);
+  const qc = useQueryClient();
   const isCancelled = order.status === 'CANCELLED';
   const isReopenRequested = order.status === 'REOPEN_REQUESTED';
 
@@ -423,9 +608,19 @@ function OrderRow({
             <Receipt className="w-4 h-4 text-primary flex-shrink-0" />
             <div>
               <p className="font-bold text-primary font-mono text-sm">{order.orderCode || `#${String(order.id).padStart(4,'0')}`}</p>
-              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${STATUS_BADGE[order.status] || STATUS_BADGE.ACTIVE}`}>
-                {STATUS_LABEL[order.status] || order.status}
-              </span>
+              <div className="flex gap-1 flex-wrap mt-0.5">
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${STATUS_BADGE[order.status] || STATUS_BADGE.ACTIVE}`}>
+                  {STATUS_LABEL[order.status] || order.status}
+                </span>
+                {order.fiscalStatus && (
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md border ${FISCAL_BADGE[order.fiscalStatus] || "bg-gray-100 text-gray-600 border-gray-300"}`}>
+                    {FISCAL_LABEL[order.fiscalStatus] || order.fiscalStatus}
+                  </span>
+                )}
+                {order.preNotaNumber && (
+                  <span className="text-xs text-violet-600 font-mono">{order.preNotaNumber}</span>
+                )}
+              </div>
             </div>
           </div>
         </td>
@@ -620,7 +815,7 @@ function OrderRow({
                 </div>
               )}
               {/* DANFE Panel */}
-              <DanfePanel order={order} company={company} products={products} />
+              <DanfePanel order={order} company={company} products={products} queryClient={qc} />
             </div>
           </td>
         </tr>
@@ -639,6 +834,7 @@ export default function OrdersPage() {
 
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterFiscal, setFilterFiscal] = useState("ALL");
   const [noteOrder, setNoteOrder] = useState<Order | null>(null);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
@@ -650,7 +846,10 @@ export default function OrdersPage() {
       company?.companyName.toLowerCase().includes(search.toLowerCase()) ||
       code.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'ALL' || o.status === filterStatus;
-    return matchSearch && matchStatus;
+    const matchFiscal = filterFiscal === 'ALL' ||
+      (filterFiscal === 'nota_pendente' && !o.fiscalStatus) ||
+      o.fiscalStatus === filterFiscal;
+    return matchSearch && matchStatus && matchFiscal;
   });
 
   const patchOrder = async (id: number, updates: any) => {
@@ -827,7 +1026,7 @@ export default function OrdersPage() {
               className="w-full pl-9 pr-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none text-sm"
             />
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
             {(['ALL', 'ACTIVE', 'CONFIRMED', 'REOPEN_REQUESTED', 'OPEN_FOR_EDITING', 'CANCELLED'] as const).map(s => (
               <button key={s}
                 onClick={() => setFilterStatus(s)}
@@ -839,6 +1038,19 @@ export default function OrdersPage() {
                 {s === 'ALL' ? 'Todos' : STATUS_LABEL[s] || s}
               </button>
             ))}
+            <div className="w-px h-6 bg-border mx-1" />
+            <Tag className="w-4 h-4 text-violet-500 flex-shrink-0" />
+            <select
+              data-testid="select-filter-fiscal"
+              value={filterFiscal}
+              onChange={e => setFilterFiscal(e.target.value)}
+              className="px-3 py-2 rounded-xl text-xs font-bold border-2 border-border text-muted-foreground focus:border-violet-400 outline-none bg-white"
+            >
+              <option value="ALL">Fiscal: Todos</option>
+              {Object.entries(FISCAL_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
           </div>
         </div>
 

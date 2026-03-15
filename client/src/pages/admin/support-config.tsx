@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Phone, Mail, MessageSquare, Save } from 'lucide-react';
+import { Phone, Mail, MessageSquare, Save, Receipt } from 'lucide-react';
 import type { CompanyConfig } from '@shared/schema';
 
 export default function SupportConfigPage() {
@@ -18,12 +18,17 @@ export default function SupportConfigPage() {
 
   const [formData, setFormData] = useState({
     companyName: '',
+    fantasyName: '',
     address: '',
     city: '',
     state: '',
+    cep: '',
     phone: '',
     email: '',
     cnpj: '',
+    stateRegistration: '',
+    defaultCfop: '',
+    defaultNatureza: '',
     supportPhone: '',
     supportEmail: '',
     supportMessage: '',
@@ -42,12 +47,17 @@ export default function SupportConfigPage() {
     if (config) {
       setFormData({
         companyName: config.companyName || '',
+        fantasyName: (config as any).fantasyName || '',
         address: config.address || '',
         city: config.city || '',
         state: config.state || '',
+        cep: (config as any).cep || '',
         phone: config.phone || '',
         email: config.email || '',
         cnpj: config.cnpj || '',
+        stateRegistration: (config as any).stateRegistration || '',
+        defaultCfop: (config as any).defaultCfop || '',
+        defaultNatureza: (config as any).defaultNatureza || '',
         supportPhone: config.supportPhone || '',
         supportEmail: config.supportEmail || '',
         supportMessage: config.supportMessage || '',
@@ -87,12 +97,22 @@ export default function SupportConfigPage() {
                 <h2 className="text-lg font-semibold mb-4">Informações da Empresa</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="companyName">Nome da Empresa</Label>
+                    <Label htmlFor="companyName">Razão Social</Label>
                     <Input
                       id="companyName"
                       value={formData.companyName}
                       onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                       data-testid="input-company-name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="fantasyName">Nome Fantasia</Label>
+                    <Input
+                      id="fantasyName"
+                      value={formData.fantasyName}
+                      onChange={(e) => setFormData({ ...formData, fantasyName: e.target.value })}
+                      data-testid="input-fantasy-name"
+                      placeholder="VivaFrutaz"
                     />
                   </div>
                   <div>
@@ -103,6 +123,16 @@ export default function SupportConfigPage() {
                       onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })}
                       data-testid="input-cnpj"
                       placeholder="XX.XXX.XXX/0001-XX"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="stateRegistration">Inscrição Estadual (IE)</Label>
+                    <Input
+                      id="stateRegistration"
+                      value={formData.stateRegistration}
+                      onChange={(e) => setFormData({ ...formData, stateRegistration: e.target.value })}
+                      data-testid="input-state-registration"
+                      placeholder="000.000.000.000"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -136,6 +166,16 @@ export default function SupportConfigPage() {
                     />
                   </div>
                   <div>
+                    <Label htmlFor="cep">CEP</Label>
+                    <Input
+                      id="cep"
+                      value={formData.cep}
+                      onChange={(e) => setFormData({ ...formData, cep: e.target.value })}
+                      data-testid="input-cep"
+                      placeholder="00000-000"
+                    />
+                  </div>
+                  <div>
                     <Label htmlFor="phone">Telefone</Label>
                     <Input
                       id="phone"
@@ -154,6 +194,39 @@ export default function SupportConfigPage() {
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       data-testid="input-email"
                     />
+                  </div>
+                </div>
+
+                {/* Fiscal Section */}
+                <div className="mt-4 p-4 rounded-xl border-2 border-violet-200 bg-violet-50">
+                  <h3 className="text-sm font-bold text-violet-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Receipt className="w-4 h-4" /> Padrões Fiscais (NF-e / DANFE)
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="defaultCfop" className="text-violet-700">CFOP Padrão</Label>
+                      <Input
+                        id="defaultCfop"
+                        value={formData.defaultCfop}
+                        onChange={(e) => setFormData({ ...formData, defaultCfop: e.target.value })}
+                        data-testid="input-default-cfop"
+                        placeholder="5102"
+                        className="border-violet-200 focus:border-violet-400"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Código Fiscal de Operações padrão (ex: 5102)</p>
+                    </div>
+                    <div>
+                      <Label htmlFor="defaultNatureza" className="text-violet-700">Natureza da Operação</Label>
+                      <Input
+                        id="defaultNatureza"
+                        value={formData.defaultNatureza}
+                        onChange={(e) => setFormData({ ...formData, defaultNatureza: e.target.value })}
+                        data-testid="input-default-natureza"
+                        placeholder="Venda de mercadoria adquirida"
+                        className="border-violet-200 focus:border-violet-400"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Texto que aparece no campo Natureza da Operação</p>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -56,6 +56,9 @@ export const companies = pgTable("companies", {
   billingFormat: text("billing_format"),
   paymentDates: text("payment_dates"),
   financialNotes: text("financial_notes"),
+  // Dados fiscais do cliente
+  stateRegistration: text("state_registration"), // Inscrição Estadual
+  addressState: text("address_state"), // UF, ex: "SP"
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -93,6 +96,10 @@ export const products = pgTable("products", {
   // Dias da semana em que o produto está disponível (null = todos os dias)
   // ex: ["Segunda-feira","Quarta-feira","Sexta-feira"]
   availableDays: jsonb("available_days"),
+  // Dados fiscais
+  ncm: text("ncm"), // Nomenclatura Comum do Mercosul, ex: "08039000"
+  cfop: text("cfop"), // Código Fiscal de Operações, ex: "5102"
+  commercialUnit: text("commercial_unit"), // Unidade comercial para NF, ex: "KG"
 });
 
 export const productPrices = pgTable("product_prices", {
@@ -139,6 +146,9 @@ export const orders = pgTable("orders", {
   nimbiExpiration: date("nimbi_expiration"),
   reopenReason: text("reopen_reason"),
   reopenRequestedAt: timestamp("reopen_requested_at"),
+  // Dados fiscais
+  fiscalStatus: text("fiscal_status").default("nota_pendente"), // nota_pendente | nota_exportada | nota_emitida | nota_cancelada
+  preNotaNumber: text("pre_nota_number"), // VF-NF-000001
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -464,12 +474,18 @@ export const companyConfig = pgTable("company_config", {
   address: text("address"),
   city: text("city"),
   state: text("state"),
+  cep: text("cep"),
   phone: text("phone"),
   email: text("email"),
   cnpj: text("cnpj"),
+  stateRegistration: text("state_registration"), // Inscrição Estadual
+  fantasyName: text("fantasy_name"), // Nome Fantasia
   supportPhone: text("support_phone"),
   supportEmail: text("support_email"),
   supportMessage: text("support_message"),
+  // Dados fiscais padrão
+  defaultCfop: text("default_cfop").default("5102"),
+  defaultNatureza: text("default_natureza").default("Venda de mercadoria adquirida"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

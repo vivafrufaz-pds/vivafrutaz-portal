@@ -44,6 +44,9 @@ const emptyForm = {
   isSeasonal: false,
   observation: "",
   availableDays: [] as string[],
+  ncm: "",
+  cfop: "",
+  commercialUnit: "",
 };
 
 function productToForm(p: Product): typeof emptyForm {
@@ -57,6 +60,9 @@ function productToForm(p: Product): typeof emptyForm {
     isSeasonal: p.isSeasonal ?? false,
     observation: (p as any).observation || "",
     availableDays: Array.isArray((p as any).availableDays) ? (p as any).availableDays as string[] : [],
+    ncm: (p as any).ncm || "",
+    cfop: (p as any).cfop || "",
+    commercialUnit: (p as any).commercialUnit || "",
   };
 }
 
@@ -126,6 +132,9 @@ export default function ProductsPage() {
       isSeasonal: formData.isSeasonal,
       observation: formData.observation || null,
       availableDays: formData.availableDays.length > 0 ? formData.availableDays : null,
+      ncm: formData.ncm || null,
+      cfop: formData.cfop || null,
+      commercialUnit: formData.commercialUnit || null,
     };
 
     if (editingProduct) {
@@ -343,6 +352,36 @@ export default function ProductsPage() {
                   <p className="text-xs text-blue-600">Produto disponível sazonalmente</p>
                 </div>
               </label>
+            </div>
+          </div>
+
+          {/* Dados Fiscais */}
+          <div className="p-4 rounded-xl border-2 border-violet-200 bg-violet-50">
+            <label className="flex items-center gap-1 text-sm font-bold text-violet-800 mb-3">
+              <span className="text-xs bg-violet-200 text-violet-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Dados Fiscais</span>
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-violet-700 mb-1">NCM</label>
+                <input value={formData.ncm} onChange={e => set("ncm", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border-2 border-violet-200 focus:border-violet-400 outline-none text-sm"
+                  placeholder="ex: 0803.10.00" />
+                <p className="text-xs text-muted-foreground mt-0.5">Nomenclatura Comum do Mercosul</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-violet-700 mb-1">CFOP</label>
+                <input value={formData.cfop} onChange={e => set("cfop", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border-2 border-violet-200 focus:border-violet-400 outline-none text-sm"
+                  placeholder="ex: 5102" />
+                <p className="text-xs text-muted-foreground mt-0.5">Código Fiscal de Operações</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-violet-700 mb-1">Unid. Comercial</label>
+                <input value={formData.commercialUnit} onChange={e => set("commercialUnit", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border-2 border-violet-200 focus:border-violet-400 outline-none text-sm"
+                  placeholder="ex: KG, UN, CX" />
+                <p className="text-xs text-muted-foreground mt-0.5">Para NF-e</p>
+              </div>
             </div>
           </div>
 

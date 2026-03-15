@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import QRCode from "qrcode";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import * as XLSX from "xlsx";
 
 export interface DanfeOrder {
   id: number;
@@ -15,6 +16,8 @@ export interface DanfeOrder {
   orderNote?: string | null;
   adminNote?: string | null;
   companyId: number;
+  preNotaNumber?: string | null;
+  fiscalStatus?: string | null;
 }
 
 export interface DanfeItem {
@@ -23,6 +26,8 @@ export interface DanfeItem {
   unit: string;
   unitPrice: string;
   totalPrice: string;
+  ncm?: string | null;
+  cfop?: string | null;
 }
 
 export interface DanfeCompany {
@@ -35,6 +40,8 @@ export interface DanfeCompany {
   addressNeighborhood?: string | null;
   addressCity?: string | null;
   addressZip?: string | null;
+  addressState?: string | null;
+  stateRegistration?: string | null;
 }
 
 export interface DanfeLogistics {
@@ -53,9 +60,14 @@ export interface DanfeData {
     address?: string | null;
     phone?: string | null;
     companyName?: string | null;
+    fantasyName?: string | null;
     city?: string | null;
     state?: string | null;
+    cep?: string | null;
     email?: string | null;
+    stateRegistration?: string | null;
+    defaultCfop?: string | null;
+    defaultNatureza?: string | null;
   };
 }
 
@@ -66,6 +78,13 @@ const STATUS_LABEL: Record<string, string> = {
   OPEN_FOR_EDITING: "Em Edição",
   CANCELLED: "Cancelado",
   DELIVERED: "Entregue",
+};
+
+const FISCAL_STATUS_LABEL: Record<string, string> = {
+  nota_pendente: "Nota Pendente",
+  nota_exportada: "Nota Exportada",
+  nota_emitida: "Nota Emitida",
+  nota_cancelada: "Nota Cancelada",
 };
 
 function safeText(val: unknown): string {
@@ -93,6 +112,7 @@ function buildAddress(c: DanfeCompany): string {
     c.addressNumber && `nº ${c.addressNumber}`,
     c.addressNeighborhood,
     c.addressCity,
+    c.addressState,
     c.addressZip,
   ].filter(Boolean);
   return parts.join(", ") || "—";
@@ -108,6 +128,10 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   const LIGHT_GRAY = [245, 246, 248] as [number, number, number];
   const DARK = [30, 40, 50] as [number, number, number];
   const WHITE: [number, number, number] = [255, 255, 255];
+  const BLUE = [37, 99, 235] as [number, number, number];
+
+  const cfop = data.vivaFrutaz.defaultCfop || "5102";
+  const natureza = data.vivaFrutaz.defaultNatureza || "Venda de mercadoria adquirida";
 
   let y = 0;
 
@@ -130,102 +154,143 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
 
   // VivaFrutaz brand block (right side of header)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(safeText(data.vivaFrutaz.companyName) || "VivaFrutaz", pageW - margin - 2, 13, { align: "right" });
+  doc.setFontSize(15);
+  doc.text(safeText(data.vivaFrutaz.companyName) || "VivaFrutaz", pageW - margin - 2, 12, { align: "right" });
+  if (data.vivaFrutaz.fantasyName && data.vivaFrutaz.fantasyName !== data.vivaFrutaz.companyName) {
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "italic");
+    doc.text(safeText(data.vivaFrutaz.fantasyName), pageW - margin - 2, 17, { align: "right" });
+  }
   doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  if (data.vivaFrutaz.cnpj) doc.text(`CNPJ: ${safeText(data.vivaFrutaz.cnpj)}`, pageW - margin - 2, 18, { align: "right" });
-  if (data.vivaFrutaz.phone) doc.text(`Tel: ${safeText(data.vivaFrutaz.phone)}`, pageW - margin - 2, 22, { align: "right" });
-  if (data.vivaFrutaz.address) doc.text(safeText(data.vivaFrutaz.address), pageW - margin - 2, 26, { align: "right" });
+  if (data.vivaFrutaz.cnpj) doc.text(`CNPJ: ${safeText(data.vivaFrutaz.cnpj)}`, pageW - margin - 2, 20, { align: "right" });
+  if (data.vivaFrutaz.phone) doc.text(`Tel: ${safeText(data.vivaFrutaz.phone)}`, pageW - margin - 2, 24, { align: "right" });
 
   y = 32;
 
   // ── QR Code ────────────────────────────────────────────────
   try {
-    const qrUrl = `${window.location.origin}/admin/orders?order=${data.order.id}`;
-    const qrDataUrl = await QRCode.toDataURL(qrUrl, { width: 120, margin: 1 });
-    doc.addImage(qrDataUrl, "PNG", pageW - margin - 22, y, 22, 22);
+    const qrContent = JSON.stringify({
+      id: data.order.id,
+      url: `${window.location.origin}/admin/orders?order=${data.order.id}`,
+      entrega: formatDate(data.order.deliveryDate),
+      preNota: data.order.preNotaNumber || "",
+    });
+    const qrDataUrl = await QRCode.toDataURL(qrContent, { width: 120, margin: 1 });
+    doc.addImage(qrDataUrl, "PNG", pageW - margin - 24, y, 24, 24);
   } catch (_) {}
 
   // ── Order info band ────────────────────────────────────────
   doc.setFillColor(...LIGHT_GRAY);
-  doc.roundedRect(margin, y, pageW - margin * 2 - 26, 22, 2, 2, "F");
+  doc.roundedRect(margin, y, pageW - margin * 2 - 28, 32, 2, 2, "F");
 
   doc.setTextColor(...DARK);
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  doc.text(`Pedido: ${safeText(data.order.orderCode) || `#${data.order.id}`}`, margin + 4, y + 7);
+  const orderLabel = safeText(data.order.orderCode) || `#${data.order.id}`;
+  doc.text(`Pedido: ${orderLabel}`, margin + 4, y + 7);
 
-  doc.setFontSize(8);
+  if (data.order.preNotaNumber) {
+    doc.setFontSize(8);
+    doc.setTextColor(...BLUE);
+    doc.text(`Pré-Nota: ${safeText(data.order.preNotaNumber)}`, margin + 4, y + 13);
+    doc.setTextColor(...DARK);
+  }
+
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "normal");
+  const row1y = y + (data.order.preNotaNumber ? 19 : 14);
+  const row2y = row1y + 6;
+  const row3y = row2y + 6;
+
   const col1x = margin + 4;
-  const col2x = margin + 60;
-  const col3x = margin + 115;
-  const row1y = y + 13;
-  const row2y = y + 19;
+  const col2x = margin + 65;
+  const col3x = margin + 120;
 
   doc.text(`Data do pedido: ${formatDate(data.order.orderDate)}`, col1x, row1y);
   doc.text(`Data de entrega: ${formatDate(data.order.deliveryDate)}`, col2x, row1y);
   doc.text(`Semana ref.: ${safeText(data.order.weekReference)}`, col3x, row1y);
+
+  doc.text(`Natureza: ${natureza}`, col1x, row2y);
+  doc.text(`CFOP: ${cfop}`, col2x, row2y);
+
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...GREEN);
-  doc.text(`Status: ${safeText(STATUS_LABEL[data.order.status] || data.order.status)}`, col1x, row2y);
+  doc.text(`Status: ${safeText(STATUS_LABEL[data.order.status] || data.order.status)}`, col1x, row3y);
+  if (data.order.fiscalStatus) {
+    doc.setTextColor(100, 60, 200);
+    doc.text(`Fiscal: ${safeText(FISCAL_STATUS_LABEL[data.order.fiscalStatus] || data.order.fiscalStatus)}`, col2x, row3y);
+  }
   doc.setTextColor(...DARK);
   doc.setFont("helvetica", "normal");
 
-  y += 26;
+  y += 36;
 
-  // ── Two-column info section ────────────────────────────────
+  // ── Two-column info section ─────────────────────────────
   const halfW = (pageW - margin * 2 - 4) / 2;
   const colRx = margin + halfW + 4;
 
-  // Company (VivaFrutaz)
+  // Remetente header
   doc.setFillColor(...GREEN);
   doc.rect(margin, y, halfW, 6, "F");
   doc.setTextColor(...WHITE);
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "bold");
   doc.text("REMETENTE (VivaFrutaz)", margin + 3, y + 4.2);
 
-  // Client
+  // Destinatário header
   doc.setFillColor(...ORANGE);
   doc.rect(colRx, y, halfW, 6, "F");
   doc.text("DESTINATÁRIO (Cliente)", colRx + 3, y + 4.2);
   y += 6;
 
-  const infoBoxH = 36;
+  const infoBoxH = 42;
   doc.setFillColor(...LIGHT_GRAY);
   doc.rect(margin, y, halfW, infoBoxH, "F");
   doc.rect(colRx, y, halfW, infoBoxH, "F");
 
   doc.setTextColor(...DARK);
   doc.setFontSize(7.5);
+
+  // Remetente info
+  let ry = y + 5;
   doc.setFont("helvetica", "bold");
-  doc.text(safeText(data.vivaFrutaz.companyName) || "VivaFrutaz", margin + 3, y + 6);
+  doc.text(safeText(data.vivaFrutaz.companyName) || "VivaFrutaz", margin + 3, ry);
   doc.setFont("helvetica", "normal");
-  if (data.vivaFrutaz.cnpj) doc.text(`CNPJ: ${safeText(data.vivaFrutaz.cnpj)}`, margin + 3, y + 11);
+  ry += 5;
+  if (data.vivaFrutaz.cnpj) { doc.text(`CNPJ: ${safeText(data.vivaFrutaz.cnpj)}`, margin + 3, ry); ry += 4.5; }
+  if (data.vivaFrutaz.stateRegistration) { doc.text(`IE: ${safeText(data.vivaFrutaz.stateRegistration)}`, margin + 3, ry); ry += 4.5; }
   if (data.vivaFrutaz.address) {
     const lines = doc.splitTextToSize(safeText(data.vivaFrutaz.address), halfW - 6);
-    doc.text(lines, margin + 3, y + 16);
+    doc.text(lines, margin + 3, ry);
+    ry += lines.length * 4;
   }
-  const cityState = [data.vivaFrutaz.city, data.vivaFrutaz.state].filter(Boolean).join(" – ");
-  if (cityState) doc.text(safeText(cityState), margin + 3, y + 21);
-  if (data.vivaFrutaz.phone) doc.text(`Tel: ${safeText(data.vivaFrutaz.phone)}`, margin + 3, y + 24);
-  if (data.vivaFrutaz.email) doc.text(`Email: ${safeText(data.vivaFrutaz.email)}`, margin + 3, y + 28);
+  const cityStateSender = [data.vivaFrutaz.city, data.vivaFrutaz.state].filter(Boolean).join(" – ");
+  if (cityStateSender) { doc.text(cityStateSender, margin + 3, ry); ry += 4.5; }
+  if (data.vivaFrutaz.cep) { doc.text(`CEP: ${safeText(data.vivaFrutaz.cep)}`, margin + 3, ry); ry += 4.5; }
+  if (data.vivaFrutaz.phone) { doc.text(`Tel: ${safeText(data.vivaFrutaz.phone)}`, margin + 3, ry); ry += 4.5; }
+  if (data.vivaFrutaz.email) { doc.text(`Email: ${safeText(data.vivaFrutaz.email)}`, margin + 3, ry); }
 
+  // Destinatário info
+  let cy = y + 5;
   doc.setFont("helvetica", "bold");
-  doc.text(safeText(data.company.companyName), colRx + 3, y + 6);
+  doc.text(safeText(data.company.companyName), colRx + 3, cy);
   doc.setFont("helvetica", "normal");
-  if (data.company.cnpj) doc.text(`CNPJ: ${safeText(data.company.cnpj)}`, colRx + 3, y + 11);
+  cy += 5;
+  if (data.company.cnpj) { doc.text(`CNPJ: ${safeText(data.company.cnpj)}`, colRx + 3, cy); cy += 4.5; }
+  if (data.company.stateRegistration) { doc.text(`IE: ${safeText(data.company.stateRegistration)}`, colRx + 3, cy); cy += 4.5; }
   const clientAddr = buildAddress(data.company);
-  const addrLines = doc.splitTextToSize(clientAddr, halfW - 6);
-  doc.text(addrLines, colRx + 3, y + 16);
-  if (data.company.contactName) doc.text(`Contato: ${safeText(data.company.contactName)}`, colRx + 3, y + 24);
-  if (data.company.phone) doc.text(`Tel: ${safeText(data.company.phone)}`, colRx + 3, y + 28);
+  if (clientAddr && clientAddr !== "—") {
+    const addrLines = doc.splitTextToSize(clientAddr, halfW - 6);
+    doc.text(addrLines, colRx + 3, cy);
+    cy += addrLines.length * 4;
+  }
+  if (data.company.contactName) { doc.text(`Contato: ${safeText(data.company.contactName)}`, colRx + 3, cy); cy += 4.5; }
+  if (data.company.phone) { doc.text(`Tel: ${safeText(data.company.phone)}`, colRx + 3, cy); }
 
   y += infoBoxH + 6;
 
-  // ── Products table ─────────────────────────────────────────
+  // ── Products table ────────────────────────────────────────
   doc.setFillColor(...GREEN);
   doc.rect(margin, y, pageW - margin * 2, 6, "F");
   doc.setTextColor(...WHITE);
@@ -234,32 +299,65 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   doc.text("ITENS DO PEDIDO", margin + 3, y + 4.2);
   y += 6;
 
+  const hasNcm = data.items.some(i => i.ncm);
+  const hasCfop = data.items.some(i => i.cfop);
+
+  const tableHead = hasNcm
+    ? [["Produto", "NCM", "CFOP", "Qtd", "Un.", "Preço Unit.", "Subtotal"]]
+    : [["Produto", "Qtd", "Un.", "Preço Unit.", "Subtotal"]];
+
+  const tableBody = data.items.map(item =>
+    hasNcm
+      ? [
+          safeText(item.productName),
+          safeText(item.ncm) || "—",
+          safeText(item.cfop) || cfop,
+          String(item.quantity ?? 0),
+          safeText(item.unit) || "un",
+          formatMoney(item.unitPrice),
+          formatMoney(item.totalPrice),
+        ]
+      : [
+          safeText(item.productName),
+          String(item.quantity ?? 0),
+          safeText(item.unit) || "un",
+          formatMoney(item.unitPrice),
+          formatMoney(item.totalPrice),
+        ]
+  );
+
+  const columnStyles: any = hasNcm
+    ? {
+        0: { cellWidth: "auto" },
+        1: { cellWidth: 20, halign: "center" as const },
+        2: { cellWidth: 14, halign: "center" as const },
+        3: { cellWidth: 12, halign: "center" as const },
+        4: { cellWidth: 12, halign: "center" as const },
+        5: { cellWidth: 26, halign: "right" as const },
+        6: { cellWidth: 26, halign: "right" as const },
+      }
+    : {
+        0: { cellWidth: "auto" },
+        1: { cellWidth: 14, halign: "center" as const },
+        2: { cellWidth: 14, halign: "center" as const },
+        3: { cellWidth: 28, halign: "right" as const },
+        4: { cellWidth: 28, halign: "right" as const },
+      };
+
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: [["Produto", "Qtd", "Un.", "Preço Unit.", "Subtotal"]],
-    body: data.items.map(item => [
-      safeText(item.productName),
-      String(item.quantity ?? 0),
-      safeText(item.unit) || "un",
-      formatMoney(item.unitPrice),
-      formatMoney(item.totalPrice),
-    ]),
+    head: tableHead,
+    body: tableBody,
     headStyles: {
       fillColor: DARK,
       textColor: WHITE,
       fontStyle: "bold",
-      fontSize: 8,
+      fontSize: 7.5,
     },
-    bodyStyles: { fontSize: 8, textColor: DARK },
+    bodyStyles: { fontSize: 7.5, textColor: DARK },
     alternateRowStyles: { fillColor: [250, 250, 252] },
-    columnStyles: {
-      0: { cellWidth: "auto" },
-      1: { cellWidth: 14, halign: "center" },
-      2: { cellWidth: 14, halign: "center" },
-      3: { cellWidth: 28, halign: "right" },
-      4: { cellWidth: 28, halign: "right" },
-    },
+    columnStyles,
     tableLineColor: [220, 220, 224],
     tableLineWidth: 0.1,
   });
@@ -269,20 +367,21 @@ export async function generateDanfePdf(data: DanfeData): Promise<jsPDF> {
   // ── Totals ─────────────────────────────────────────────────
   const totalItems = data.items.reduce((s, i) => s + (i.quantity ?? 0), 0);
   const totalVal = parseFloat(data.order.totalValue) || 0;
-  const totalsX = pageW - margin - 60;
+  const totalsX = pageW - margin - 64;
 
   doc.setFillColor(...LIGHT_GRAY);
-  doc.rect(totalsX, y, 60, 20, "F");
-  doc.setFontSize(8);
+  doc.rect(totalsX, y, 64, 22, "F");
+  doc.setFontSize(7.5);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...DARK);
   doc.text(`Total de itens: ${totalItems} un.`, totalsX + 3, y + 6);
+  doc.text(`Qtd produtos: ${data.items.length}`, totalsX + 3, y + 11);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(10.5);
   doc.setTextColor(...GREEN);
-  doc.text(`TOTAL: ${formatMoney(totalVal)}`, totalsX + 3, y + 15);
+  doc.text(`TOTAL: ${formatMoney(totalVal)}`, totalsX + 3, y + 19);
 
-  y += 24;
+  y += 26;
 
   // ── Logistics info ─────────────────────────────────────────
   const logi = data.logistics;
@@ -363,4 +462,117 @@ export async function openDanfe(data: DanfeData): Promise<void> {
   const blob = doc.output("blob");
   const url = URL.createObjectURL(blob);
   window.open(url, "_blank");
+}
+
+// ── Exportação ERP — Excel ────────────────────────────────────────
+export function exportToExcel(data: DanfeData): void {
+  const cfop = data.vivaFrutaz.defaultCfop || "5102";
+  const rows = data.items.map(item => ({
+    numero_pedido: data.order.orderCode || `#${data.order.id}`,
+    numero_pre_nota: data.order.preNotaNumber || "",
+    data_pedido: formatDate(data.order.orderDate),
+    data_entrega: formatDate(data.order.deliveryDate),
+    semana_referencia: data.order.weekReference || "",
+    cliente_nome: data.company.companyName || "",
+    cliente_cnpj: data.company.cnpj || "",
+    cliente_ie: data.company.stateRegistration || "",
+    cliente_endereco: [data.company.addressStreet, data.company.addressNumber].filter(Boolean).join(", "),
+    cidade: data.company.addressCity || "",
+    estado: data.company.addressState || "",
+    cep: data.company.addressZip || "",
+    contato: data.company.contactName || "",
+    natureza_operacao: data.vivaFrutaz.defaultNatureza || "Venda de mercadoria adquirida",
+    remetente_nome: data.vivaFrutaz.companyName || "VivaFrutaz",
+    remetente_cnpj: data.vivaFrutaz.cnpj || "",
+    remetente_ie: data.vivaFrutaz.stateRegistration || "",
+    remetente_cidade: data.vivaFrutaz.city || "",
+    remetente_estado: data.vivaFrutaz.state || "",
+    produto: item.productName,
+    ncm: item.ncm || "",
+    cfop: item.cfop || cfop,
+    quantidade: item.quantity,
+    unidade: item.unit,
+    valor_unitario: parseFloat(item.unitPrice || "0"),
+    valor_total_item: parseFloat(item.totalPrice || "0"),
+    valor_total_nota: parseFloat(data.order.totalValue || "0"),
+    observacoes: [data.order.orderNote, data.order.adminNote].filter(Boolean).join(" | "),
+    status_fiscal: data.order.fiscalStatus || "nota_pendente",
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Nota Fiscal");
+
+  const colWidths = Object.keys(rows[0] || {}).map(k => ({ wch: Math.max(k.length + 4, 18) }));
+  ws["!cols"] = colWidths;
+
+  const code = safeText(data.order.orderCode) || `pedido-${data.order.id}`;
+  XLSX.writeFile(wb, `NF-${code}.xlsx`);
+}
+
+// ── Exportação ERP — XML ──────────────────────────────────────────
+export function exportToXML(data: DanfeData): void {
+  const cfop = data.vivaFrutaz.defaultCfop || "5102";
+  const natureza = data.vivaFrutaz.defaultNatureza || "Venda de mercadoria adquirida";
+  const e = (s: string | null | undefined) => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const totalVal = parseFloat(data.order.totalValue || "0").toFixed(2);
+
+  const itensXml = data.items.map(item => `
+    <item>
+      <produto>${e(item.productName)}</produto>
+      <ncm>${e(item.ncm)}</ncm>
+      <cfop>${e(item.cfop || cfop)}</cfop>
+      <quantidade>${item.quantity}</quantidade>
+      <unidade>${e(item.unit)}</unidade>
+      <valor_unitario>${parseFloat(item.unitPrice || "0").toFixed(2)}</valor_unitario>
+      <valor_total>${parseFloat(item.totalPrice || "0").toFixed(2)}</valor_total>
+    </item>`).join("");
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<nota_fiscal>
+  <pedido>
+    <numero>${e(data.order.orderCode)}</numero>
+    <pre_nota>${e(data.order.preNotaNumber)}</pre_nota>
+    <data_pedido>${formatDate(data.order.orderDate)}</data_pedido>
+    <data_entrega>${formatDate(data.order.deliveryDate)}</data_entrega>
+    <semana_referencia>${e(data.order.weekReference)}</semana_referencia>
+    <natureza_operacao>${e(natureza)}</natureza_operacao>
+    <cfop>${e(cfop)}</cfop>
+    <valor_total>${totalVal}</valor_total>
+    <status_fiscal>${e(data.order.fiscalStatus)}</status_fiscal>
+    <observacoes>${e([data.order.orderNote, data.order.adminNote].filter(Boolean).join(" | "))}</observacoes>
+  </pedido>
+  <remetente>
+    <razao_social>${e(data.vivaFrutaz.companyName)}</razao_social>
+    <cnpj>${e(data.vivaFrutaz.cnpj)}</cnpj>
+    <ie>${e(data.vivaFrutaz.stateRegistration)}</ie>
+    <endereco>${e(data.vivaFrutaz.address)}</endereco>
+    <cidade>${e(data.vivaFrutaz.city)}</cidade>
+    <estado>${e(data.vivaFrutaz.state)}</estado>
+    <cep>${e(data.vivaFrutaz.cep)}</cep>
+    <telefone>${e(data.vivaFrutaz.phone)}</telefone>
+    <email>${e(data.vivaFrutaz.email)}</email>
+  </remetente>
+  <destinatario>
+    <razao_social>${e(data.company.companyName)}</razao_social>
+    <cnpj>${e(data.company.cnpj)}</cnpj>
+    <ie>${e(data.company.stateRegistration)}</ie>
+    <endereco>${e([data.company.addressStreet, data.company.addressNumber].filter(Boolean).join(", "))}</endereco>
+    <cidade>${e(data.company.addressCity)}</cidade>
+    <estado>${e(data.company.addressState)}</estado>
+    <cep>${e(data.company.addressZip)}</cep>
+    <contato>${e(data.company.contactName)}</contato>
+    <telefone>${e(data.company.phone)}</telefone>
+  </destinatario>
+  <itens>${itensXml}
+  </itens>
+</nota_fiscal>`;
+
+  const blob = new Blob([xml], { type: "application/xml;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `NF-${safeText(data.order.orderCode) || data.order.id}.xml`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
