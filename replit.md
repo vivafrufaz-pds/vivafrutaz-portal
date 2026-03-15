@@ -4,6 +4,14 @@
 
 VivaFrutaz is a B2B corporate fruit ordering platform designed for companies to place weekly fruit orders. It features a dual-portal system for admin staff and client companies, supporting role-based access, time-windowed ordering, and comprehensive reporting. The platform includes a built-in logistics module, executive dashboard, Flora IA (intelligent chat assistant with smart export and intelligence modules), and incident management for both internal and client-related issues. The system is entirely in Brazilian Portuguese (PT-BR).
 
+### PWA Support
+- **Manifest**: `client/public/manifest.json` with 8 icon sizes (72–512px), standalone display, PT-BR locale
+- **Icons**: Generated via `pngjs` in `client/public/icon-{size}.png` + `apple-touch-icon.png`
+- **Service Worker**: `client/public/sw.js` — caches static assets, skips API/auth routes, offline-ready
+- **Registration**: Service worker registered in `client/src/main.tsx` on page load
+- **Install Prompt**: `PWAInstallPrompt.tsx` handles `beforeinstallprompt` (Android/Desktop) and iOS Share Sheet guide; shows after 3s delay; dismissible per session
+- **Mobile Sidebar**: Hamburger drawer in Layout.tsx — `Menu` button in header opens sliding panel; overlay click/Escape closes it; auto-closes on navigation
+
 ### Flora IA (VirtualAssistant.tsx)
 - **Panel-first interface**: opens in "Painel" mode (grid of categorized shortcuts), chat is secondary
 - **Smart Export**: interprets natural language like "exportar pedidos da semana" or "exportar faturamento do mês", generates XLSX via `GET /api/flora/export`

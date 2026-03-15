@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useLocation, Link } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
@@ -6,14 +6,28 @@ import {
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
-  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain, GraduationCap, DollarSign, Route
+  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain, GraduationCap, DollarSign, Route, Menu, X
 } from 'lucide-react';
 
 import { VirtualAssistant } from './VirtualAssistant';
+import { PWAInstallPrompt } from './PWAInstallPrompt';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, company, isStaff, isClient, logout } = useAuth();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Close sidebar on navigation (mobile)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location]);
+
+  // Close sidebar on Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setSidebarOpen(false); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
 
   const { data: testModeData } = useQuery<{ enabled: boolean }>({
     queryKey: ['/api/settings/test-mode'],
@@ -80,7 +94,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const links = isStaff 
     ? adminLinks.filter(l => {
         if (!l.roles.includes(user?.role || '')) return false;
-        if (!userTabPerms || userTabPerms.length === 0) return true; // null = no restriction
+        if (!userTabPerms || userTabPerms.length === 0) return true;
         return userTabPerms.includes(l.tabKey);
       })
     : isClient ? clientLinks : [];
@@ -98,90 +112,141 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const currentPageLabel = links.find(l => l.href === location)?.label || 'Painel';
+
+  const SidebarContent = () => (
+    <>
+      <div className="p-5 flex items-center gap-3 border-b border-border/50">
+        <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center shadow-lg shadow-primary/25">
+          {logoData?.logoBase64 ? (
+            <img
+              src={`data:${logoData.logoType};base64,${logoData.logoBase64}`}
+              alt="Logo"
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
+              <Leaf className="w-6 h-6 text-primary-foreground" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h1 className="font-display font-bold text-xl tracking-tight text-foreground leading-none">VivaFrutaz</h1>
+          <p className="text-xs text-muted-foreground font-medium mt-1">Portal B2B</p>
+        </div>
+        {/* Close button on mobile */}
+        <button
+          onClick={() => setSidebarOpen(false)}
+          className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+          aria-label="Fechar menu"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+        {links.map((link) => {
+          const Icon = link.icon;
+          const isActive = location === link.href;
+          return (
+            <Link 
+              key={link.href} 
+              href={link.href}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm min-h-[48px] ${
+                isActive 
+                  ? 'bg-primary/10 text-primary' 
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted'
+              }`}
+            >
+              <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-primary' : ''}`} />
+              <span className="truncate">{link.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="p-4 border-t border-border/50">
+        <div className="px-4 py-3 bg-muted/30 rounded-xl mb-3">
+          <p className="text-sm font-bold text-foreground truncate">
+            {isStaff ? user?.name : company?.companyName}
+          </p>
+          <p className="text-xs text-muted-foreground truncate">
+            {isStaff ? roleLabel(user?.role) : company?.contactName}
+          </p>
+        </div>
+        <button 
+          data-testid="button-logout"
+          onClick={() => logout()}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors font-medium text-sm min-h-[48px]"
+        >
+          <LogOut className="w-5 h-5" />
+          Sair
+        </button>
+      </div>
+    </>
+  );
+
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row">
-      <aside className="w-full md:w-64 bg-card border-r border-border/50 flex-shrink-0 flex flex-col z-10 premium-shadow relative">
-        <div className="p-6 flex items-center gap-3 border-b border-border/50">
-          <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center shadow-lg shadow-primary/25">
-            {logoData?.logoBase64 ? (
-              <img
-                src={`data:${logoData.logoType};base64,${logoData.logoBase64}`}
-                alt="Logo"
-                className="w-full h-full object-contain"
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-                <Leaf className="w-6 h-6 text-primary-foreground" />
-              </div>
-            )}
-          </div>
-          <div>
-            <h1 className="font-display font-bold text-xl tracking-tight text-foreground leading-none">VivaFrutaz</h1>
-            <p className="text-xs text-muted-foreground font-medium mt-1">Portal B2B</p>
-          </div>
-        </div>
+    <div className="h-screen overflow-hidden bg-background flex">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
-        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1.5">
-          {links.map((link) => {
-            const Icon = link.icon;
-            const isActive = location === link.href;
-            return (
-              <Link 
-                key={link.href} 
-                href={link.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm ${
-                  isActive 
-                    ? 'bg-primary/10 text-primary' 
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
-              >
-                <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-primary' : ''}`} />
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-border/50">
-          <div className="px-4 py-3 bg-muted/30 rounded-xl mb-3">
-            <p className="text-sm font-bold text-foreground truncate">
-              {isStaff ? user?.name : company?.companyName}
-            </p>
-            <p className="text-xs text-muted-foreground truncate">
-              {isStaff ? roleLabel(user?.role) : company?.contactName}
-            </p>
-          </div>
-          <button 
-            data-testid="button-logout"
-            onClick={() => logout()}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors font-medium text-sm"
-          >
-            <LogOut className="w-4 h-4" />
-            Sair
-          </button>
-        </div>
+      {/* Sidebar — fixed on mobile (drawer), static on desktop */}
+      <aside
+        className={`
+          fixed md:static inset-y-0 left-0 z-40
+          w-72 md:w-64 h-full md:h-screen
+          bg-card border-r border-border/50
+          flex flex-col flex-shrink-0
+          premium-shadow
+          transition-transform duration-300 ease-in-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}
+      >
+        <SidebarContent />
       </aside>
 
-      <VirtualAssistant />
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+      {/* Main area */}
+      <div className="flex-1 flex flex-col min-w-0 md:ml-0">
+        <VirtualAssistant />
+        <PWAInstallPrompt />
+
         {testModeActive && (
           <div className="flex items-center justify-center gap-2 bg-amber-400 text-amber-900 px-4 py-2 text-sm font-bold shrink-0 z-20">
             <FlaskConical className="w-4 h-4" />
-            MODO TESTE ATIVO — Pedidos criados não afetam dados reais
+            <span className="hidden sm:inline">MODO TESTE ATIVO — Pedidos criados não afetam dados reais</span>
+            <span className="sm:hidden">MODO TESTE ATIVO</span>
             <FlaskConical className="w-4 h-4" />
           </div>
         )}
-        <header className="h-16 border-b border-border/50 bg-card/50 backdrop-blur-sm flex items-center px-8 shrink-0 z-0">
-          <h2 className="text-lg font-bold text-foreground">
-            {links.find(l => l.href === location)?.label || 'Painel'}
+
+        {/* Top bar with hamburger on mobile */}
+        <header className="h-16 border-b border-border/50 bg-card/50 backdrop-blur-sm flex items-center gap-3 px-4 md:px-8 shrink-0 sticky top-0 z-10">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors flex-shrink-0"
+            aria-label="Abrir menu"
+            data-testid="button-open-sidebar"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <h2 className="text-base md:text-lg font-bold text-foreground truncate">
+            {currentPageLabel}
           </h2>
         </header>
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
