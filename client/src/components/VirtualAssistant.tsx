@@ -1,12 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, ChevronDown, Home, RefreshCw } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, ChevronDown, Home, RefreshCw, Zap, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { useQuery } from '@tanstack/react-query';
 
 interface Message {
   id: number;
   from: 'bot' | 'user';
   text: string;
   isMenu?: boolean;
+  isAlert?: boolean;
+  isReport?: boolean;
+  reportLines?: ReportLine[];
+}
+
+interface ReportLine {
+  icon: string;
+  label: string;
+  value: string;
+  level: 'ok' | 'warn' | 'error';
 }
 
 const CLIENT_MENU_OPTIONS = [
@@ -20,6 +31,7 @@ const CLIENT_MENU_OPTIONS = [
 ];
 
 const ADMIN_MENU_OPTIONS = [
+  { key: '0', label: '0 — Verificar Sistema (Scan Automático)' },
   { key: '1', label: '1 — Empresas (clientes)' },
   { key: '2', label: '2 — Produtos e categorias' },
   { key: '3', label: '3 — Pedidos e confirmações' },
@@ -29,6 +41,11 @@ const ADMIN_MENU_OPTIONS = [
   { key: '7', label: '7 — Pedidos pontuais' },
   { key: '8', label: '8 — Compras e estoque' },
   { key: '9', label: '9 — Configurações e outros módulos' },
+];
+
+const DEV_EXTRA_OPTIONS = [
+  { key: 'D', label: 'D — Logs e Erros do Sistema' },
+  { key: 'E', label: 'E — Detector de Bugs (Bug Scanner)' },
 ];
 
 const CLIENT_ANSWERS: Record<string, string> = {
@@ -185,6 +202,32 @@ Clientes são notificados automaticamente.`,
 💾 Backup: execução e download de backups do banco de dados
 👨‍💻 Área do Desenvolvedor: ferramentas técnicas, logs e modo de teste
 📊 Painel Executivo (Diretoria): visão consolidada de pedidos e finanças`,
+
+  'D': `Logs e Erros do Sistema (Desenvolvedor):
+
+📋 Os logs completos estão disponíveis em:
+→ Menu → Área do Desenvolvedor → Aba "Bugs"
+
+Lá você encontra:
+• Detector de Bugs com histórico de erros
+• Últimos 20 registros de nível ERROR
+• Filtros por tipo e status (Aberto / Analisando / Resolvido)
+• Exportação de relatório de bugs em .txt
+
+Para monitorar em tempo real: consulte os logs do servidor no terminal ou painel de administração Replit.`,
+
+  'E': `Detector de Bugs (Bug Scanner):
+
+🔍 O Detector de Bugs está em:
+→ Menu → Área do Desenvolvedor → Aba "Bugs"
+
+Funcionalidades:
+• Filtro por tipo de bug (FRONTEND, API, PERFORMANCE, SECURITY...)
+• Status por bug: Aberto → Analisando → Resolvido
+• Histórico de erros (últimos 20 do nível ERROR)
+• Exportar relatório como arquivo .txt
+
+Para executar o scanner manualmente, clique em "Executar Verificação" na aba de Bugs. O scanner verifica integridade do banco de dados, APIs críticas e saúde do sistema.`,
 };
 
 const CLIENT_FAQ: Array<{ patterns: string[]; answer: string }> = [
@@ -207,7 +250,7 @@ const ADMIN_FAQ: Array<{ patterns: string[]; answer: string }> = [
   { patterns: ['senha', 'reset', 'redefinir', 'senha cliente'], answer: 'Senhas de clientes são gerenciadas em "Senhas de Clientes" no menu. Administradores podem aprovar ou recusar solicitações de reset de senha.' },
   { patterns: ['financeiro', 'faturamento', 'nota fiscal', 'nimbi', 'exportar'], answer: 'O Painel Financeiro mostra pedidos com filtros por data, empresa e produto. Exporte no formato Nimbi (ERP), Excel ou XML NF-e. Controle o status fiscal de cada pedido (Pendente → Exportada → Emitida).' },
   { patterns: ['backup', 'banco de dados', 'segurança'], answer: 'Backups são gerenciados em "Backup & E-mails". Administradores podem executar backups manuais e baixar os arquivos. Acesse em Menu → Backup.' },
-  { patterns: ['desenvolvedor', 'developer', 'dev', 'técnico', 'tecnico', 'logs'], answer: 'A Área do Desenvolvedor contém ferramentas técnicas: logs do sistema, modo de manutenção, modo de teste, e configurações avançadas. Acessível apenas para perfil Desenvolvedor.' },
+  { patterns: ['desenvolvedor', 'developer', 'dev', 'técnico', 'tecnico', 'logs', 'bug', 'erro', 'error'], answer: 'A Área do Desenvolvedor contém ferramentas técnicas: logs do sistema, modo de manutenção, modo de teste, detector de bugs e auditoria. Acessível para perfil Desenvolvedor/Admin. Acesse em Menu → Área do Desenvolvedor.' },
   { patterns: ['usuario', 'usuário', 'interno', 'perfil', 'papel', 'role'], answer: 'Usuários internos são gerenciados em "Usuários do Sistema". Perfis disponíveis: Administrador, Gerente de Operações, Gerente de Compras, Financeiro, Diretoria, Desenvolvedor, Logística.' },
   { patterns: ['danfe', 'nfe', 'nf-e', 'nota fiscal', 'pdf nota', 'fiscal'], answer: 'O DANFE é gerado em PDF direto no módulo de Pedidos. Cada pedido tem um painel fiscal com: status, número de pré-nota, exportação ERP (Excel/XML) e geração do DANFE.' },
   { patterns: ['estoque', 'inventário', 'inventario', 'compras', 'purchase'], answer: 'O módulo de Estoque (Inventário) controla entrada/saída de produtos. O planejamento de compras mostra o que precisará ser comprado por dia. Acesse em Menu → Inventário.' },
@@ -217,6 +260,7 @@ const ADMIN_FAQ: Array<{ patterns: string[]; answer: string }> = [
   { patterns: ['empresa', 'cliente', 'cadastro', 'cnpj', 'razão social'], answer: 'Empresas são os clientes do sistema. Cadastre em Menu → Empresas: nome, CNPJ, endereço, contato e grupo de preço. Cada empresa tem acesso próprio ao portal.' },
   { patterns: ['maçã', 'maca', 'banana', 'laranja', 'fruta', 'produto', 'categoria'], answer: 'Produtos são gerenciados em Menu → Produtos. Você pode cadastrar com: nome, categoria, unidade, preço base, flags (industrializado/sazonal), dias disponíveis, dados fiscais (NCM/CFOP) e curiosidades educativas.' },
   { patterns: ['diretoria', 'executivo', 'dashboard executivo', 'painel executivo'], answer: 'O Painel Executivo (Diretoria) oferece visão consolidada de pedidos, faturamento e métricas. Acessível apenas para perfil Diretoria e Administrador.' },
+  { patterns: ['scan', 'verificação', 'verificar', 'checar sistema', 'auditoria'], answer: 'Para verificar o sistema automaticamente, escolha a opção "0 — Verificar Sistema" no menu do assistente. Ele fará um scan completo e mostrará alertas em tempo real.' },
 ];
 
 function getRoleLabel(role?: string): string {
@@ -233,6 +277,13 @@ function getRoleLabel(role?: string): string {
   return map[role || ''] || 'Interno';
 }
 
+function getGreetingTime(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
 function findFaqAnswer(input: string, isClient: boolean): string | null {
   const lower = input.toLowerCase().trim();
   const faqList = isClient ? CLIENT_FAQ : ADMIN_FAQ;
@@ -246,34 +297,91 @@ export function VirtualAssistant() {
   const { user, company } = useAuth();
   const isClient = !!company;
   const isLoggedIn = !!(user || company);
+  const isDeveloper = !isClient && (user as any)?.role === 'DEVELOPER';
 
-  const MENU_OPTIONS = isClient ? CLIENT_MENU_OPTIONS : ADMIN_MENU_OPTIONS;
+  const MENU_OPTIONS = isClient
+    ? CLIENT_MENU_OPTIONS
+    : isDeveloper
+      ? [...ADMIN_MENU_OPTIONS, ...DEV_EXTRA_OPTIONS]
+      : ADMIN_MENU_OPTIONS;
   const ANSWERS = isClient ? CLIENT_ANSWERS : ADMIN_ANSWERS;
 
-  const greeting = isClient
-    ? `Olá${company ? `, ${(company as any).companyName?.split(' ')[0] || ''}` : ''}! Sou o Assistente VivaFrutaz 🍊. Como posso ajudar?`
-    : `Olá${user ? `, ${(user as any).name?.split(' ')[0] || ''}` : ''}! Sou o Assistente VivaFrutaz 🍊.\nPerfil: ${getRoleLabel((user as any)?.role)}. O que você precisa?`;
-
-  const MENU_TEXT = greeting + '\n\n' + MENU_OPTIONS.map(o => o.label).join('\n') + (isClient ? '\n\n📱 WhatsApp: 11 99411-3911' : '');
-
-  const INITIAL_MESSAGES: Message[] = [
-    { id: 0, from: 'bot', text: MENU_TEXT, isMenu: true },
-  ];
-
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [disabled, setDisabled] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  if (!isLoggedIn) return null;
+  const { data: auditData } = useQuery<any>({
+    queryKey: ['/api/admin/audit'],
+    enabled: !isClient && isLoggedIn,
+    staleTime: 3 * 60 * 1000,
+  });
+
+  const { data: ordersData } = useQuery<any[]>({
+    queryKey: ['/api/orders'],
+    enabled: !isClient && isLoggedIn,
+    staleTime: 3 * 60 * 1000,
+  });
+
+  const criticalIssues = !isClient && auditData?.issues
+    ? (auditData.issues as any[]).filter((i: any) => i.severity === 'CRITICAL' || i.severity === 'HIGH').length
+    : 0;
+
+  const activeOrders = Array.isArray(ordersData)
+    ? ordersData.filter((o: any) => o.status === 'ACTIVE' || o.status === 'CONFIRMED').length
+    : null;
+
+  const buildGreeting = () => {
+    const time = getGreetingTime();
+    if (isClient) {
+      const name = (company as any)?.companyName?.split(' ')[0] || '';
+      return `${time}${name ? `, ${name}` : ''}! Sou o Assistente VivaFrutaz 🍊. Como posso ajudar?`;
+    }
+    const name = (user as any)?.name?.split(' ')[0] || '';
+    const role = getRoleLabel((user as any)?.role);
+    let base = `${time}${name ? `, ${name}` : ''}! Sou o Assistente VivaFrutaz 🍊\nPerfil: ${role}.`;
+    if (activeOrders !== null && activeOrders > 0) {
+      base += `\n\n📦 Há ${activeOrders} pedido${activeOrders !== 1 ? 's' : ''} ativo${activeOrders !== 1 ? 's' : ''} no sistema agora.`;
+    }
+    if (criticalIssues > 0) {
+      base += `\n⚠️ ${criticalIssues} problema${criticalIssues !== 1 ? 's' : ''} crítico${criticalIssues !== 1 ? 's' : ''} detectado${criticalIssues !== 1 ? 's' : ''}. Use a opção "0" para ver o relatório.`;
+    } else if (auditData) {
+      base += `\n✅ Sistema verificado — nenhum problema crítico.`;
+    }
+    base += '\n\nEscolha uma opção ou digite sua pergunta:';
+    return base;
+  };
+
+  const buildInitialMessages = (): Message[] => {
+    return [{ id: 0, from: 'bot', text: buildGreeting(), isMenu: true }];
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    if (!initialized && (isClient || auditData !== undefined || ordersData !== undefined)) {
+      setMessages(buildInitialMessages());
+      setInitialized(true);
+    }
+  }, [isLoggedIn, auditData, ordersData, initialized]);
+
+  useEffect(() => {
+    if (!initialized && isLoggedIn && isClient) {
+      setMessages(buildInitialMessages());
+      setInitialized(true);
+    }
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (open) setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 80);
   }, [messages, open]);
 
-  const addBotMessage = (text: string, isMenu?: boolean) => {
-    setMessages(prev => [...prev, { id: Date.now(), from: 'bot', text, isMenu }]);
+  if (!isLoggedIn) return null;
+
+  const addBotMessage = (text: string, opts?: Partial<Pick<Message, 'isMenu' | 'isAlert' | 'isReport' | 'reportLines'>>) => {
+    setMessages(prev => [...prev, { id: Date.now(), from: 'bot', text, ...opts }]);
   };
 
   const addUserMessage = (text: string) => {
@@ -281,11 +389,93 @@ export function VirtualAssistant() {
   };
 
   const returnToMenu = () => {
-    addBotMessage(MENU_TEXT, true);
+    addBotMessage(buildGreeting(), { isMenu: true });
+  };
+
+  const runSystemScan = async () => {
+    setScanning(true);
+    setDisabled(true);
+    addBotMessage('🔍 Iniciando verificação automática do sistema...');
+    await new Promise(r => setTimeout(r, 800));
+
+    const lines: ReportLine[] = [];
+
+    const audit = auditData;
+    if (!audit) {
+      addBotMessage('Não foi possível obter dados do sistema. Verifique a conexão com o servidor.', { isAlert: true });
+      setScanning(false);
+      setDisabled(false);
+      return;
+    }
+
+    const summary = audit.summary || {};
+    lines.push({
+      icon: '🏢',
+      label: 'Empresas ativas',
+      value: String(summary.activeCompanies ?? '—'),
+      level: 'ok',
+    });
+    lines.push({
+      icon: '📦',
+      label: 'Pedidos ativos',
+      value: String(activeOrders ?? summary.activeOrders ?? '—'),
+      level: activeOrders === 0 ? 'warn' : 'ok',
+    });
+
+    const issues: any[] = audit.issues || [];
+    const inactiveCompanies = audit.details?.inactiveCompanies?.length ?? 0;
+    const inactiveProducts = audit.details?.inactiveProducts?.length ?? 0;
+    const loginFails = audit.details?.loginFails?.length ?? 0;
+    const sysErrors = audit.details?.systemErrors?.length ?? 0;
+
+    if (inactiveCompanies > 0) {
+      lines.push({ icon: '⚠️', label: 'Empresas inativas (+60 dias)', value: `${inactiveCompanies} empresa(s)`, level: inactiveCompanies > 5 ? 'error' : 'warn' });
+    } else {
+      lines.push({ icon: '✅', label: 'Empresas inativas', value: 'Nenhuma', level: 'ok' });
+    }
+
+    if (inactiveProducts > 0) {
+      lines.push({ icon: '⚠️', label: 'Produtos inativos', value: `${inactiveProducts} produto(s)`, level: 'warn' });
+    } else {
+      lines.push({ icon: '✅', label: 'Produtos inativos', value: 'Nenhum', level: 'ok' });
+    }
+
+    if (loginFails > 0) {
+      lines.push({ icon: '🔐', label: 'Falhas de login recentes', value: `${loginFails} tentativa(s)`, level: loginFails > 10 ? 'error' : 'warn' });
+    } else {
+      lines.push({ icon: '✅', label: 'Falhas de login', value: 'Nenhuma recente', level: 'ok' });
+    }
+
+    if (sysErrors > 0) {
+      lines.push({ icon: '🐛', label: 'Erros de sistema', value: `${sysErrors} erro(s) no log`, level: sysErrors > 5 ? 'error' : 'warn' });
+    } else {
+      lines.push({ icon: '✅', label: 'Erros de sistema', value: 'Nenhum detectado', level: 'ok' });
+    }
+
+    const critIssues = issues.filter((i: any) => i.severity === 'CRITICAL' || i.severity === 'HIGH');
+    if (critIssues.length > 0) {
+      lines.push({ icon: '🚨', label: 'Problemas críticos', value: `${critIssues.length} encontrado(s)`, level: 'error' });
+    } else {
+      lines.push({ icon: '✅', label: 'Saúde geral do sistema', value: 'Saudável', level: 'ok' });
+    }
+
+    const hasWarnings = lines.some(l => l.level !== 'ok');
+    const summaryText = hasWarnings
+      ? `⚠️ Verificação concluída com alertas — veja o relatório abaixo.`
+      : `✅ Sistema verificado — tudo funcionando corretamente.`;
+
+    addBotMessage(summaryText, { isReport: true, reportLines: lines });
+    setScanning(false);
+    setDisabled(false);
   };
 
   const handleMenuOption = (key: string) => {
-    addUserMessage(MENU_OPTIONS.find(o => o.key === key)?.label || key);
+    const label = MENU_OPTIONS.find(o => o.key === key)?.label || key;
+    addUserMessage(label);
+    if (key === '0') {
+      runSystemScan();
+      return;
+    }
     setDisabled(true);
     setTimeout(() => {
       if (ANSWERS[key]) addBotMessage(ANSWERS[key]);
@@ -300,16 +490,12 @@ export function VirtualAssistant() {
 
     const trimmed = msg.trim();
     const validKeys = MENU_OPTIONS.map(o => o.key);
-    const menuNum = validKeys.find(n =>
-      trimmed === n || trimmed.startsWith(n + ' ') || trimmed.startsWith(n + '.') || trimmed.startsWith(n + '-')
+    const menuKey = validKeys.find(k =>
+      trimmed === k || trimmed.toLowerCase() === k.toLowerCase() ||
+      trimmed.startsWith(k + ' ') || trimmed.startsWith(k + '.') || trimmed.startsWith(k + '-')
     );
-    if (menuNum) {
-      addUserMessage(msg);
-      setDisabled(true);
-      setTimeout(() => {
-        if (ANSWERS[menuNum]) addBotMessage(ANSWERS[menuNum]);
-        setDisabled(false);
-      }, 350);
+    if (menuKey) {
+      handleMenuOption(menuKey);
       return;
     }
 
@@ -323,14 +509,14 @@ export function VirtualAssistant() {
         const fallback = isClient
           ? 'Não encontrei uma resposta para sua pergunta. Escolha uma opção abaixo ou fale pelo WhatsApp:\n📱 11 99411-3911'
           : 'Não encontrei uma resposta específica. Escolha uma das opções do menu ou descreva melhor sua dúvida.';
-        addBotMessage(fallback, true);
+        addBotMessage(fallback, { isMenu: true });
       }
       setDisabled(false);
     }, 350);
   };
 
   const handleReset = () => {
-    setMessages(INITIAL_MESSAGES);
+    setMessages(buildInitialMessages());
     setInput('');
   };
 
@@ -343,13 +529,18 @@ export function VirtualAssistant() {
         aria-label="Abrir assistente"
       >
         {open ? <ChevronDown className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
+        {!open && criticalIssues > 0 && (
+          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse">
+            {criticalIssues}
+          </span>
+        )}
       </button>
 
       {open && (
         <div
           data-testid="assistant-window"
           className="fixed bottom-24 right-5 z-50 w-80 md:w-96 bg-card rounded-2xl shadow-2xl border border-border/50 flex flex-col"
-          style={{ maxHeight: '78vh' }}
+          style={{ maxHeight: '80vh' }}
         >
           <div className="flex items-center gap-3 p-4 bg-primary rounded-t-2xl text-white">
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
@@ -358,9 +549,21 @@ export function VirtualAssistant() {
             <div className="flex-1">
               <p className="font-bold text-sm">Assistente VivaFrutaz</p>
               <p className="text-xs text-white/70">
-                {isClient ? 'Suporte ao cliente' : `Suporte interno — ${getRoleLabel((user as any)?.role)}`}
+                {isClient
+                  ? 'Suporte ao cliente'
+                  : `Suporte interno — ${getRoleLabel((user as any)?.role)}`}
               </p>
             </div>
+            {!isClient && (
+              <button
+                data-testid="button-assistant-scan"
+                onClick={() => { if (!scanning && !disabled) { addUserMessage('0 — Verificar Sistema (Scan Automático)'); runSystemScan(); }}}
+                title="Scan do sistema"
+                className="hover:bg-white/20 rounded-lg p-1.5 transition-colors"
+              >
+                <Zap className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button
               data-testid="button-assistant-reset"
               onClick={handleReset}
@@ -374,7 +577,7 @@ export function VirtualAssistant() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: '48vh' }}>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: '50vh' }}>
             {messages.map(m => (
               <div key={m.id} className={`flex ${m.from === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {m.from === 'bot' && (
@@ -383,9 +586,30 @@ export function VirtualAssistant() {
                   </div>
                 )}
                 <div className="max-w-[82%]">
-                  <div className={`px-3 py-2 rounded-xl text-sm ${m.from === 'user' ? 'bg-primary text-white rounded-br-sm' : 'bg-muted text-foreground rounded-bl-sm'}`}>
-                    {m.text.split('\n').map((line, i) => <span key={i}>{line}{i < m.text.split('\n').length - 1 && <br />}</span>)}
-                  </div>
+                  {m.isReport && m.reportLines ? (
+                    <div className="space-y-1.5">
+                      <div className="px-3 py-2 rounded-xl text-sm bg-muted text-foreground rounded-bl-sm">
+                        {m.text}
+                      </div>
+                      <div className="bg-white border border-border/50 rounded-xl overflow-hidden text-xs">
+                        {m.reportLines.map((line, i) => (
+                          <div key={i} className={`flex items-center justify-between px-3 py-2 ${i > 0 ? 'border-t border-border/30' : ''} ${line.level === 'error' ? 'bg-red-50' : line.level === 'warn' ? 'bg-orange-50' : ''}`}>
+                            <span className="text-muted-foreground flex items-center gap-1.5">
+                              <span>{line.icon}</span> {line.label}
+                            </span>
+                            <span className={`font-bold ${line.level === 'error' ? 'text-red-700' : line.level === 'warn' ? 'text-orange-700' : 'text-green-700'}`}>
+                              {line.value}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`px-3 py-2 rounded-xl text-sm ${m.from === 'user' ? 'bg-primary text-white rounded-br-sm' : m.isAlert ? 'bg-orange-50 border border-orange-200 text-orange-800 rounded-bl-sm' : 'bg-muted text-foreground rounded-bl-sm'}`}>
+                      {m.text.split('\n').map((line, i) => <span key={i}>{line}{i < m.text.split('\n').length - 1 && <br />}</span>)}
+                    </div>
+                  )}
+
                   {m.isMenu && m.from === 'bot' && (
                     <div className="mt-2 flex flex-col gap-1.5">
                       {MENU_OPTIONS.map(opt => (
@@ -394,8 +618,15 @@ export function VirtualAssistant() {
                           data-testid={`button-menu-option-${opt.key}`}
                           onClick={() => handleMenuOption(opt.key)}
                           disabled={disabled}
-                          className="w-full text-left text-xs px-3 py-2 bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-xl transition-colors font-medium text-primary disabled:opacity-50"
+                          className={`w-full text-left text-xs px-3 py-2 border rounded-xl transition-colors font-medium disabled:opacity-50 ${
+                            opt.key === '0'
+                              ? 'bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-800'
+                              : opt.key === 'D' || opt.key === 'E'
+                                ? 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-800'
+                                : 'bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary'
+                          }`}
                         >
+                          {opt.key === '0' && <AlertTriangle className="w-3 h-3 inline mr-1 mb-0.5" />}
                           {opt.label}
                         </button>
                       ))}
@@ -411,7 +642,8 @@ export function VirtualAssistant() {
                       )}
                     </div>
                   )}
-                  {!m.isMenu && m.from === 'bot' && m.id !== 0 && (
+
+                  {!m.isMenu && !m.isReport && m.from === 'bot' && m.id !== 0 && (
                     <div className="mt-2 flex gap-1.5 flex-wrap">
                       <button
                         data-testid="button-back-to-menu"
@@ -438,9 +670,33 @@ export function VirtualAssistant() {
                       </button>
                     </div>
                   )}
+
+                  {m.isReport && (
+                    <div className="mt-2 flex gap-1.5">
+                      <button
+                        data-testid="button-back-to-menu"
+                        onClick={returnToMenu}
+                        className="text-xs px-2.5 py-1.5 bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-lg text-primary font-medium flex items-center gap-1 transition-colors"
+                      >
+                        <Home className="w-3 h-3" /> Voltar ao Menu
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
+            {scanning && (
+              <div className="flex justify-start">
+                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-1">
+                  <Bot className="w-3.5 h-3.5 text-primary animate-pulse" />
+                </div>
+                <div className="px-3 py-2 bg-muted rounded-xl text-sm text-muted-foreground flex items-center gap-2">
+                  <span className="inline-block w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="inline-block w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="inline-block w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
 
