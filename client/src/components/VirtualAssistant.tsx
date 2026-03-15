@@ -46,6 +46,7 @@ const ADMIN_MENU_OPTIONS = [
 const DEV_EXTRA_OPTIONS = [
   { key: 'D', label: 'D — Logs e Erros do Sistema' },
   { key: 'E', label: 'E — Detector de Bugs (Bug Scanner)' },
+  { key: 'I', label: 'I — IA Operacional / Central de Inteligência' },
 ];
 
 const CLIENT_ANSWERS: Record<string, string> = {
@@ -228,6 +229,22 @@ Funcionalidades:
 • Exportar relatório como arquivo .txt
 
 Para executar o scanner manualmente, clique em "Executar Verificação" na aba de Bugs. O scanner verifica integridade do banco de dados, APIs críticas e saúde do sistema.`,
+
+  'I': `IA Operacional — Central de Inteligência:
+
+🧠 Acesse em:
+→ Menu → IA Operacional
+
+A Central de Inteligência analisa automaticamente:
+
+📦 Estoque: produtos abaixo do mínimo, previsão de ruptura
+👥 Clientes: empresas fora do padrão de pedido histórico
+🛒 Produtos: queda de vendas e baixo giro
+🚚 Logística: rotas sem motorista, sobrecarga de entregas
+🔐 Sistema: falhas de login, erros repetidos
+
+Alertas são classificados por severidade: Crítico → Alto → Médio → Baixo.
+Clique em cada alerta para ir direto ao módulo relacionado.`,
 };
 
 const CLIENT_FAQ: Array<{ patterns: string[]; answer: string }> = [
@@ -261,6 +278,7 @@ const ADMIN_FAQ: Array<{ patterns: string[]; answer: string }> = [
   { patterns: ['maçã', 'maca', 'banana', 'laranja', 'fruta', 'produto', 'categoria'], answer: 'Produtos são gerenciados em Menu → Produtos. Você pode cadastrar com: nome, categoria, unidade, preço base, flags (industrializado/sazonal), dias disponíveis, dados fiscais (NCM/CFOP) e curiosidades educativas.' },
   { patterns: ['diretoria', 'executivo', 'dashboard executivo', 'painel executivo'], answer: 'O Painel Executivo (Diretoria) oferece visão consolidada de pedidos, faturamento e métricas. Acessível apenas para perfil Diretoria e Administrador.' },
   { patterns: ['scan', 'verificação', 'verificar', 'checar sistema', 'auditoria'], answer: 'Para verificar o sistema automaticamente, escolha a opção "0 — Verificar Sistema" no menu do assistente. Ele fará um scan completo e mostrará alertas em tempo real.' },
+  { patterns: ['ia operacional', 'inteligência', 'inteligencia', 'central de inteligência', 'ia preditiva', 'alertas preditivos'], answer: 'A Central de Inteligência (IA Operacional) analisa 5 categorias: Estoque, Clientes, Produtos, Logística e Sistema. Acesse em Menu → IA Operacional. Use a opção "I" no menu do assistente para mais detalhes.' },
 ];
 
 function getRoleLabel(role?: string): string {
@@ -326,8 +344,14 @@ export function VirtualAssistant() {
     staleTime: 3 * 60 * 1000,
   });
 
-  const criticalIssues = !isClient && auditData?.issues
-    ? (auditData.issues as any[]).filter((i: any) => i.severity === 'CRITICAL' || i.severity === 'HIGH').length
+  const { data: intelligenceData } = useQuery<any>({
+    queryKey: ['/api/admin/intelligence'],
+    enabled: !isClient && isLoggedIn,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const criticalIssues = !isClient
+    ? (intelligenceData?.summary?.critical ?? 0) + (intelligenceData?.summary?.high ?? 0)
     : 0;
 
   const activeOrders = Array.isArray(ordersData)
@@ -347,9 +371,9 @@ export function VirtualAssistant() {
       base += `\n\n📦 Há ${activeOrders} pedido${activeOrders !== 1 ? 's' : ''} ativo${activeOrders !== 1 ? 's' : ''} no sistema agora.`;
     }
     if (criticalIssues > 0) {
-      base += `\n⚠️ ${criticalIssues} problema${criticalIssues !== 1 ? 's' : ''} crítico${criticalIssues !== 1 ? 's' : ''} detectado${criticalIssues !== 1 ? 's' : ''}. Use a opção "0" para ver o relatório.`;
-    } else if (auditData) {
-      base += `\n✅ Sistema verificado — nenhum problema crítico.`;
+      base += `\n⚠️ ${criticalIssues} alerta${criticalIssues !== 1 ? 's' : ''} de alta prioridade na IA Operacional. Use opção "0" para detalhes.`;
+    } else if (intelligenceData) {
+      base += `\n✅ IA Operacional: nenhum alerta crítico no momento.`;
     }
     base += '\n\nEscolha uma opção ou digite sua pergunta:';
     return base;
