@@ -479,19 +479,30 @@ export async function registerRoutes(
   app.post('/api/special-order-requests', async (req, res) => {
     try {
       const { companyId, requestedDay, requestedDate, description, quantity, observations, items } = req.body;
-      if (!companyId || !requestedDay) {
-        return res.status(400).json({ message: "Campos obrigatórios faltando." });
+      if (!companyId) return res.status(400).json({ message: "ID da empresa é obrigatório." });
+      if (!requestedDay) return res.status(400).json({ message: "Dia desejado é obrigatório." });
+      if (Array.isArray(items) && items.length > 0) {
+        for (const it of items) {
+          if (!it.productName?.trim()) return res.status(400).json({ message: "Nome do produto é obrigatório." });
+          if (!it.quantity?.trim()) return res.status(400).json({ message: "Quantidade do produto é obrigatória." });
+          if (!it.category) return res.status(400).json({ message: "Categoria do produto é obrigatória." });
+        }
       }
-      // For multi-item requests, description/quantity can be derived from items
-      const descFinal = description || (Array.isArray(items) ? items.map((i: any) => i.productName).join(', ') : '');
-      const qtyFinal = quantity || (Array.isArray(items) ? items.map((i: any) => `${i.quantity}`).join(', ') : '1');
+      const descFinal = description || (Array.isArray(items) && items.length ? items.map((i: any) => i.productName).join(', ') : 'Pedido pontual');
+      const qtyFinal = quantity || (Array.isArray(items) && items.length ? items.map((i: any) => i.quantity).join(', ') : '1');
       const req2 = await storage.createSpecialOrderRequest({
-        companyId, requestedDay, requestedDate: requestedDate || null,
-        description: descFinal, quantity: qtyFinal, observations,
-        items: items || null,
-      } as any);
+        companyId: Number(companyId), requestedDay,
+        requestedDate: requestedDate || null,
+        description: descFinal, quantity: qtyFinal,
+        observations: observations || null,
+        items: Array.isArray(items) && items.length ? items : null,
+        estimatedDeliveryDate: null,
+      });
       res.status(201).json(req2);
-    } catch { res.status(500).json({ message: "Erro interno" }); }
+    } catch (e: any) {
+      console.error('[POST /api/special-order-requests]', e);
+      res.status(500).json({ message: e?.message || "Erro interno ao salvar pedido pontual." });
+    }
   });
 
   // Client: list own requests
@@ -2500,18 +2511,86 @@ export async function registerRoutes(
   });
 
   // ─── Planejamento de Compras ──────────────────────────────────
+
+  // Smart forecast endpoint
+  app.get('/api/purchase-planning/forecast', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    try {
+      const [allOrders, allProds] = await Promise.all([storage.getOrders(), storage.getProducts()]);
+      const prodById = new Map(allProds.map(p => [p.id, p]));
+      const eightWeeksAgo = new Date(); eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
+      const recentOrders = allOrders.filter(o => o.status !== 'CANCELLED' && new Date(o.deliveryDate) >= eightWeeksAgo);
+
+      // Aggregate by product name, per week
+      const weeklyMap: Record<string, Record<string, number>> = {}; // productName -> weekKey -> qty
+      for (const order of recentOrders) {
+        const orderWithItems = await storage.getOrder(order.id);
+        if (!orderWithItems) continue;
+        const items = orderWithItems.items;
+        const delivDate = new Date(order.deliveryDate);
+        const weekKey = `${delivDate.getFullYear()}-W${Math.ceil((delivDate.getDate() + new Date(delivDate.getFullYear(), delivDate.getMonth(), 1).getDay()) / 7)}`;
+        for (const item of items) {
+          const prod = prodById.get(item.productId);
+          const name = prod?.name || `Produto #${item.productId}`;
+          if (!weeklyMap[name]) weeklyMap[name] = {};
+          weeklyMap[name][weekKey] = (weeklyMap[name][weekKey] || 0) + Number(item.quantity || 0);
+        }
+      }
+
+      const forecast = Object.entries(weeklyMap).map(([productName, weeks]) => {
+        const weekValues = Object.values(weeks);
+        const totalWeeks = 8;
+        const avgWeekly = weekValues.reduce((s, v) => s + v, 0) / totalWeeks;
+        const recentWeeks = weekValues.slice(-2);
+        const recentAvg = recentWeeks.length ? recentWeeks.reduce((s, v) => s + v, 0) / recentWeeks.length : avgWeekly;
+        const trend: 'up' | 'down' | 'stable' = recentAvg > avgWeekly * 1.1 ? 'up' : recentAvg < avgWeekly * 0.9 ? 'down' : 'stable';
+        return {
+          productName, avgWeekly: Math.round(avgWeekly * 10) / 10,
+          suggestion: Math.ceil(avgWeekly * 1.15), weeksActive: weekValues.filter(v => v > 0).length,
+          trend, recentAvg: Math.round(recentAvg * 10) / 10,
+        };
+      }).filter(f => f.avgWeekly > 0).sort((a, b) => b.avgWeekly - a.avgWeekly);
+
+      res.json({ forecast, analyzedWeeks: 8, generatedAt: new Date().toISOString() });
+    } catch (e: any) {
+      console.error('Forecast error:', e);
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   app.get('/api/purchase-planning', async (req, res) => {
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     try {
-      const { startDate, endDate, weekRef, categoryFilter, sourceFilter } = req.query as Record<string, string>;
-      const allOrders = await storage.getOrders();
+      // Accept startDate (YYYY-MM-DD) as primary param; auto-compute Mon–Fri range
+      const { startDate: rawStart, categoryFilter, sourceFilter } = req.query as Record<string, string>;
+      // Compute start (Monday) and end (Friday) of the selected week
+      let startDate = rawStart;
+      if (!startDate) {
+        const today = new Date();
+        const day = today.getDay() || 7; // ISO: Mon=1..Sun=7
+        const mon = new Date(today); mon.setDate(today.getDate() - (day - 1));
+        startDate = mon.toISOString().split('T')[0];
+      }
+      const startD = new Date(startDate + 'T12:00:00');
+      const endD = new Date(startD); endD.setDate(startD.getDate() + 4);
+      const endDate = endD.toISOString().split('T')[0];
+      const weekRef = startDate; // use startDate as weekRef for plan statuses
+
+      const [allOrders, allProducts, allCompanies] = await Promise.all([
+        storage.getOrders(),
+        storage.getProducts(),
+        storage.getCompanies(),
+      ]);
+      const productById = new Map(allProducts.map(p => [p.id, p]));
+      const companyById = new Map(allCompanies.map(c => [c.id, c]));
 
       const filtered = allOrders.filter(o => {
         if (['CANCELLED'].includes(o.status)) return false;
         const d = new Date(o.deliveryDate).toISOString().split('T')[0];
-        if (startDate && d < startDate) return false;
-        if (endDate && d > endDate) return false;
+        if (d < startDate) return false;
+        if (d > endDate) return false;
         return true;
       });
 
@@ -2525,24 +2604,29 @@ export async function registerRoutes(
 
       // Regular order items (only if sourceFilter allows)
       if (!sourceFilter || sourceFilter === 'all' || sourceFilter === 'regular') {
-        for (const order of filtered) {
-          const items = await storage.getOrderItems(order.id);
-          for (const item of items) {
-            if (categoryFilter && categoryFilter !== 'all') continue; // regular items have no category
-            const key = `reg__${item.productName || `produto-${item.productId}`}`;
-            if (!productMap.has(key)) {
-              productMap.set(key, { productId: item.productId || null, productName: item.productName || `Produto #${item.productId}`, totalQty: 0, unit: item.unit || 'un', source: 'regular', companies: [] });
+        if (!categoryFilter || categoryFilter === 'all') { // regular items have no category
+          for (const order of filtered) {
+            const orderWithItems = await storage.getOrder(order.id);
+            if (!orderWithItems) continue;
+            for (const item of orderWithItems.items) {
+              const prod = productById.get(item.productId);
+              const productName = prod?.name || `Produto #${item.productId}`;
+              const unit = prod?.unit || 'un';
+              const key = `reg__${productName}`;
+              if (!productMap.has(key)) {
+                productMap.set(key, { productId: item.productId, productName, totalQty: 0, unit, source: 'regular', companies: [] });
+              }
+              const entry = productMap.get(key)!;
+              entry.totalQty += Number(item.quantity || 0);
+              const companyName = companyById.get(order.companyId)?.companyName || `Empresa #${order.companyId}`;
+              entry.companies.push({
+                companyId: order.companyId, companyName,
+                quantity: Number(item.quantity || 0),
+                deliveryDate: new Date(order.deliveryDate).toISOString().split('T')[0],
+                orderId: order.id,
+                orderCode: order.orderCode,
+              });
             }
-            const entry = productMap.get(key)!;
-            entry.totalQty += Number(item.quantity || 0);
-            entry.companies.push({
-              companyId: order.companyId,
-              companyName: order.companyName || `Empresa #${order.companyId}`,
-              quantity: Number(item.quantity || 0),
-              deliveryDate: new Date(order.deliveryDate).toISOString().split('T')[0],
-              orderId: order.id,
-              orderCode: order.orderCode,
-            });
           }
         }
       }
@@ -2580,16 +2664,38 @@ export async function registerRoutes(
 
       const result = Array.from(productMap.values()).sort((a, b) => b.totalQty - a.totalQty);
 
-      // Attach plan statuses if weekRef provided
-      let statuses: any[] = [];
-      if (weekRef) {
-        statuses = await storage.getPurchasePlanStatuses(weekRef);
-      }
-
+      // Attach plan statuses
+      const statuses = await storage.getPurchasePlanStatuses(weekRef);
       const statusMap = new Map(statuses.map(s => [s.productName, s]));
       const enriched = result.map(p => ({ ...p, planStatus: statusMap.get(p.productName) || null }));
 
-      res.json({ items: enriched, totalOrders: filtered.length, period: { startDate, endDate } });
+      // Group by day for day-by-day view
+      const DAY_NAMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+      const byDay: Record<string, { date: string; dayName: string; shortDate: string; items: typeof enriched }> = {};
+      for (const p of enriched) {
+        for (const c of p.companies) {
+          const d = c.deliveryDate;
+          if (!byDay[d]) {
+            const dt = new Date(d + 'T12:00:00');
+            byDay[d] = {
+              date: d, dayName: DAY_NAMES[dt.getDay()],
+              shortDate: dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+              items: [],
+            };
+          }
+          // Check if this product already in day
+          let dayItem = byDay[d].items.find(i => i.productName === p.productName && i.source === p.source);
+          if (!dayItem) {
+            dayItem = { ...p, totalQty: 0, companies: [], planStatus: p.planStatus };
+            byDay[d].items.push(dayItem);
+          }
+          dayItem.totalQty += c.quantity;
+          dayItem.companies.push(c);
+        }
+      }
+      const dayGroups = Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
+
+      res.json({ items: enriched, byDay: dayGroups, totalOrders: filtered.length, period: { startDate, endDate }, weekRef });
     } catch (e: any) {
       console.error('Purchase planning error:', e);
       res.status(500).json({ message: e.message });

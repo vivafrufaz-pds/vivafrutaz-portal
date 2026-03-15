@@ -109,8 +109,8 @@ export interface IStorage {
   // Special Order Requests
   getSpecialOrderRequests(): Promise<SpecialOrderRequest[]>;
   getSpecialOrderRequestsByCompany(companyId: number): Promise<SpecialOrderRequest[]>;
-  createSpecialOrderRequest(data: { companyId: number; requestedDay: string; requestedDate?: string | null; description: string; quantity: string; observations?: string }): Promise<SpecialOrderRequest>;
-  updateSpecialOrderRequest(id: number, updates: { status: string; adminNote?: string; resolvedAt?: Date }): Promise<SpecialOrderRequest>;
+  createSpecialOrderRequest(data: { companyId: number; requestedDay: string; requestedDate?: string | null; description: string; quantity: string; observations?: string | null; items?: any; estimatedDeliveryDate?: string | null }): Promise<SpecialOrderRequest>;
+  updateSpecialOrderRequest(id: number, updates: { status: string; adminNote?: string; resolvedAt?: Date; items?: any; estimatedDeliveryDate?: string | null }): Promise<SpecialOrderRequest>;
 
   // User Management
   getUsers(): Promise<User[]>;
@@ -636,12 +636,12 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(specialOrderRequests).where(eq(specialOrderRequests.companyId, companyId)).orderBy(desc(specialOrderRequests.createdAt));
   }
 
-  async createSpecialOrderRequest(data: { companyId: number; requestedDay: string; requestedDate?: string | null; description: string; quantity: string; observations?: string }): Promise<SpecialOrderRequest> {
-    const [req] = await db.insert(specialOrderRequests).values({ ...data, status: 'PENDING' }).returning();
+  async createSpecialOrderRequest(data: { companyId: number; requestedDay: string; requestedDate?: string | null; description: string; quantity: string; observations?: string | null; items?: any; estimatedDeliveryDate?: string | null }): Promise<SpecialOrderRequest> {
+    const [req] = await db.insert(specialOrderRequests).values({ ...data, status: 'PENDING' } as any).returning();
     return req;
   }
 
-  async updateSpecialOrderRequest(id: number, updates: { status: string; adminNote?: string; resolvedAt?: Date }): Promise<SpecialOrderRequest> {
+  async updateSpecialOrderRequest(id: number, updates: { status: string; adminNote?: string; resolvedAt?: Date; items?: any; estimatedDeliveryDate?: string | null }): Promise<SpecialOrderRequest> {
     const [updated] = await db.update(specialOrderRequests).set(updates as any).where(eq(specialOrderRequests.id, id)).returning();
     return updated;
   }
