@@ -51,6 +51,8 @@ import AdminWasteControl from "@/pages/admin/waste-control";
 import AdminPurchasePlanning from "@/pages/admin/purchase-planning";
 import AdminInventory from "@/pages/admin/inventory";
 import AdminEmailManagement from "@/pages/admin/email-management";
+import AdminAboutUs from "@/pages/admin/about-us";
+import AdminSmtpConfig from "@/pages/admin/smtp-config";
 
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
@@ -60,6 +62,7 @@ import ClientSpecialOrder from "@/pages/client/special-order";
 import ClientIncidents from "@/pages/client/incidents";
 import ClientQuotations from "@/pages/client/quotations";
 import ClientProfile from "@/pages/client/profile";
+import ClientAboutUs from "@/pages/client/about-us";
 
 // Maintenance screen for blocked clients
 function MaintenanceScreen() {
@@ -270,6 +273,12 @@ function Router() {
       <Route path="/admin/email-management">
         {() => <ProtectedRoute component={AdminEmailManagement} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} tabKey="email-management" />}
       </Route>
+      <Route path="/admin/about-us">
+        {() => <ProtectedRoute component={AdminAboutUs} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS']} tabKey="about-us" />}
+      </Route>
+      <Route path="/admin/smtp-config">
+        {() => <ProtectedRoute component={AdminSmtpConfig} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER']} tabKey="smtp-config" />}
+      </Route>
 
       {/* Client Routes */}
       <Route path="/client">
@@ -295,6 +304,9 @@ function Router() {
       </Route>
       <Route path="/client/profile">
         {() => <ProtectedRoute component={ClientProfile} role="client" />}
+      </Route>
+      <Route path="/client/about-us">
+        {() => <ProtectedRoute component={ClientAboutUs} role="client" />}
       </Route>
 
       <Route component={NotFound} />

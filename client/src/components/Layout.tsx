@@ -6,7 +6,7 @@ import {
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
-  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail
+  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings
 } from 'lucide-react';
 import { VirtualAssistant } from './VirtualAssistant';
 
@@ -50,6 +50,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/purchase-planning', label: 'Planejamento de Compras', icon: ShoppingBag, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'PURCHASE_MANAGER', 'OPERATIONS_MANAGER'], tabKey: 'purchase-planning' },
     { href: '/admin/inventory', label: 'Estoque / Inventário', icon: Warehouse, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'PURCHASE_MANAGER'], tabKey: 'inventory' },
     { href: '/admin/email-management', label: 'Central de E-mails', icon: Mail, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'], tabKey: 'email-management' },
+    { href: '/admin/smtp-config', label: 'Configuração SMTP', icon: Settings, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'smtp-config' },
+    { href: '/admin/about-us', label: 'Quem Somos Nós', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'], tabKey: 'about-us' },
   ];
 
   const clientLinks = [
@@ -59,6 +61,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/client/special-order', label: 'Pedidos Pontuais', icon: Star },
     { href: '/client/incidents', label: 'Ocorrências', icon: AlertTriangle },
     { href: '/client/profile', label: 'Perfil da Empresa', icon: UserCircle },
+    { href: '/client/about-us', label: 'Quem Somos Nós', icon: Building2 },
   ];
 
   const userTabPerms = user?.tabPermissions as string[] | null | undefined;

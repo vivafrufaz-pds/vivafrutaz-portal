@@ -682,3 +682,35 @@ export const emailLogs = pgTable("email_logs", {
 export const insertEmailLogSchema = createInsertSchema(emailLogs).omit({ id: true, sentAt: true });
 export type EmailLog = typeof emailLogs.$inferSelect;
 export type InsertEmailLog = z.infer<typeof insertEmailLogSchema>;
+
+// ─── Quem Somos Nós (Institutional Info) ─────────────────────────────────────
+export const aboutUs = pgTable("about_us", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull().default("Quem Somos Nós"),
+  content: text("content").notNull().default(""),
+  foundingYear: text("founding_year"),
+  mission: text("mission"),
+  vision: text("vision"),
+  values: text("values"),
+  imageBase64: text("image_base64"), // uploaded logo/photo as base64
+  imageType: text("image_type"),     // e.g. "image/png"
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertAboutUsSchema = createInsertSchema(aboutUs).omit({ id: true, updatedAt: true });
+export type AboutUs = typeof aboutUs.$inferSelect;
+export type InsertAboutUs = z.infer<typeof insertAboutUsSchema>;
+
+// ─── SMTP Configuration ───────────────────────────────────────────────────────
+export const smtpConfig = pgTable("smtp_config", {
+  id: serial("id").primaryKey(),
+  host: text("host").notNull().default(""),
+  port: integer("port").notNull().default(587),
+  user: text("user").notNull().default(""),
+  password: text("password").notNull().default(""), // stored plain; masked in API response
+  senderEmail: text("sender_email").notNull().default(""),
+  senderName: text("sender_name").notNull().default("VivaFrutaz"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertSmtpConfigSchema = createInsertSchema(smtpConfig).omit({ id: true, updatedAt: true });
+export type SmtpConfig = typeof smtpConfig.$inferSelect;
+export type InsertSmtpConfig = z.infer<typeof insertSmtpConfigSchema>;

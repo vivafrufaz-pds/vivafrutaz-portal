@@ -1,39 +1,86 @@
 import nodemailer from "nodemailer";
+import { storage } from "./storage";
 
-const SMTP_HOST = process.env.SMTP_HOST;
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587");
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-const SMTP_FROM = process.env.SMTP_FROM || "VivaFrutaz <noreply@vivafrutaz.com>";
+// In-memory SMTP config cache — loaded from DB + overridden by env vars
+type SmtpCfg = {
+  host: string; port: number; user: string; pass: string; from: string;
+};
 
-function isConfigured() {
-  return !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+let _smtpCfg: SmtpCfg | null = null;
+
+async function getSmtpCfg(): Promise<SmtpCfg> {
+  // If already loaded, return cached (reloaded on PUT /api/smtp-config)
+  if (_smtpCfg) return _smtpCfg;
+  // Try DB first
+  try {
+    const dbCfg = await storage.getSmtpConfig();
+    if (dbCfg && dbCfg.host && dbCfg.user && dbCfg.password) {
+      const from = dbCfg.senderEmail
+        ? `${dbCfg.senderName} <${dbCfg.senderEmail}>`
+        : `${dbCfg.senderName} <${dbCfg.user}>`;
+      _smtpCfg = { host: dbCfg.host, port: dbCfg.port, user: dbCfg.user, pass: dbCfg.password, from };
+      return _smtpCfg;
+    }
+  } catch { /* ignore DB error, fall through to env */ }
+  // Fallback: env variables
+  const host = process.env.SMTP_HOST || '';
+  const port = parseInt(process.env.SMTP_PORT || '587');
+  const user = process.env.SMTP_USER || '';
+  const pass = process.env.SMTP_PASS || '';
+  const from = process.env.SMTP_FROM || `VivaFrutaz <noreply@vivafrutaz.com>`;
+  _smtpCfg = { host, port, user, pass, from };
+  return _smtpCfg;
 }
 
-function createTransporter() {
-  if (!isConfigured()) return null;
+// Call this after updating SMTP config in DB to force reload
+export async function reloadSmtpConfig(): Promise<void> {
+  _smtpCfg = null;
+  await getSmtpCfg();
+}
+
+async function isConfigured(): Promise<boolean> {
+  const cfg = await getSmtpCfg();
+  return !!(cfg.host && cfg.user && cfg.pass);
+}
+
+async function createTransporter() {
+  if (!(await isConfigured())) return null;
+  const cfg = await getSmtpCfg();
   return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.port === 465,
+    auth: { user: cfg.user, pass: cfg.pass },
   });
 }
 
 async function sendMail(to: string, subject: string, html: string) {
-  if (!isConfigured()) {
+  if (!(await isConfigured())) {
     console.log(`[MAILER] Email não enviado (SMTP não configurado). Para: ${to} | Assunto: ${subject}`);
     return { sent: false, reason: "SMTP não configurado" };
   }
   try {
-    const transporter = createTransporter()!;
-    await transporter.sendMail({ from: SMTP_FROM, to, subject, html });
+    const transporter = (await createTransporter())!;
+    const cfg = await getSmtpCfg();
+    await transporter.sendMail({ from: cfg.from, to, subject, html });
     console.log(`[MAILER] Email enviado para ${to}: ${subject}`);
     return { sent: true };
   } catch (err: any) {
     console.error(`[MAILER] Falha ao enviar email para ${to}:`, err.message);
     return { sent: false, reason: err.message };
   }
+}
+
+export async function sendTestEmail(toEmail: string, toName: string = 'Admin') {
+  const html = wrapTemplate('Teste de Configuração SMTP', `
+    <p>Olá, <strong>${toName}</strong>!</p>
+    <p>Este é um e-mail de teste enviado pelo sistema <strong>VivaFrutaz</strong>.</p>
+    <p style="margin-top:16px;padding:12px 16px;background:#dcfce7;border-radius:8px;color:#15803d;font-weight:bold;">
+      ✅ Configuração SMTP funcionando corretamente.
+    </p>
+    <p>Você pode ignorar este e-mail com segurança.</p>
+  `);
+  return sendMail(toEmail, 'Teste de Configuração SMTP — VivaFrutaz', html);
 }
 
 function wrapTemplate(title: string, body: string) {
@@ -169,13 +216,13 @@ export async function sendAdminNewOrder(opts: {
 }
 
 export const mailerStatus = () => ({
-  configured: isConfigured(),
-  smtp: SMTP_HOST ? `${SMTP_HOST}:${SMTP_PORT}` : null,
-  from: SMTP_FROM,
+  configured: !!(_smtpCfg?.host && _smtpCfg?.user && _smtpCfg?.pass),
+  smtp: _smtpCfg?.host ? `${_smtpCfg.host}:${_smtpCfg.port}` : null,
+  from: _smtpCfg?.from || null,
 });
 
 export function isMailerConfigured(): boolean {
-  return isConfigured();
+  return !!(_smtpCfg?.host && _smtpCfg?.user && _smtpCfg?.pass);
 }
 
 export async function sendMailWithAttachment(
@@ -184,14 +231,15 @@ export async function sendMailWithAttachment(
   html: string,
   attachment: { filename: string; filepath: string; contentType: string }
 ): Promise<{ sent: boolean; reason?: string }> {
-  if (!isConfigured()) {
+  if (!(await isConfigured())) {
     console.log(`[MAILER] Email com anexo não enviado (SMTP não configurado). Para: ${to}`);
     return { sent: false, reason: "SMTP não configurado" };
   }
   try {
-    const transporter = createTransporter()!;
+    const cfg = await getSmtpCfg();
+    const transporter = (await createTransporter())!;
     await transporter.sendMail({
-      from: SMTP_FROM,
+      from: cfg.from,
       to,
       subject,
       html,
@@ -209,16 +257,6 @@ export async function sendMailWithAttachment(
     console.error(`[MAILER] Falha ao enviar email com anexo para ${to}:`, err.message);
     return { sent: false, reason: err.message };
   }
-}
-
-export async function sendTestEmail(toEmail: string) {
-  const html = wrapTemplate("Teste de envio de e-mail", `
-    <p>Este é um <strong>e-mail de teste</strong> enviado pelo sistema VivaFrutaz.</p>
-    <p>Se você recebeu esta mensagem, as configurações SMTP estão corretas e o envio automático de e-mails está funcionando.</p>
-    <p><strong>Servidor SMTP:</strong> ${SMTP_HOST}:${SMTP_PORT}</p>
-    <p><strong>Remetente:</strong> ${SMTP_FROM}</p>
-  `);
-  return sendMail(toEmail, "Teste de envio de e-mail do sistema VivaFrutaz.", html);
 }
 
 // ─── New automated email functions ──────────────────────────────────────────

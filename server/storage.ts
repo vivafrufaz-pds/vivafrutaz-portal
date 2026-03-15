@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs, aboutUs, smtpConfig,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -23,7 +23,9 @@ import {
   type InventoryPhysicalCount, type InsertInventoryPhysicalCount,
   type FiscalInvoice, type InsertFiscalInvoice,
   type EmailSchedule, type InsertEmailSchedule,
-  type EmailLog, type InsertEmailLog
+  type EmailLog, type InsertEmailLog,
+  type AboutUs, type InsertAboutUs,
+  type SmtpConfig, type InsertSmtpConfig
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -1149,6 +1151,44 @@ export class DatabaseStorage implements IStorage {
         gte(emailLogs.sentAt, startOfDay)
       ));
     return !!r;
+  }
+
+  // ─── About Us (Quem Somos Nós) ────────────────────────────────────────────
+  async getAboutUs(): Promise<AboutUs | undefined> {
+    const [r] = await db.select().from(aboutUs).limit(1);
+    return r;
+  }
+  async upsertAboutUs(data: Partial<InsertAboutUs>): Promise<AboutUs> {
+    const existing = await this.getAboutUs();
+    if (existing) {
+      const [r] = await db.update(aboutUs)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(aboutUs.id, existing.id))
+        .returning();
+      return r;
+    } else {
+      const [r] = await db.insert(aboutUs).values({ ...data } as InsertAboutUs).returning();
+      return r;
+    }
+  }
+
+  // ─── SMTP Config ──────────────────────────────────────────────────────────
+  async getSmtpConfig(): Promise<SmtpConfig | undefined> {
+    const [r] = await db.select().from(smtpConfig).limit(1);
+    return r;
+  }
+  async upsertSmtpConfig(data: Partial<InsertSmtpConfig>): Promise<SmtpConfig> {
+    const existing = await this.getSmtpConfig();
+    if (existing) {
+      const [r] = await db.update(smtpConfig)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(smtpConfig.id, existing.id))
+        .returning();
+      return r;
+    } else {
+      const [r] = await db.insert(smtpConfig).values({ ...data } as InsertSmtpConfig).returning();
+      return r;
+    }
   }
 }
 
