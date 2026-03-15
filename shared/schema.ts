@@ -127,6 +127,12 @@ export const products = pgTable("products", {
   curiosity: text("curiosity"),
   // Safra: indica se o produto está atualmente fora de safra/indisponível
   outOfSeason: boolean("out_of_season").default(false).notNull(),
+  // ID do produto base (ex: "001", "002") — identifica produtos derivados do mesmo item base
+  productCode: text("product_code"),
+  // Disponibilidade de categorias: 'all' = todas; 'specific' = apenas as listadas em allowedCategories
+  categoryAvailability: text("category_availability").notNull().default("all"),
+  // Lista de categorias permitidas quando categoryAvailability = 'specific'
+  allowedCategories: jsonb("allowed_categories"),
 });
 
 export const productPrices = pgTable("product_prices", {

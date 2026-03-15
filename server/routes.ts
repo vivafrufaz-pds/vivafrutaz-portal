@@ -966,6 +966,81 @@ export async function registerRoutes(
     }
   });
 
+  // --- Próximo código de produto disponível ---
+  app.get('/api/products/next-code', async (req: any, res) => {
+    try {
+      const all = await storage.getProducts();
+      const usedCodes = (all as any[])
+        .map((p: any) => p.productCode)
+        .filter(Boolean)
+        .map((c: string) => parseInt(c.replace(/\D/g, ''), 10))
+        .filter((n: number) => !isNaN(n));
+      const maxCode = usedCodes.length > 0 ? Math.max(...usedCodes) : 0;
+      const next = String(maxCode + 1).padStart(3, '0');
+      res.json({ nextCode: next });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // --- Alertas de variação de preço (via notas fiscais) ---
+  app.get('/api/products/price-alerts', async (req: any, res) => {
+    try {
+      const [allProducts, allInvoices] = await Promise.all([
+        storage.getProducts(),
+        storage.getFiscalInvoices(),
+      ]);
+
+      const ALERT_THRESHOLD = 0.20; // 20% de variação
+      const alerts: any[] = [];
+
+      for (const product of allProducts as any[]) {
+        if (!product.basePrice || Number(product.basePrice) <= 0) continue;
+        const basePrice = Number(product.basePrice);
+
+        // Buscar itens de notas fiscais ligados a este produto
+        const linkedItems: { unitPrice: number; invoiceDate: string; invoiceNumber: string; supplier: string }[] = [];
+        for (const invoice of allInvoices as any[]) {
+          const items = (invoice.items as any[]) || [];
+          for (const item of items) {
+            if (item.linkedProductId === product.id && item.unitPrice) {
+              linkedItems.push({
+                unitPrice: Number(item.unitPrice),
+                invoiceDate: invoice.issueDate || invoice.importedAt,
+                invoiceNumber: invoice.invoiceNumber,
+                supplier: invoice.supplier,
+              });
+            }
+          }
+        }
+
+        if (linkedItems.length === 0) continue;
+
+        // Pegar o custo mais recente
+        const latestCost = linkedItems[0].unitPrice;
+        const variation = (latestCost - basePrice) / basePrice;
+
+        if (Math.abs(variation) >= ALERT_THRESHOLD) {
+          // Encontrar produtos derivados (mesmo productCode)
+          const derivedProducts = product.productCode
+            ? (allProducts as any[]).filter(
+                (p: any) => p.productCode === product.productCode && p.id !== product.id
+              )
+            : [];
+
+          alerts.push({
+            product: { id: product.id, name: product.name, category: product.category, productCode: product.productCode, basePrice: basePrice },
+            latestCost,
+            variation: +(variation * 100).toFixed(1),
+            direction: variation > 0 ? 'increase' : 'decrease',
+            latestInvoice: linkedItems[0],
+            derivedProducts: derivedProducts.map((p: any) => ({ id: p.id, name: p.name, category: p.category })),
+          });
+        }
+      }
+
+      res.json(alerts);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // --- Substitute/manage item in order (safra management) ---
   app.post('/api/orders/:orderId/substitute-item', async (req, res) => {
     try {
