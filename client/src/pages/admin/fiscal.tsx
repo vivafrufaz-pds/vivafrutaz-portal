@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import {
-  Receipt, Search, Filter, Calendar, Building2, Download, Eye, FileText,
+  Receipt, Search, Filter, Calendar, Building2, Download, Eye,
   CheckCircle2, Clock, XCircle, Send, ChevronDown, ChevronRight, RefreshCw,
-  TrendingUp, AlertCircle, Package
+  TrendingUp, Package
 } from 'lucide-react';
 import { downloadDanfe, openDanfe, type DanfeData } from '@/lib/danfe-generator';
 
@@ -45,13 +45,12 @@ export default function FiscalManagement() {
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('todos');
-  const [filterClientType, setFilterClientType] = useState('todos');
   const [filterContract, setFilterContract] = useState('todos');
-  const [filterCompany, setFilterCompany] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [expandedCompany, setExpandedCompany] = useState<number | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set());
+  const [danfeLoading, setDanfeLoading] = useState<number | null>(null);
 
   const { data: ordersRaw = [], isLoading, refetch } = useQuery<any[]>({
     queryKey: ['/api/orders'],
@@ -61,6 +60,12 @@ export default function FiscalManagement() {
   const { data: companies = [] } = useQuery<any[]>({
     queryKey: ['/api/companies'],
     staleTime: 60000,
+  });
+
+  const { data: companyConfig } = useQuery<any>({
+    queryKey: ['/api/company-config'],
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 
   const companyMap = useMemo(() => {
@@ -74,39 +79,36 @@ export default function FiscalManagement() {
       if (filterStatus !== 'todos') {
         const status = o.fiscalStatus || 'nota_pendente';
         if (filterStatus === 'faturado' && status !== 'nota_emitida') return false;
-        if (filterStatus === 'pendente' && status !== 'nota_pendente') return false;
+        if (filterStatus === 'pendente' && (status && status !== 'nota_pendente')) return false;
         if (!['faturado', 'pendente', 'todos'].includes(filterStatus) && status !== filterStatus) return false;
       }
 
       const company = companyMap[o.companyId];
-      if (filterClientType !== 'todos' && company?.clientType !== filterClientType) return false;
       if (filterContract !== 'todos') {
         if (filterContract === 'avulso' && company?.clientType !== 'avulso') return false;
         if (filterContract === 'contratual' && company?.clientType !== 'contratual') return false;
-        if (filterContract === 'mensal' && company?.billingCycle !== 'mensal') return false;
-        if (filterContract === 'semanal' && company?.billingCycle !== 'semanal') return false;
+        if (filterContract === 'mensal' && company?.clientType !== 'mensal') return false;
+        if (filterContract === 'semanal' && company?.clientType !== 'semanal') return false;
       }
 
-      if (filterCompany && !o.companyName?.toLowerCase().includes(filterCompany.toLowerCase())) return false;
-
+      const companyName = company?.companyName || '';
       if (dateFrom && o.deliveryDate && o.deliveryDate < dateFrom) return false;
       if (dateTo && o.deliveryDate && o.deliveryDate > dateTo) return false;
 
       if (search) {
         const q = search.toLowerCase();
-        if (!o.companyName?.toLowerCase().includes(q) &&
-            !String(o.id).includes(q) &&
-            !o.deliveryDate?.includes(q)) return false;
+        if (!companyName.toLowerCase().includes(q) && !String(o.id).includes(q)) return false;
       }
       return true;
     });
-  }, [ordersRaw, filterStatus, filterClientType, filterContract, filterCompany, dateFrom, dateTo, search, companyMap]);
+  }, [ordersRaw, filterStatus, filterContract, dateFrom, dateTo, search, companyMap]);
 
   const grouped = useMemo(() => {
     const g: Record<number, { company: any; orders: any[]; total: number }> = {};
     orders.forEach((o: any) => {
+      const company = companyMap[o.companyId] || { companyName: `Empresa #${o.companyId}`, id: o.companyId };
       if (!g[o.companyId]) {
-        g[o.companyId] = { company: companyMap[o.companyId] || { companyName: o.companyName, id: o.companyId }, orders: [], total: 0 };
+        g[o.companyId] = { company, orders: [], total: 0 };
       }
       g[o.companyId].orders.push(o);
       g[o.companyId].total += Number(o.totalValue || 0);
@@ -145,8 +147,108 @@ export default function FiscalManagement() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
       toast({ title: 'Exportado para Bling com sucesso' });
     },
-    onError: () => toast({ title: 'Erro ao exportar para Bling', variant: 'destructive' }),
+    onError: (err: any) => {
+      const msg = err?.message || 'Erro ao exportar para Bling';
+      toast({ title: msg, variant: 'destructive' });
+    },
   });
+
+  const buildDanfeData = async (order: any): Promise<DanfeData> => {
+    const company = companyMap[order.companyId] || {};
+
+    let detail: any = { order, items: [] };
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, { credentials: 'include' });
+      if (res.ok) detail = await res.json();
+    } catch { /* use fallback */ }
+
+    const detailOrder = detail.order || detail;
+    const rawItems = detail.items || detailOrder.items || [];
+
+    const items = rawItems.map((item: any) => ({
+      productName: item.productName || item.name || `Produto #${item.productId}`,
+      quantity: Number(item.quantity || 1),
+      unit: item.unit || 'un',
+      unitPrice: Number(item.unitPrice || item.price || 0),
+      totalPrice: Number(item.totalPrice || item.totalValue || (item.quantity * item.unitPrice) || 0),
+      ncm: item.ncm || null,
+      cfop: item.cfop || null,
+    }));
+
+    const cfg = companyConfig || {};
+
+    return {
+      order: {
+        id: order.id,
+        orderCode: order.orderCode || `VF-${order.id}`,
+        status: order.status || 'ACTIVE',
+        orderDate: order.orderDate || order.createdAt || new Date().toISOString(),
+        deliveryDate: order.deliveryDate || null,
+        weekReference: order.weekReference || null,
+        totalValue: order.totalValue,
+        orderNote: order.orderNote || null,
+        adminNote: order.adminNote || null,
+        companyId: order.companyId,
+        preNotaNumber: detailOrder?.preNotaNumber || order.preNotaNumber || null,
+        fiscalStatus: detailOrder?.fiscalStatus || order.fiscalStatus || null,
+      },
+      items,
+      company: {
+        companyName: company?.companyName || `Empresa #${order.companyId}`,
+        cnpj: company?.cnpj || null,
+        contactName: company?.contactName || null,
+        phone: company?.phone || null,
+        addressStreet: company?.addressStreet || null,
+        addressNumber: company?.addressNumber || null,
+        addressNeighborhood: company?.addressNeighborhood || null,
+        addressCity: company?.addressCity || null,
+        addressZip: company?.addressZip || null,
+        addressState: company?.addressState || null,
+        stateRegistration: company?.stateRegistration || null,
+      },
+      vivaFrutaz: {
+        companyName: cfg?.companyName || 'VivaFrutaz',
+        fantasyName: cfg?.fantasyName || null,
+        cnpj: cfg?.cnpj || null,
+        address: cfg?.address || null,
+        city: cfg?.city || null,
+        state: cfg?.state || null,
+        cep: cfg?.cep || null,
+        phone: cfg?.phone || null,
+        email: cfg?.email || null,
+        stateRegistration: cfg?.stateRegistration || null,
+        defaultCfop: cfg?.defaultCfop || '5102',
+        defaultNatureza: cfg?.defaultNatureza || 'Venda de mercadoria adquirida',
+        logoBase64: cfg?.logoBase64 || null,
+        logoType: cfg?.logoType || null,
+      },
+    };
+  };
+
+  const handleViewDanfe = async (order: any) => {
+    setDanfeLoading(order.id);
+    try {
+      const data = await buildDanfeData(order);
+      await openDanfe(data);
+    } catch (e) {
+      toast({ title: 'Erro ao gerar DANFE para visualização', variant: 'destructive' });
+    } finally {
+      setDanfeLoading(null);
+    }
+  };
+
+  const handleDownloadDanfe = async (order: any) => {
+    setDanfeLoading(order.id);
+    try {
+      const data = await buildDanfeData(order);
+      await downloadDanfe(data);
+      toast({ title: 'DANFE baixado com sucesso' });
+    } catch (e) {
+      toast({ title: 'Erro ao baixar DANFE', variant: 'destructive' });
+    } finally {
+      setDanfeLoading(null);
+    }
+  };
 
   const toggleOrder = (id: number) => {
     setSelectedOrders(prev => {
@@ -175,47 +277,6 @@ export default function FiscalManagement() {
     }
     selectedOrders.forEach(id => fiscalMutation.mutate({ orderId: id, fiscalStatus: status }));
     setSelectedOrders(new Set());
-  };
-
-  const handleViewDanfe = async (order: any) => {
-    const items = (order.items || []).map((item: any) => ({
-      description: item.productName || item.name || 'Item',
-      quantity: Number(item.quantity || 1),
-      unitValue: Number(item.unitPrice || item.price || 0),
-      totalValue: Number(item.totalValue || (item.quantity * item.unitPrice) || 0),
-    }));
-    const danfeData: DanfeData = {
-      orderId: order.id,
-      orderDate: order.deliveryDate || order.createdAt || new Date().toISOString(),
-      companyName: order.companyName || 'N/A',
-      companyCnpj: order.companyCnpj || companyMap[order.companyId]?.cnpj || '',
-      companyAddress: companyMap[order.companyId]?.address || '',
-      items,
-      totalValue: Number(order.totalValue || 0),
-      notes: order.observations || '',
-    };
-    openDanfe(danfeData);
-  };
-
-  const handleDownloadDanfe = async (order: any) => {
-    const items = (order.items || []).map((item: any) => ({
-      description: item.productName || item.name || 'Item',
-      quantity: Number(item.quantity || 1),
-      unitValue: Number(item.unitPrice || item.price || 0),
-      totalValue: Number(item.totalValue || (item.quantity * item.unitPrice) || 0),
-    }));
-    const danfeData: DanfeData = {
-      orderId: order.id,
-      orderDate: order.deliveryDate || order.createdAt || new Date().toISOString(),
-      companyName: order.companyName || 'N/A',
-      companyCnpj: order.companyCnpj || companyMap[order.companyId]?.cnpj || '',
-      companyAddress: companyMap[order.companyId]?.address || '',
-      items,
-      totalValue: Number(order.totalValue || 0),
-      notes: order.observations || '',
-    };
-    downloadDanfe(danfeData);
-    toast({ title: 'DANFE gerado e baixado com sucesso' });
   };
 
   return (
@@ -269,13 +330,13 @@ export default function FiscalManagement() {
           <Filter className="w-4 h-4 text-primary" />
           Filtros
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-          <div className="relative xl:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="relative lg:col-span-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <input
               data-testid="input-fiscal-search"
               type="text"
-              placeholder="Buscar empresa ou pedido..."
+              placeholder="Buscar empresa ou nº do pedido..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-sm border border-border/50 rounded-xl bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -316,7 +377,9 @@ export default function FiscalManagement() {
             <option value="faturado">Faturado (Emitida)</option>
             <option value="nota_cancelada">Cancelada</option>
           </select>
+        </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <select
             data-testid="select-fiscal-contract"
             value={filterContract}
@@ -329,40 +392,40 @@ export default function FiscalManagement() {
             <option value="mensal">Faturamento mensal</option>
             <option value="semanal">Faturamento semanal</option>
           </select>
-        </div>
 
-        {selectedOrders.size > 0 && (
-          <div className="flex items-center gap-3 pt-2 border-t border-border/30 flex-wrap">
-            <span className="text-sm font-medium text-foreground">{selectedOrders.size} pedido(s) selecionado(s)</span>
-            <button
-              data-testid="button-bulk-mark-emitida"
-              onClick={() => handleBulkStatus('nota_emitida')}
-              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors"
-            >
-              Marcar como Emitida
-            </button>
-            <button
-              data-testid="button-bulk-mark-exportada"
-              onClick={() => handleBulkStatus('nota_exportada')}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors"
-            >
-              Marcar como Exportada
-            </button>
-            <button
-              data-testid="button-bulk-mark-pendente"
-              onClick={() => handleBulkStatus('nota_pendente')}
-              className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-xs font-bold transition-colors"
-            >
-              Marcar como Pendente
-            </button>
-            <button
-              onClick={() => setSelectedOrders(new Set())}
-              className="px-3 py-1.5 bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg text-xs font-medium transition-colors"
-            >
-              Limpar seleção
-            </button>
-          </div>
-        )}
+          {selectedOrders.size > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-foreground">{selectedOrders.size} selecionado(s)</span>
+              <button
+                data-testid="button-bulk-mark-emitida"
+                onClick={() => handleBulkStatus('nota_emitida')}
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors"
+              >
+                → Emitida
+              </button>
+              <button
+                data-testid="button-bulk-mark-exportada"
+                onClick={() => handleBulkStatus('nota_exportada')}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors"
+              >
+                → Exportada
+              </button>
+              <button
+                data-testid="button-bulk-mark-pendente"
+                onClick={() => handleBulkStatus('nota_pendente')}
+                className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-xs font-bold transition-colors"
+              >
+                → Pendente
+              </button>
+              <button
+                onClick={() => setSelectedOrders(new Set())}
+                className="px-3 py-1.5 bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg text-xs font-medium transition-colors"
+              >
+                Limpar
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Orders grouped by company */}
@@ -398,7 +461,7 @@ export default function FiscalManagement() {
                     ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
                     onChange={() => toggleAllInGroup(compOrders)}
                     onClick={e => e.stopPropagation()}
-                    className="w-4 h-4 rounded border-border accent-primary"
+                    className="w-4 h-4 rounded border-border accent-primary flex-shrink-0"
                     data-testid={`checkbox-group-${company.id}`}
                   />
 
@@ -413,14 +476,11 @@ export default function FiscalManagement() {
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                           company.clientType === 'contratual'
                             ? 'bg-purple-100 text-purple-700 border-purple-300'
+                            : company.clientType === 'mensal'
+                            ? 'bg-orange-100 text-orange-700 border-orange-300'
                             : 'bg-blue-100 text-blue-700 border-blue-300'
                         }`}>
-                          {company.clientType === 'contratual' ? 'Contratual' : 'Avulso'}
-                        </span>
-                      )}
-                      {company.billingCycle && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50">
-                          {company.billingCycle === 'mensal' ? 'Mensal' : 'Semanal'}
+                          {company.clientType === 'contratual' ? 'Contratual' : company.clientType === 'mensal' ? 'Mensal' : company.clientType === 'semanal' ? 'Semanal' : 'Avulso'}
                         </span>
                       )}
                     </div>
@@ -436,7 +496,10 @@ export default function FiscalManagement() {
                     <p className="text-xs text-muted-foreground">total período</p>
                   </div>
 
-                  {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                  {isExpanded
+                    ? <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    : <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  }
                 </div>
 
                 {isExpanded && (
@@ -448,7 +511,7 @@ export default function FiscalManagement() {
                             <th className="text-left px-4 py-2 w-8"></th>
                             <th className="text-left px-4 py-2">Pedido</th>
                             <th className="text-left px-4 py-2">Entrega</th>
-                            <th className="text-left px-4 py-2">Status</th>
+                            <th className="text-left px-4 py-2">Status Fiscal</th>
                             <th className="text-right px-4 py-2">Valor</th>
                             <th className="text-right px-4 py-2">Ações</th>
                           </tr>
@@ -456,7 +519,7 @@ export default function FiscalManagement() {
                         <tbody>
                           {compOrders.map((order: any) => {
                             const fStatus = order.fiscalStatus || 'nota_pendente';
-                            const FIcon = FISCAL_ICON[fStatus] || Clock;
+                            const isLoadingDanfe = danfeLoading === order.id;
                             return (
                               <tr key={order.id} className={`border-t border-border/20 hover:bg-muted/20 transition-colors ${selectedOrders.has(order.id) ? 'bg-primary/5' : ''}`}>
                                 <td className="px-4 py-3">
@@ -469,9 +532,17 @@ export default function FiscalManagement() {
                                   />
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className="font-mono font-bold text-foreground">#{order.id}</span>
+                                  <div>
+                                    <span className="font-mono font-bold text-foreground">#{order.id}</span>
+                                    {order.preNotaNumber && (
+                                      <p className="text-[10px] text-muted-foreground mt-0.5">{order.preNotaNumber}</p>
+                                    )}
+                                    {order.erpId && (
+                                      <p className="text-[10px] text-blue-600 mt-0.5">{order.erpId}</p>
+                                    )}
+                                  </div>
                                 </td>
-                                <td className="px-4 py-3 text-muted-foreground">{fmtDate(order.deliveryDate)}</td>
+                                <td className="px-4 py-3 text-muted-foreground text-xs">{fmtDate(order.deliveryDate)}</td>
                                 <td className="px-4 py-3">
                                   <select
                                     value={fStatus}
@@ -491,16 +562,18 @@ export default function FiscalManagement() {
                                     <button
                                       data-testid={`button-view-danfe-fiscal-${order.id}`}
                                       onClick={() => handleViewDanfe(order)}
-                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors border border-blue-200"
+                                      disabled={isLoadingDanfe}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-colors border border-blue-200 disabled:opacity-50"
                                       title="Visualizar DANFE"
                                     >
-                                      <Eye className="w-3.5 h-3.5" />
+                                      {isLoadingDanfe ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
                                       DANFE
                                     </button>
                                     <button
                                       data-testid={`button-download-danfe-fiscal-${order.id}`}
                                       onClick={() => handleDownloadDanfe(order)}
-                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg text-xs font-bold transition-colors border border-border/50"
+                                      disabled={isLoadingDanfe}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-muted hover:bg-muted/80 text-muted-foreground rounded-lg text-xs font-bold transition-colors border border-border/50 disabled:opacity-50"
                                       title="Baixar DANFE PDF"
                                     >
                                       <Download className="w-3.5 h-3.5" />
@@ -509,12 +582,12 @@ export default function FiscalManagement() {
                                     <button
                                       data-testid={`button-bling-fiscal-${order.id}`}
                                       onClick={() => blingMutation.mutate(order.id)}
-                                      disabled={blingMutation.isPending}
-                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-xs font-bold transition-colors border border-orange-200 disabled:opacity-50"
-                                      title="Exportar para Bling"
+                                      disabled={blingMutation.isPending || order.erpExportStatus === 'exportado'}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-xs font-bold transition-colors border border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={order.erpExportStatus === 'exportado' ? `Já exportado: ${order.erpId}` : 'Exportar para Bling'}
                                     >
                                       <Send className="w-3.5 h-3.5" />
-                                      Bling
+                                      {order.erpExportStatus === 'exportado' ? 'Exportado' : 'Bling'}
                                     </button>
                                   </div>
                                 </td>
@@ -525,7 +598,7 @@ export default function FiscalManagement() {
                         <tfoot>
                           <tr className="bg-muted/20 border-t border-border/30">
                             <td colSpan={4} className="px-4 py-2 text-xs text-muted-foreground font-medium">
-                              Total consolidado — {compOrders.length} pedido(s)
+                              Consolidado — {compOrders.length} pedido(s) · {compOrders.filter(o => o.fiscalStatus === 'nota_emitida').length} emitida(s)
                             </td>
                             <td className="px-4 py-2 text-right font-bold text-foreground">{fmt(total)}</td>
                             <td className="px-4 py-2"></td>
