@@ -75,6 +75,9 @@ const emptyForm = {
   autoCalcCost: true,
   autoPriceFromCatalog: false,
   manualAvgCost: "",
+  contractStartDate: "",
+  contractEndDate: "",
+  contractVigencia: "",
 };
 
 function companyToForm(c: Company): typeof emptyForm {
@@ -111,6 +114,9 @@ function companyToForm(c: Company): typeof emptyForm {
     autoCalcCost: ca.autoCalcCost !== false,
     autoPriceFromCatalog: !!ca.autoPriceFromCatalog,
     manualAvgCost: ca.manualAvgCost ? String(ca.manualAvgCost) : "",
+    contractStartDate: ca.contractStartDate || "",
+    contractEndDate: ca.contractEndDate || "",
+    contractVigencia: ca.contractVigencia || "",
   };
 }
 
@@ -899,6 +905,9 @@ export default function CompaniesPage() {
       autoCalcCost: formData.autoCalcCost,
       autoPriceFromCatalog: formData.autoPriceFromCatalog,
       manualAvgCost: formData.manualAvgCost ? String(formData.manualAvgCost) : null,
+      contractStartDate: (formData as any).contractStartDate || null,
+      contractEndDate: (formData as any).contractEndDate || null,
+      contractVigencia: (formData as any).contractVigencia || null,
     };
 
     if (editingCompany) {
@@ -1444,6 +1453,42 @@ export default function CompaniesPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Vigência Contratual */}
+                <div className="mt-4 pt-4 border-t border-border/50">
+                  <p className="text-sm font-semibold mb-1 text-foreground flex items-center gap-1">
+                    <CalendarDays className="w-4 h-4 text-primary" /> Vigência Contratual
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-3">Controle de prazo e datas. Gera alertas automáticos quando o contrato se aproxima do vencimento ou completa 12 meses.</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-muted-foreground mb-1 block">Tipo de Vigência</label>
+                      <select value={(formData as any).contractVigencia || ''} onChange={e => set('contractVigencia' as any, e.target.value)}
+                        data-testid="select-company-vigencia"
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm">
+                        <option value="">Não definido</option>
+                        <option value="prazo_indefinido">Prazo Indefinido</option>
+                        <option value="prazo_determinado">Prazo Determinado</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-muted-foreground mb-1 block">Data de Início</label>
+                      <input type="date" value={(formData as any).contractStartDate || ''} onChange={e => set('contractStartDate' as any, e.target.value)}
+                        data-testid="input-company-contract-start"
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                    </div>
+                    <div>
+                      <label className={`text-xs font-bold mb-1 block ${(formData as any).contractVigencia !== 'prazo_determinado' ? 'text-muted-foreground/40' : 'text-muted-foreground'}`}>
+                        Data de Fim
+                      </label>
+                      <input type="date" value={(formData as any).contractEndDate || ''}
+                        disabled={(formData as any).contractVigencia !== 'prazo_determinado'}
+                        onChange={e => set('contractEndDate' as any, e.target.value)}
+                        data-testid="input-company-contract-end"
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm disabled:opacity-40" />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

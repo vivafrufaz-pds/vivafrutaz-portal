@@ -1477,6 +1477,137 @@ export async function registerRoutes(
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ─── Contract Management (Vigência + Reajustes) ──────────────────────────
+  // Update contract vigencia / dates
+  app.patch('/api/companies/:id/contract-info', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const companyId = Number(req.params.id);
+      const { contractStartDate, contractEndDate, contractVigencia } = req.body;
+      const updated = await storage.updateCompany(companyId, { contractStartDate, contractEndDate, contractVigencia } as any);
+      await storage.createLog({ action: 'CONTRACT_INFO_UPDATED', description: `Vigência contratual atualizada para empresa ID ${companyId}`, userId: req.session.userId, userEmail: null, userRole: 'ADMIN', level: 'INFO' });
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Get contract adjustments history
+  app.get('/api/companies/:id/contract-adjustments', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const adjustments = await storage.getContractAdjustments(Number(req.params.id));
+      res.json(adjustments);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Create contract adjustment
+  app.post('/api/companies/:id/contract-adjustments', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const companyId = Number(req.params.id);
+      const user = await storage.getUser(req.session.userId);
+      const adj = await storage.createContractAdjustment({
+        ...req.body,
+        companyId,
+        responsibleUserId: req.session.userId,
+        responsibleEmail: user?.email || null,
+      });
+      // Update company minWeeklyBilling if newWeeklyValue provided
+      if (req.body.newWeeklyValue) {
+        await storage.updateCompany(companyId, { minWeeklyBilling: req.body.newWeeklyValue });
+      }
+      await storage.createLog({ action: 'CONTRACT_ADJUSTMENT_CREATED', description: `Reajuste de ${req.body.adjustmentPercentage}% criado para empresa ID ${companyId} por ${user?.email}`, userId: req.session.userId, userEmail: user?.email || null, userRole: 'ADMIN', level: 'INFO' });
+      res.status(201).json(adj);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Update contract adjustment (save document content, email sent status)
+  app.patch('/api/companies/:id/contract-adjustments/:adjId', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const updated = await storage.updateContractAdjustment(Number(req.params.adjId), req.body);
+      res.json(updated);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Get all contract alerts (dashboard use)
+  app.get('/api/contracts/alerts', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const companies = await storage.getCompanies();
+      const now = new Date();
+      const alerts: any[] = [];
+
+      for (const company of companies) {
+        if (!company.active) continue;
+        const c = company as any;
+
+        // Check 12-month milestone for indefinite contracts
+        if (c.contractVigencia === 'prazo_indefinido' && c.contractStartDate) {
+          const start = new Date(c.contractStartDate);
+          const monthsDiff = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+          if (monthsDiff >= 12) {
+            // Check last adjustment
+            const adjs = await storage.getContractAdjustments(company.id);
+            const lastAdj = adjs[0];
+            const lastAdjDate = lastAdj ? new Date(lastAdj.createdAt) : start;
+            const monthsSinceAdj = (now.getFullYear() - lastAdjDate.getFullYear()) * 12 + (now.getMonth() - lastAdjDate.getMonth());
+            if (monthsSinceAdj >= 12) {
+              alerts.push({ type: '12_months', companyId: company.id, companyName: company.companyName, contractStartDate: c.contractStartDate, monthsActive: monthsDiff, monthsSinceLastAdjustment: monthsSinceAdj });
+            }
+          }
+        }
+
+        // Check expiring contracts
+        if (c.contractVigencia === 'prazo_determinado' && c.contractEndDate) {
+          const end = new Date(c.contractEndDate);
+          const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysLeft <= 90 && daysLeft >= 0) {
+            alerts.push({ type: 'expiring', companyId: company.id, companyName: company.companyName, contractEndDate: c.contractEndDate, daysLeft });
+          }
+        }
+      }
+
+      res.json(alerts);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // Send adjustment email
+  app.post('/api/companies/:id/contract-adjustments/:adjId/send-email', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const company = await storage.getCompany(Number(req.params.id));
+      if (!company) return res.status(404).json({ message: 'Empresa não encontrada' });
+      const adj = await storage.getContractAdjustment(Number(req.params.adjId));
+      if (!adj) return res.status(404).json({ message: 'Reajuste não encontrado' });
+
+      const smtpConfig = await storage.getSmtpConfig();
+      if (!smtpConfig?.host) return res.status(400).json({ message: 'SMTP não configurado' });
+
+      const { emailBody, emailSubject } = req.body;
+      const targetEmail = (company as any).notificationEmail || company.email;
+
+      const nodemailer = await import('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host: smtpConfig.host,
+        port: smtpConfig.port || 587,
+        secure: smtpConfig.port === 465,
+        auth: { user: smtpConfig.username, pass: smtpConfig.password },
+      });
+
+      await transporter.sendMail({
+        from: `"${smtpConfig.fromName || 'VivaFrutaz'}" <${smtpConfig.fromEmail || smtpConfig.username}>`,
+        to: targetEmail,
+        subject: emailSubject || 'Atualização Contratual VivaFrutaz',
+        text: emailBody || `Olá,\n\nConforme previsto em contrato, estamos aplicando o reajuste anual baseado no índice IPCA.\n\nAtenciosamente\nEquipe VivaFrutaz`,
+      });
+
+      await storage.updateContractAdjustment(adj.id, { emailSentAt: new Date() } as any);
+      const user = await storage.getUser(req.session.userId);
+      await storage.createLog({ action: 'CONTRACT_EMAIL_SENT', description: `Email de reajuste contratual enviado para ${targetEmail} (empresa ${company.companyName})`, userId: req.session.userId, userEmail: user?.email || null, userRole: 'ADMIN', level: 'INFO' });
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // Generate orders from contract scope for the current week
   app.post('/api/companies/:id/generate-orders-from-scope', async (req, res) => {
     try {

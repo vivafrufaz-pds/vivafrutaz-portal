@@ -67,6 +67,10 @@ export const companies = pgTable("companies", {
   manualAvgCost: numeric("manual_avg_cost", { precision: 10, scale: 2 }),
   // Preferência de frequência de pedido do cliente: 'semanal' | 'mensal' | 'pontual'
   preferredOrderType: text("preferred_order_type"),
+  // Gestão de vigência contratual
+  contractStartDate: date("contract_start_date"), // Data de início do contrato
+  contractEndDate: date("contract_end_date"), // Data de fim (só para prazo_determinado)
+  contractVigencia: text("contract_vigencia"), // 'prazo_indefinido' | 'prazo_determinado'
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -414,6 +418,25 @@ export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: t
 export const insertSpecialOrderRequestSchema = createInsertSchema(specialOrderRequests).omit({ id: true, createdAt: true, resolvedAt: true });
 export const insertContractScopeSchema = createInsertSchema(contractScopes).omit({ id: true });
 export const insertPasswordResetRequestSchema = createInsertSchema(passwordResetRequests).omit({ id: true, createdAt: true, resolvedAt: true });
+
+// ─── Contract Adjustments (Histórico de Reajustes Contratuais) ───────────────
+export const contractAdjustments = pgTable("contract_adjustments", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  adjustmentPercentage: numeric("adjustment_percentage", { precision: 5, scale: 2 }).notNull(),
+  reason: text("reason").notNull(),
+  appliedAt: date("applied_at").notNull(),
+  newWeeklyValue: numeric("new_weekly_value", { precision: 10, scale: 2 }),
+  responsibleUserId: integer("responsible_user_id"),
+  responsibleEmail: text("responsible_email"),
+  documentContent: jsonb("document_content"), // { headerText, bodyText, footerText, signatureName, signatureRole, signatureDate, signatureImage }
+  emailSentAt: timestamp("email_sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertContractAdjustmentSchema = createInsertSchema(contractAdjustments).omit({ id: true, createdAt: true });
+export type ContractAdjustment = typeof contractAdjustments.$inferSelect;
+export type InsertContractAdjustment = z.infer<typeof insertContractAdjustmentSchema>;
 
 // ─── DANFE Records ───────────────────────────────────────────
 export const danfeRecords = pgTable("danfe_records", {

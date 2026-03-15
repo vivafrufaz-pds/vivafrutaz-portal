@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs, aboutUs, smtpConfig, floraTraining, pushSubscriptions, notificationSettings,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs, aboutUs, smtpConfig, floraTraining, pushSubscriptions, notificationSettings, contractAdjustments,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -12,6 +12,7 @@ import {
   type Task, type ClientIncident, type IncidentMessage, type InternalIncident,
   type LogisticsDriver, type LogisticsVehicle, type LogisticsRoute, type LogisticsMaintenance, type CompanyQuotation,
   type ContractScope, type InsertContractScope,
+  type ContractAdjustment, type InsertContractAdjustment,
   type DanfeRecord, type InsertDanfeRecord,
   type CompanyConfig, type InsertCompanyConfig,
   type Announcement, type InsertAnnouncement,
@@ -51,6 +52,12 @@ export interface IStorage {
   createContractScope(scope: InsertContractScope): Promise<ContractScope>;
   updateContractScope(id: number, data: Partial<InsertContractScope>): Promise<ContractScope>;
   deleteContractScope(id: number): Promise<void>;
+
+  // Contract Adjustments
+  getContractAdjustments(companyId: number): Promise<ContractAdjustment[]>;
+  createContractAdjustment(adj: InsertContractAdjustment): Promise<ContractAdjustment>;
+  updateContractAdjustment(id: number, data: Partial<InsertContractAdjustment>): Promise<ContractAdjustment>;
+  getContractAdjustment(id: number): Promise<ContractAdjustment | undefined>;
 
   // DANFE Records
   getDanfeRecordsByOrderId(orderId: number): Promise<DanfeRecord[]>;
@@ -286,6 +293,27 @@ export class DatabaseStorage implements IStorage {
 
   async deleteContractScope(id: number): Promise<void> {
     await db.delete(contractScopes).where(eq(contractScopes.id, id));
+  }
+
+  async getContractAdjustments(companyId: number): Promise<ContractAdjustment[]> {
+    return await db.select().from(contractAdjustments)
+      .where(eq(contractAdjustments.companyId, companyId))
+      .orderBy(desc(contractAdjustments.createdAt));
+  }
+
+  async createContractAdjustment(adj: InsertContractAdjustment): Promise<ContractAdjustment> {
+    const [record] = await db.insert(contractAdjustments).values(adj).returning();
+    return record;
+  }
+
+  async updateContractAdjustment(id: number, data: Partial<InsertContractAdjustment>): Promise<ContractAdjustment> {
+    const [record] = await db.update(contractAdjustments).set(data as any).where(eq(contractAdjustments.id, id)).returning();
+    return record;
+  }
+
+  async getContractAdjustment(id: number): Promise<ContractAdjustment | undefined> {
+    const [record] = await db.select().from(contractAdjustments).where(eq(contractAdjustments.id, id));
+    return record;
   }
 
   async getDanfeRecordsByOrderId(orderId: number): Promise<DanfeRecord[]> {

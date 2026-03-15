@@ -3,7 +3,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useOrders } from "@/hooks/use-ordering";
 import { useCompanies } from "@/hooks/use-admin";
 import { Layout } from "@/components/Layout";
-import { ShoppingCart, Users, TrendingUp, Package, Wrench, CheckCircle2, AlertTriangle, FlaskConical, Shield, CalendarDays, Filter } from "lucide-react";
+import { ShoppingCart, Users, TrendingUp, Package, Wrench, CheckCircle2, AlertTriangle, FlaskConical, Shield, CalendarDays, Filter, ScrollText } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -307,6 +308,7 @@ export default function AdminDashboard() {
   const { user } = useAuth();
   const { data: orders } = useOrders();
   const { data: companies } = useCompanies();
+  const { data: contractAlerts = [] } = useQuery<any[]>({ queryKey: ['/api/contracts/alerts'], staleTime: 60000 });
   const today = toDateStr(new Date());
 
   const [preset, setPreset] = useState<string>('month');
@@ -415,6 +417,36 @@ export default function AdminDashboard() {
             </div>
           ))}
         </div>
+
+        {/* Contract Alerts */}
+        {contractAlerts.length > 0 && (
+          <div className="bg-card rounded-2xl border border-amber-200 premium-shadow p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                <ScrollText className="w-5 h-5 text-amber-600" />
+                Alertas de Contratos ({contractAlerts.length})
+              </h2>
+              <Link href="/admin/contracts">
+                <span className="text-xs font-bold text-primary hover:underline cursor-pointer">Ver gestão de contratos →</span>
+              </Link>
+            </div>
+            <div className="space-y-2">
+              {contractAlerts.slice(0, 5).map((a: any, i: number) => (
+                <div key={i} className={`p-3 rounded-xl border flex items-start gap-3 ${a.type === 'expiring' && a.daysLeft <= 30 ? 'bg-red-50 border-red-200' : a.type === 'expiring' && a.daysLeft <= 60 ? 'bg-orange-50 border-orange-200' : 'bg-amber-50 border-amber-200'}`}>
+                  <AlertTriangle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${a.type === 'expiring' && a.daysLeft <= 30 ? 'text-red-600' : 'text-amber-600'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-foreground">{a.companyName}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {a.type === '12_months'
+                        ? `Contrato completou ${a.monthsActive} meses. Sem reajuste há ${a.monthsSinceLastAdjustment} meses — avaliar IPCA.`
+                        : `Vence em ${a.daysLeft} dias (${new Date(a.contractEndDate + 'T00:00:00').toLocaleDateString('pt-BR')})`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Mode controls */}
         {canToggleMaintenance && (
