@@ -205,6 +205,20 @@ export function VirtualAssistant() {
     }
   }, [isLoggedIn, initialized, isClient, name]);
 
+  // Listen for external "Ask Flora" events (from training mode, contextual tips, etc.)
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const msg = e.detail?.message;
+      if (msg) {
+        setOpen(true);
+        setMode('chat');
+        setTimeout(() => sendMessage(msg), 150);
+      }
+    };
+    window.addEventListener('flora:ask', handler as EventListener);
+    return () => window.removeEventListener('flora:ask', handler as EventListener);
+  }, [sendMessage]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);

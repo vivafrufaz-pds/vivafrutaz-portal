@@ -13,6 +13,7 @@ import {
 import { VirtualAssistant } from './VirtualAssistant';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
 import { WhatsNewModal } from './WhatsNewModal';
+import { TrainingModeProvider, TrainingModeButton } from './TrainingMode';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -275,8 +276,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         })()}
       </nav>
 
-      <div className="p-4 border-t border-border/50">
-        <div className="px-4 py-3 bg-muted/30 rounded-xl mb-3">
+      <div className="p-4 border-t border-border/50 space-y-2">
+        {isStaff && <TrainingModeButton />}
+        <div className="px-4 py-3 bg-muted/30 rounded-xl">
           <p className="text-sm font-bold text-foreground truncate">
             {isStaff ? user?.name : company?.companyName}
           </p>
@@ -296,7 +298,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     </>
   );
 
+  const handleAskFlora = (message: string) => {
+    window.dispatchEvent(new CustomEvent('flora:ask', { detail: { message } }));
+  };
+
   return (
+    <TrainingModeProvider onAskFlora={handleAskFlora}>
     <div className="h-screen overflow-hidden bg-background flex">
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -359,5 +366,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
+    </TrainingModeProvider>
   );
 }

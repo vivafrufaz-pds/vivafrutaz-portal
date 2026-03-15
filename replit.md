@@ -3,6 +3,15 @@
 ## Overview
 VivaFrutaz is a B2B corporate fruit ordering platform in Brazilian Portuguese (PT-BR), designed for companies to place weekly fruit orders. It features a dual-portal system for admin and client companies, supporting role-based access, time-windowed ordering, comprehensive reporting, and a built-in logistics module. Key capabilities include an executive dashboard, Flora IA (an intelligent chat assistant with smart export, intelligence, and external search modules), contextual onboarding, and an incident management system for both internal and client-related issues.
 
+## Training Mode (v2.6.0)
+- **TrainingMode** (`client/src/components/TrainingMode.tsx`): Full guided tour system with 11 steps covering Dashboard, Orders, Contracts, Purchase Planning, Products, Fiscal, Inventory, Companies, and Flora IA.
+- **TrainingModeButton**: Shown in sidebar bottom area (staff only). Displays "Novo" badge until first completion, then "✓" badge.
+- **Context**: `TrainingModeProvider` + `useTraining` hook. Manages tour state, step navigation, spotlight cleanup.
+- **Spotlight**: Target elements get `z-index: 10000 + outline: 3px solid primary`. Full-screen overlay dims background (z-index 9997).
+- **Flora integration**: "Perguntar à Flora sobre isto" button at each step sends question via `flora:ask` custom DOM event → VirtualAssistant handles it.
+- **Persistence**: Training completion stored in localStorage key `vf_training_completed_v1`.
+- **Event Bus**: All Flora integrations (TrainingMode, ContextualTip, WhatsNewModal) use `window.dispatchEvent(new CustomEvent('flora:ask', { detail: { message } }))`. VirtualAssistant listens and opens automatically.
+
 ## New Components (v2.5.0)
 - **WhatsNewModal** (`client/src/components/WhatsNewModal.tsx`): Shows new feature announcements on first login per version. Tracks seen status via localStorage key `vf_whats_new_seen_v2.5.0`. Staff only.
 - **ContextualTip** (`client/src/components/ContextualTip.tsx`): First-use dismissible tip component. Tracks per-tip dismissal in localStorage (`vf_tip_dismissed_{tipId}`). Used in contracts, fiscal, and purchase-planning pages.

@@ -61,11 +61,11 @@ const NEW_FEATURES: Feature[] = [
   },
 ];
 
-interface Props {
-  onAskFlora?: (message: string) => void;
-}
-
-export function WhatsNewModal({ onAskFlora }: Props) {
+export function WhatsNewModal() {
+  const askFlora = (msg: string) => {
+    window.dispatchEvent(new CustomEvent('flora:ask', { detail: { message: msg } }));
+  };
+  const onAskFlora = askFlora;
   const { isStaff } = useAuth();
   const [visible, setVisible] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);

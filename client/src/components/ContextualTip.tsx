@@ -6,7 +6,6 @@ interface ContextualTipProps {
   title: string;
   message: string;
   learnMoreMessage?: string;
-  onAskFlora?: (message: string) => void;
   variant?: 'info' | 'help' | 'new';
 }
 
@@ -17,9 +16,11 @@ export function ContextualTip({
   title,
   message,
   learnMoreMessage,
-  onAskFlora,
   variant = 'help',
 }: ContextualTipProps) {
+  const askFlora = (msg: string) => {
+    window.dispatchEvent(new CustomEvent('flora:ask', { detail: { message: msg } }));
+  };
   const key = STORAGE_PREFIX + tipId;
   const [visible, setVisible] = useState(false);
 
@@ -75,10 +76,10 @@ export function ContextualTip({
       <div className="flex-1 min-w-0">
         <p className={`font-bold text-sm ${c.text}`}>{title}</p>
         <p className={`text-xs ${c.sub} mt-0.5 leading-relaxed`}>{message}</p>
-        {learnMoreMessage && onAskFlora && (
+        {learnMoreMessage && (
           <button
             type="button"
-            onClick={() => { onAskFlora(learnMoreMessage); dismiss(); }}
+            onClick={() => { askFlora(learnMoreMessage); dismiss(); }}
             className={`mt-1.5 flex items-center gap-1 text-xs font-semibold ${c.learn} hover:underline`}
             data-testid={`tip-learn-more-${tipId}`}
           >
