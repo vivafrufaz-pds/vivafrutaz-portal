@@ -756,6 +756,103 @@ export async function registerRoutes(
     }
   });
 
+  // ─── FLORA SMART EXPORT ──────────────────────────────────────────────
+  app.get('/api/flora/export', async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId;
+      if (!userId) return res.status(401).json({ message: 'Não autenticado' });
+      const currentUser = await storage.getUser(userId);
+      if (!currentUser) return res.status(401).json({ message: 'Não autenticado' });
+
+      const XLSX = await import('xlsx');
+      const { type = 'orders', period = 'week', companyId, status, format = 'excel' } = req.query as Record<string, string>;
+      const now = new Date();
+      let dateFrom: Date | null = null;
+      let dateTo: Date | null = new Date();
+      dateTo.setHours(23, 59, 59, 999);
+
+      if (period === 'today') {
+        dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      } else if (period === 'week') {
+        const day = now.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+      } else if (period === 'month') {
+        dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (period === 'lastmonth') {
+        dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        dateTo = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      } else {
+        dateFrom = null;
+      }
+
+      const allOrders = await storage.getOrders();
+      const allCompanies = await storage.getCompanies();
+
+      let orders = allOrders;
+      if (dateFrom) orders = orders.filter((o: any) => new Date(o.orderDate || o.createdAt) >= dateFrom!);
+      if (dateTo) orders = orders.filter((o: any) => new Date(o.orderDate || o.createdAt) <= dateTo!);
+      if (companyId) orders = orders.filter((o: any) => o.companyId === parseInt(companyId));
+      if (status) orders = orders.filter((o: any) => o.status === status.toUpperCase());
+
+      const companyMap: Record<number, string> = {};
+      for (const c of allCompanies) companyMap[c.id] = (c as any).companyName;
+
+      let workbook: any;
+      let filename = '';
+
+      if (type === 'financial') {
+        const rows = orders
+          .filter((o: any) => o.status !== 'CANCELLED')
+          .map((o: any) => ({
+            'Código': o.orderCode,
+            'Empresa': companyMap[o.companyId] || `#${o.companyId}`,
+            'Data do Pedido': o.orderDate ? new Date(o.orderDate).toLocaleDateString('pt-BR') : '',
+            'Data de Entrega': o.deliveryDate ? new Date(o.deliveryDate).toLocaleDateString('pt-BR') : '',
+            'Semana': o.weekReference || '',
+            'Valor Total (R$)': parseFloat(o.totalValue || '0'),
+            'Status Fiscal': o.fiscalStatus || '',
+            'Nota Fiscal': o.preNotaNumber || '',
+            'Status ERP': o.erpExportStatus || '',
+          }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, ws, 'Faturamento');
+        const total = rows.reduce((s: number, r: any) => s + r['Valor Total (R$)'], 0);
+        XLSX.utils.sheet_add_aoa(ws, [['', '', '', '', 'TOTAL:', total]], { origin: -1 });
+        filename = `faturamento_${period}_${now.toISOString().slice(0, 10)}.xlsx`;
+      } else {
+        const rows = orders.map((o: any) => ({
+          'Código': o.orderCode,
+          'Empresa': companyMap[o.companyId] || `#${o.companyId}`,
+          'Status': o.status,
+          'Data do Pedido': o.orderDate ? new Date(o.orderDate).toLocaleDateString('pt-BR') : '',
+          'Data de Entrega': o.deliveryDate ? new Date(o.deliveryDate).toLocaleDateString('pt-BR') : '',
+          'Semana': o.weekReference || '',
+          'Valor Total (R$)': parseFloat(o.totalValue || '0'),
+          'Observação': o.orderNote || '',
+          'Nota Admin': o.adminNote || '',
+        }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, ws, 'Pedidos');
+        filename = `pedidos_${period}_${now.toISOString().slice(0, 10)}.xlsx`;
+      }
+
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+      // Log export
+      await storage.createLog({ action: 'FLORA_EXPORT', description: `Exportação via Flora: tipo=${type}, período=${period}${companyId ? ', empresa=#' + companyId : ''}`, userId: currentUser.id, userEmail: currentUser.email, userRole: currentUser.role, level: 'INFO' });
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(buffer);
+    } catch (err: any) {
+      console.error('[Flora Export]', err);
+      res.status(500).json({ message: 'Erro ao gerar exportação: ' + err.message });
+    }
+  });
+
   // --- Orders export with date filter ---
   app.get('/api/orders/export', async (req, res) => {
     try {
@@ -4284,6 +4381,80 @@ export async function registerRoutes(
       } else {
         intent = 'client_general';
         response = `Olá! Posso ajudar com:\n• **"meus pedidos"** — ver status dos pedidos\n• **"previsão de entrega"** — ver datas da janela atual\n• **"clima"** — previsão do tempo\n• **"suporte"** — contato com a equipe\n\nOu fale diretamente com nossa equipe pelo WhatsApp! 📱`;
+      }
+    }
+
+    else if (isInternal && /exportar|gerar relatório|gerar relatorio|relatório financeiro|relatorio financeiro|relatório de pedidos|relatorio de pedidos|download/.test(msg)) {
+      intent = 'export';
+      // Parse type
+      const isFinancial = /faturamento|financeiro|financeira|fiscal|nota/.test(msg);
+      const isPurchase = /compras|purchase|fornecedor/.test(msg);
+      const type = isFinancial ? 'financial' : isPurchase ? 'orders' : 'orders';
+
+      // Parse period
+      let period = 'week';
+      let periodLabel = 'esta semana';
+      if (/hoje|today/.test(msg)) { period = 'today'; periodLabel = 'hoje'; }
+      else if (/semana/.test(msg)) { period = 'week'; periodLabel = 'desta semana'; }
+      else if (/mês passado|mes passado|último mês|ultimo mes/.test(msg)) { period = 'lastmonth'; periodLabel = 'do mês passado'; }
+      else if (/mês|mes|mensal/.test(msg)) { period = 'month'; periodLabel = 'deste mês'; }
+      else if (/tudo|todos|histórico|historico|completo/.test(msg)) { period = 'all'; periodLabel = 'completo (todos os períodos)'; }
+
+      // Parse company name
+      let companyParam = '';
+      let companyLabel = '';
+      const empresaMatch = msg.match(/(?:da empresa|do cliente|empresa|cliente)\s+([a-záéíóúãõâêôçñ\s]{2,30})(?:\s|$)/i);
+      if (empresaMatch) {
+        const searchName = empresaMatch[1].trim().toLowerCase();
+        const allCompanies = await storage.getCompanies();
+        const found = allCompanies.find((c: any) =>
+          c.companyName.toLowerCase().includes(searchName) ||
+          searchName.includes(c.companyName.toLowerCase().substring(0, 4))
+        );
+        if (found) {
+          companyParam = `&companyId=${found.id}`;
+          companyLabel = ` da empresa **${(found as any).companyName}**`;
+        }
+      }
+
+      // Parse status
+      let statusParam = '';
+      if (/pendente/.test(msg)) statusParam = '&status=PENDING';
+      else if (/confirmado/.test(msg)) statusParam = '&status=CONFIRMED';
+      else if (/ativo|ativa/.test(msg)) statusParam = '&status=ACTIVE';
+
+      // Count orders for this period
+      try {
+        const allOrders = await storage.getOrders();
+        const now = new Date();
+        let dateFrom: Date | null = null;
+        if (period === 'today') dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        else if (period === 'week') { const diff = now.getDay() === 0 ? -6 : 1 - now.getDay(); dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff); }
+        else if (period === 'month') dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+        else if (period === 'lastmonth') dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+        let filtered = allOrders;
+        if (dateFrom) filtered = filtered.filter((o: any) => new Date(o.orderDate || o.createdAt) >= dateFrom!);
+        if (companyParam) {
+          const cid = parseInt(companyParam.split('=')[1]);
+          filtered = filtered.filter((o: any) => o.companyId === cid);
+        }
+        if (statusParam) {
+          const st = statusParam.split('=')[1];
+          filtered = filtered.filter((o: any) => o.status === st);
+        }
+        if (isFinancial) filtered = filtered.filter((o: any) => o.status !== 'CANCELLED');
+
+        const count = filtered.length;
+        const total = filtered.reduce((s: number, o: any) => s + parseFloat(o.totalValue || '0'), 0);
+        const typeLabel = isFinancial ? 'financeiro' : 'de pedidos';
+
+        const downloadUrl = `/api/flora/export?type=${type}&period=${period}${companyParam}${statusParam}`;
+        response = `📊 **Relatório ${typeLabel} ${periodLabel}${companyLabel}**\n\nEncontrei **${count} ${isFinancial ? 'pedido(s) faturável(is)' : 'pedido(s)'}**${total > 0 ? ` · Total: **R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**` : ''}.\n\n✅ Clique no botão abaixo para baixar o arquivo Excel.`;
+        newContext = { action: 'export_ready', data: { downloadUrl, count, type: typeLabel, period: periodLabel } };
+      } catch {
+        response = `📊 Preparando exportação de relatório ${isFinancial ? 'financeiro' : 'de pedidos'} ${periodLabel}${companyLabel}.\n\n✅ Clique no botão abaixo para baixar.`;
+        newContext = { action: 'export_ready', data: { downloadUrl: `/api/flora/export?type=${type}&period=${period}${companyParam}${statusParam}` } };
       }
     }
 

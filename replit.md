@@ -2,7 +2,15 @@
 
 ## Overview
 
-VivaFrutaz is a B2B corporate fruit ordering platform designed for companies to place weekly fruit orders. It features a dual-portal system for admin staff and client companies, supporting role-based access, time-windowed ordering, and comprehensive reporting. The platform aims to streamline the fruit procurement process for businesses, offering features like customized pricing, special order workflows, and robust user and order management. It includes a built-in logistics module, executive dashboard, virtual assistant, and incident management for both internal and client-related issues. The system is entirely in Brazilian Portuguese (PT-BR).
+VivaFrutaz is a B2B corporate fruit ordering platform designed for companies to place weekly fruit orders. It features a dual-portal system for admin staff and client companies, supporting role-based access, time-windowed ordering, and comprehensive reporting. The platform includes a built-in logistics module, executive dashboard, Flora IA (intelligent chat assistant with smart export and intelligence modules), and incident management for both internal and client-related issues. The system is entirely in Brazilian Portuguese (PT-BR).
+
+### Flora IA (VirtualAssistant.tsx)
+- **Panel-first interface**: opens in "Painel" mode (grid of categorized shortcuts), chat is secondary
+- **Smart Export**: interprets natural language like "exportar pedidos da semana" or "exportar faturamento do mês", generates XLSX via `GET /api/flora/export`
+- **Export shortcuts**: direct download buttons in panel for orders/financial by period (week/month/lastmonth)
+- **Intelligence modules**: commercial risk, financial forecast, logistics analysis, system efficiency intents
+- **Chat mode**: toggled from panel via "Chat com a Flora" button; export responses include a download button
+- **Flora Training**: admin CRUD at `/admin/flora-training` with keyword matching in chat
 
 ## User Preferences
 
