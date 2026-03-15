@@ -90,6 +90,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/logistics', label: 'Logística', icon: Truck, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'], tabKey: 'logistics', category: 'Logística' },
     { href: '/admin/financial', label: 'Painel Financeiro', icon: PieChart, roles: ['ADMIN', 'FINANCEIRO', 'DIRECTOR'], tabKey: 'financial', category: 'Financeiro' },
     { href: '/admin/fiscal', label: 'Gestão de Notas Fiscais', icon: Receipt, roles: ['ADMIN', 'FINANCEIRO', 'DIRECTOR', 'DEVELOPER'], tabKey: 'fiscal', category: 'Financeiro' },
+    { href: '/admin/fiscal-config', label: 'Configurações Fiscais', icon: Settings, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'fiscal-config', category: 'Financeiro' },
     { href: '/admin/tasks', label: 'Tarefas', icon: ClipboardList, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'], tabKey: 'tasks', category: 'Gestão' },
     { href: '/admin/client-incidents', label: 'Ocorrências de Clientes', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'], tabKey: 'incidents', category: 'Gestão' },
     { href: '/admin/internal-incidents', label: 'Ocorrências Internas', icon: AlertTriangle, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'], tabKey: 'internal-incidents', category: 'Gestão' },

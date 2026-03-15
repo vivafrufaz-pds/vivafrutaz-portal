@@ -500,6 +500,9 @@ export const companyConfig = pgTable("company_config", {
   // Dados fiscais padrão
   defaultCfop: text("default_cfop").default("5102"),
   defaultNatureza: text("default_natureza").default("Venda de mercadoria adquirida"),
+  regimeTributario: text("regime_tributario").default("simples_nacional"),
+  aliquotaPadrao: text("aliquota_padrao").default("0"),
+  ambienteFiscal: text("ambiente_fiscal").default("homologacao"),
   // Logo da empresa
   logoBase64: text("logo_base64"),
   logoType: text("logo_type").default("image/png"),
