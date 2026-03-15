@@ -431,65 +431,79 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete,
       </div>
 
       {/* ── Resumo financeiro do contrato ── */}
-      {visibleScopes.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Resumo Financeiro do Contrato</p>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Resumo Financeiro do Contrato</p>
+          {visibleScopes.length > 0 && (
             <button
               type="button"
               data-testid="btn-generate-orders"
               onClick={handleGenerateOrders}
-              disabled={generating || visibleScopes.length === 0}
+              disabled={generating}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-white text-xs font-bold rounded-lg shadow hover:-translate-y-0.5 transition-transform disabled:opacity-50"
             >
               {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Package className="w-3.5 h-3.5" />}
               {generating ? 'Gerando...' : 'Gerar Pedidos da Semana'}
             </button>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="rounded-xl border border-green-200 bg-green-50 p-3">
-              <p className="text-xs text-muted-foreground font-medium">💰 Valor estimado semanal</p>
-              <p className="text-xl font-bold text-green-700 mt-0.5">{hasPrices ? fmt(String(valorSemanal)) : '—'}</p>
-              <p className="text-xs text-muted-foreground">soma dos itens do escopo</p>
-            </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-              <p className="text-xs text-muted-foreground font-medium">📅 Valor estimado mensal</p>
-              <p className="text-xl font-bold text-blue-700 mt-0.5">{hasPrices ? fmt(String(valorMensal)) : '—'}</p>
-              <p className="text-xs text-muted-foreground">valor semanal × 4</p>
-            </div>
-            <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
-              <p className="text-xs text-muted-foreground font-medium">📦 Custo estimado</p>
-              {autoCalcCost ? (
-                <>
-                  <p className="text-xl font-bold text-orange-700 mt-0.5">
-                    {(hasCosts || manualCostNum > 0) ? fmt(String(custoEstimado)) : '—'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">custo por item do escopo</p>
-                </>
-              ) : (
-                <div className="mt-1 space-y-1">
-                  <input
-                    type="number" min="0" step="0.01"
-                    data-testid="input-manual-avg-cost"
-                    value={manualAvgCost}
-                    onChange={e => onFlagChange('manualAvgCost', e.target.value)}
-                    placeholder="Custo médio R$"
-                    className="w-full px-2 py-1 rounded-lg border border-orange-300 text-sm font-bold bg-white outline-none focus:border-orange-500"
-                  />
-                  <p className="text-xs text-muted-foreground">custo médio manual × qtd</p>
-                </div>
-              )}
-            </div>
-            <div className={`rounded-xl border p-3 ${margemEstimada >= 0 ? 'border-purple-200 bg-purple-50' : 'border-red-200 bg-red-50'}`}>
-              <p className="text-xs text-muted-foreground font-medium">📊 Margem estimada</p>
-              <p className={`text-xl font-bold mt-0.5 ${margemEstimada >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
-                {hasPrices && (hasCosts || !autoCalcCost) ? fmt(String(margemEstimada)) : '—'}
-              </p>
-              <p className="text-xs text-muted-foreground">valor − custo estimado</p>
-            </div>
-          </div>
+          )}
         </div>
-      )}
+
+        {visibleScopes.length === 0 ? (
+          <div className="p-4 rounded-xl border border-dashed border-border bg-muted/10 text-center text-sm text-muted-foreground">
+            <Package className="w-6 h-6 mx-auto mb-1.5 opacity-30" />
+            Adicione itens ao escopo para ver o resumo financeiro.
+          </div>
+        ) : (
+          <>
+            {!hasPrices && (
+              <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                <span className="mt-0.5 shrink-0">💡</span>
+                <span>Defina o <strong>Preço unitário</strong> nos itens abaixo para calcular o valor e a margem do contrato.</span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-xl border border-green-200 bg-green-50 p-3">
+                <p className="text-xs text-muted-foreground font-medium">💰 Valor estimado semanal</p>
+                <p className="text-xl font-bold text-green-700 mt-0.5">{fmt(String(valorSemanal))}</p>
+                <p className="text-xs text-muted-foreground">soma dos itens do escopo</p>
+              </div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                <p className="text-xs text-muted-foreground font-medium">📅 Valor estimado mensal</p>
+                <p className="text-xl font-bold text-blue-700 mt-0.5">{fmt(String(valorMensal))}</p>
+                <p className="text-xs text-muted-foreground">valor semanal × 4</p>
+              </div>
+              <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                <p className="text-xs text-muted-foreground font-medium">📦 Custo estimado</p>
+                {autoCalcCost ? (
+                  <>
+                    <p className="text-xl font-bold text-orange-700 mt-0.5">{fmt(String(custoEstimado))}</p>
+                    <p className="text-xs text-muted-foreground">custo por item do escopo</p>
+                  </>
+                ) : (
+                  <div className="mt-1 space-y-1">
+                    <input
+                      type="number" min="0" step="0.01"
+                      data-testid="input-manual-avg-cost"
+                      value={manualAvgCost}
+                      onChange={e => onFlagChange('manualAvgCost', e.target.value)}
+                      placeholder="Custo médio R$"
+                      className="w-full px-2 py-1 rounded-lg border border-orange-300 text-sm font-bold bg-white outline-none focus:border-orange-500"
+                    />
+                    <p className="text-xs text-muted-foreground">custo médio manual × qtd</p>
+                  </div>
+                )}
+              </div>
+              <div className={`rounded-xl border p-3 ${margemEstimada >= 0 ? 'border-purple-200 bg-purple-50' : 'border-red-200 bg-red-50'}`}>
+                <p className="text-xs text-muted-foreground font-medium">📊 Margem estimada</p>
+                <p className={`text-xl font-bold mt-0.5 ${margemEstimada >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
+                  {fmt(String(margemEstimada))}
+                </p>
+                <p className="text-xs text-muted-foreground">valor − custo estimado</p>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* ── Add item form ── */}
       <div className="p-4 bg-muted/20 rounded-xl border border-border space-y-3">
@@ -1108,10 +1122,10 @@ export default function CompaniesPage() {
                   key={tab.key}
                   type="button"
                   onClick={() => !isContratualLocked && setActiveTab(tab.key)}
-                  title={isContratualLocked ? 'Disponível apenas para Cliente Contratual' : undefined}
-                  className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all ${
+                  title={isContratualLocked ? 'Disponível apenas para clientes do tipo Contratual' : tab.label}
+                  className={`flex items-center gap-1.5 px-4 py-3 text-sm font-bold border-b-2 transition-all ${
                     isContratualLocked
-                      ? 'border-transparent text-muted-foreground/40 cursor-not-allowed'
+                      ? 'border-transparent text-muted-foreground/30 cursor-not-allowed bg-muted/20'
                       : activeTab === tab.key
                         ? 'border-primary text-primary'
                         : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -1119,7 +1133,12 @@ export default function CompaniesPage() {
                 >
                   <Icon className="w-4 h-4" />
                   {tab.label}
-                  {isContratualLocked && <Lock className="w-3 h-3 ml-0.5 opacity-50" />}
+                  {isContratualLocked && (
+                    <span className="inline-flex items-center gap-0.5 bg-muted text-muted-foreground/60 text-[10px] font-medium px-1.5 py-0.5 rounded-full ml-1">
+                      <Lock className="w-2.5 h-2.5" />
+                      Contratual
+                    </span>
+                  )}
                 </button>
               );
             })}
