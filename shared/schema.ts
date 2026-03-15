@@ -810,6 +810,48 @@ export type NotificationSetting = typeof notificationSettings.$inferSelect;
 export const insertNotificationSettingSchema = createInsertSchema(notificationSettings).omit({ id: true });
 export type InsertNotificationSetting = z.infer<typeof insertNotificationSettingSchema>;
 
+// ─── Simulação de Escopo Comercial ────────────────────────────────────────────
+export const scopeSimulations = pgTable("scope_simulations", {
+  id: serial("id").primaryKey(),
+  // Dados da empresa prospectada
+  companyName: text("company_name").notNull(),
+  cnpj: text("cnpj"),
+  city: text("city"),
+  contactName: text("contact_name"),
+  phone: text("phone"),
+  email: text("email"),
+  // Modelo pretendido
+  modelType: text("model_type").notNull().default("a_definir"), // 'semanal' | 'mensal' | 'contratual' | 'a_definir'
+  // Limites de faturamento configuráveis
+  minWeeklyBilling: numeric("min_weekly_billing", { precision: 10, scale: 2 }).default("350"),
+  minMonthlyBilling: numeric("min_monthly_billing", { precision: 10, scale: 2 }).default("1400"),
+  // Rota
+  route: text("route"), // 'manha' | 'tarde' | null
+  routeMinManha: numeric("route_min_manha", { precision: 10, scale: 2 }).default("350"),
+  routeMinTarde: numeric("route_min_tarde", { precision: 10, scale: 2 }).default("450"),
+  // Itens do escopo simulado (JSONB)
+  // [{productId, productName, category, quantity, unit, dayOfWeek, frequency, unitPrice, avgCost, weeklyValue}]
+  items: jsonb("items"),
+  // Totais calculados (denormalizados para performance)
+  totalWeekly: numeric("total_weekly", { precision: 10, scale: 2 }).default("0"),
+  totalMonthly: numeric("total_monthly", { precision: 10, scale: 2 }).default("0"),
+  totalCost: numeric("total_cost", { precision: 10, scale: 2 }).default("0"),
+  // Status
+  status: text("status").notNull().default("draft"), // 'draft' | 'saved' | 'converted'
+  convertedToCompanyId: integer("converted_to_company_id"),
+  convertedAt: timestamp("converted_at"),
+  // Metadados
+  createdByUserId: integer("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertScopeSimulationSchema = createInsertSchema(scopeSimulations).omit({ id: true, createdAt: true, updatedAt: true });
+export type ScopeSimulation = typeof scopeSimulations.$inferSelect;
+export type InsertScopeSimulation = z.infer<typeof insertScopeSimulationSchema>;
+
 // ─── IA Interações ─────────────────────────────────────────────────────────
 export const aiInteractions = pgTable("ai_interactions", {
   id: serial("id").primaryKey(),

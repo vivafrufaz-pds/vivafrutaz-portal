@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs, aboutUs, smtpConfig, floraTraining, pushSubscriptions, notificationSettings, contractAdjustments,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs, aboutUs, smtpConfig, floraTraining, pushSubscriptions, notificationSettings, contractAdjustments, scopeSimulations,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -29,7 +29,8 @@ import {
   type SmtpConfig, type InsertSmtpConfig,
   type FloraTraining, type InsertFloraTraining,
   type PushSubscription, type InsertPushSubscription,
-  type NotificationSetting, type InsertNotificationSetting
+  type NotificationSetting, type InsertNotificationSetting,
+  type ScopeSimulation, type InsertScopeSimulation
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql, inArray } from "drizzle-orm";
 
@@ -232,6 +233,13 @@ export interface IStorage {
   createFloraTraining(data: InsertFloraTraining): Promise<FloraTraining>;
   updateFloraTraining(id: number, data: Partial<InsertFloraTraining>): Promise<FloraTraining>;
   deleteFloraTraining(id: number): Promise<void>;
+
+  // Scope Simulations
+  getScopeSimulations(): Promise<ScopeSimulation[]>;
+  getScopeSimulation(id: number): Promise<ScopeSimulation | undefined>;
+  createScopeSimulation(data: InsertScopeSimulation): Promise<ScopeSimulation>;
+  updateScopeSimulation(id: number, data: Partial<InsertScopeSimulation>): Promise<ScopeSimulation>;
+  deleteScopeSimulation(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1328,6 +1336,30 @@ export class DatabaseStorage implements IStorage {
       .values({ event, ...data } as InsertNotificationSetting)
       .returning();
     return r;
+  }
+
+  // ─── Scope Simulations ────────────────────────────────────────────────────
+  async getScopeSimulations(): Promise<ScopeSimulation[]> {
+    return db.select().from(scopeSimulations).orderBy(desc(scopeSimulations.updatedAt));
+  }
+  async getScopeSimulation(id: number): Promise<ScopeSimulation | undefined> {
+    const [r] = await db.select().from(scopeSimulations).where(eq(scopeSimulations.id, id));
+    return r;
+  }
+  async createScopeSimulation(data: InsertScopeSimulation): Promise<ScopeSimulation> {
+    const [r] = await db.insert(scopeSimulations).values(data).returning();
+    return r;
+  }
+  async updateScopeSimulation(id: number, data: Partial<InsertScopeSimulation>): Promise<ScopeSimulation> {
+    const [r] = await db
+      .update(scopeSimulations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(scopeSimulations.id, id))
+      .returning();
+    return r;
+  }
+  async deleteScopeSimulation(id: number): Promise<void> {
+    await db.delete(scopeSimulations).where(eq(scopeSimulations.id, id));
   }
 }
 
