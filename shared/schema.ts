@@ -167,6 +167,9 @@ export const specialOrderRequests = pgTable("special_order_requests", {
   observations: text("observations"),
   status: text("status").default("PENDING").notNull(), // PENDING, APPROVED, REJECTED
   adminNote: text("admin_note"),
+  // Multi-item support: JSON array of {productName, quantity, brand?, category, productType, approvedQuantity?}
+  items: jsonb("items"),
+  estimatedDeliveryDate: text("estimated_delivery_date"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   resolvedAt: timestamp("resolved_at"),
 });

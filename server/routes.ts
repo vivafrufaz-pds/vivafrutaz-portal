@@ -478,11 +478,18 @@ export async function registerRoutes(
   // Client: submit special order
   app.post('/api/special-order-requests', async (req, res) => {
     try {
-      const { companyId, requestedDay, requestedDate, description, quantity, observations } = req.body;
-      if (!companyId || !requestedDay || !description || !quantity) {
+      const { companyId, requestedDay, requestedDate, description, quantity, observations, items } = req.body;
+      if (!companyId || !requestedDay) {
         return res.status(400).json({ message: "Campos obrigatórios faltando." });
       }
-      const req2 = await storage.createSpecialOrderRequest({ companyId, requestedDay, requestedDate: requestedDate || null, description, quantity, observations });
+      // For multi-item requests, description/quantity can be derived from items
+      const descFinal = description || (Array.isArray(items) ? items.map((i: any) => i.productName).join(', ') : '');
+      const qtyFinal = quantity || (Array.isArray(items) ? items.map((i: any) => `${i.quantity}`).join(', ') : '1');
+      const req2 = await storage.createSpecialOrderRequest({
+        companyId, requestedDay, requestedDate: requestedDate || null,
+        description: descFinal, quantity: qtyFinal, observations,
+        items: items || null,
+      } as any);
       res.status(201).json(req2);
     } catch { res.status(500).json({ message: "Erro interno" }); }
   });
@@ -512,12 +519,16 @@ export async function registerRoutes(
         return res.status(403).json({ message: 'Apenas Administrador, Diretor ou Desenvolvedor podem aprovar/recusar pedidos pontuais.' });
       }
       const id = Number(req.params.id);
-      const { status, adminNote } = req.body;
+      const { status, adminNote, items, estimatedDeliveryDate } = req.body;
       if (!status || !['APPROVED', 'REJECTED'].includes(status)) return res.status(400).json({ message: 'Status inválido.' });
       if (status === 'REJECTED' && !adminNote?.trim()) return res.status(400).json({ message: 'Informe o motivo da recusa.' });
       const allSpecial = await storage.getSpecialOrderRequests();
       const sr = allSpecial.find(r => r.id === id);
-      const updated = await storage.updateSpecialOrderRequest(id, { status, adminNote, resolvedAt: new Date() });
+      const updated = await storage.updateSpecialOrderRequest(id, {
+        status, adminNote, resolvedAt: new Date(),
+        ...(items !== undefined ? { items } : {}),
+        ...(estimatedDeliveryDate !== undefined ? { estimatedDeliveryDate } : {}),
+      } as any);
       res.json(updated);
 
       // Send email (non-blocking)
@@ -2493,7 +2504,7 @@ export async function registerRoutes(
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     try {
-      const { startDate, endDate, weekRef } = req.query as Record<string, string>;
+      const { startDate, endDate, weekRef, categoryFilter, sourceFilter } = req.query as Record<string, string>;
       const allOrders = await storage.getOrders();
 
       const filtered = allOrders.filter(o => {
@@ -2505,25 +2516,65 @@ export async function registerRoutes(
       });
 
       // Aggregate items by product
-      const productMap: Map<string, { productId: number | null; productName: string; totalQty: number; unit: string; companies: { companyId: number; companyName: string; quantity: number; deliveryDate: string; orderId: number; orderCode: string }[] }> = new Map();
+      type PlanEntry = {
+        productId: number | null; productName: string; totalQty: number; unit: string;
+        category?: string; productType?: string; source: 'regular' | 'special';
+        companies: { companyId: number; companyName: string; quantity: number; deliveryDate: string; orderId: number; orderCode: string }[];
+      };
+      const productMap: Map<string, PlanEntry> = new Map();
 
-      for (const order of filtered) {
-        const items = await storage.getOrderItems(order.id);
-        for (const item of items) {
-          const key = item.productName || `produto-${item.productId}`;
-          if (!productMap.has(key)) {
-            productMap.set(key, { productId: item.productId || null, productName: key, totalQty: 0, unit: item.unit || 'un', companies: [] });
+      // Regular order items (only if sourceFilter allows)
+      if (!sourceFilter || sourceFilter === 'all' || sourceFilter === 'regular') {
+        for (const order of filtered) {
+          const items = await storage.getOrderItems(order.id);
+          for (const item of items) {
+            if (categoryFilter && categoryFilter !== 'all') continue; // regular items have no category
+            const key = `reg__${item.productName || `produto-${item.productId}`}`;
+            if (!productMap.has(key)) {
+              productMap.set(key, { productId: item.productId || null, productName: item.productName || `Produto #${item.productId}`, totalQty: 0, unit: item.unit || 'un', source: 'regular', companies: [] });
+            }
+            const entry = productMap.get(key)!;
+            entry.totalQty += Number(item.quantity || 0);
+            entry.companies.push({
+              companyId: order.companyId,
+              companyName: order.companyName || `Empresa #${order.companyId}`,
+              quantity: Number(item.quantity || 0),
+              deliveryDate: new Date(order.deliveryDate).toISOString().split('T')[0],
+              orderId: order.id,
+              orderCode: order.orderCode,
+            });
           }
-          const entry = productMap.get(key)!;
-          entry.totalQty += Number(item.quantity || 0);
-          entry.companies.push({
-            companyId: order.companyId,
-            companyName: order.companyName || `Empresa #${order.companyId}`,
-            quantity: Number(item.quantity || 0),
-            deliveryDate: new Date(order.deliveryDate).toISOString().split('T')[0],
-            orderId: order.id,
-            orderCode: order.orderCode,
-          });
+        }
+      }
+
+      // Approved special order items
+      if (!sourceFilter || sourceFilter === 'all' || sourceFilter === 'special') {
+        const allSpecial = await storage.getSpecialOrderRequests();
+        const approvedSpecial = allSpecial.filter(s => s.status === 'APPROVED');
+        for (const sr of approvedSpecial) {
+          const srItems: any[] = Array.isArray((sr as any).items) ? (sr as any).items : [];
+          const company = await storage.getCompany(sr.companyId);
+          const companyName = company?.companyName || `Empresa #${sr.companyId}`;
+          const delivDate = (sr as any).estimatedDeliveryDate || sr.requestedDate || sr.requestedDay || 'A definir';
+
+          for (const si of srItems) {
+            if (categoryFilter && categoryFilter !== 'all' && si.category !== categoryFilter) continue;
+            const productType = si.productType || 'catalog';
+            const key = `spec__${si.productName}__${si.category || ''}`;
+            if (!productMap.has(key)) {
+              productMap.set(key, {
+                productId: null, productName: si.productName, totalQty: 0, unit: 'un',
+                category: si.category, productType, source: 'special', companies: [],
+              });
+            }
+            const entry = productMap.get(key)!;
+            const qty = Number(si.approvedQuantity || si.quantity || 0);
+            entry.totalQty += qty;
+            entry.companies.push({
+              companyId: sr.companyId, companyName, quantity: qty,
+              deliveryDate: delivDate, orderId: sr.id, orderCode: `PP-${sr.id}`,
+            });
+          }
         }
       }
 

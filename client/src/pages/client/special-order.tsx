@@ -5,16 +5,29 @@ import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Star, Plus, Clock, CheckCircle, XCircle, Send, Calendar, Filter, X, Info } from "lucide-react";
+import { Star, Plus, Clock, CheckCircle, XCircle, Send, Calendar, Filter, X, Info, Trash2, Package, Tag } from "lucide-react";
 
 const SIXTY_DAYS_AGO = subDays(new Date(), 60);
-
 const DAYS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
+const CATEGORIES = ["Frutas", "Hortifruti / Verduras", "Industrializados"];
+const PRODUCT_TYPES = [
+  { value: "catalog", label: "Produto do catálogo" },
+  { value: "external", label: "Produto fora do catálogo" },
+];
+
+type SpecialItem = {
+  productName: string;
+  quantity: string;
+  brand: string;
+  category: string;
+  productType: string;
+};
 
 type SpecialOrderRequest = {
-  id: number; companyId: number; requestedDay: string; requestedDate?: string | null; description: string;
-  quantity: string; observations: string | null; status: string;
+  id: number; companyId: number; requestedDay: string; requestedDate?: string | null;
+  description: string; quantity: string; observations: string | null; status: string;
   adminNote: string | null; createdAt: string; resolvedAt: string | null;
+  items?: SpecialItem[] | null; estimatedDeliveryDate?: string | null;
 };
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = {
@@ -22,6 +35,16 @@ const STATUS_MAP: Record<string, { label: string; color: string; icon: any }> = 
   APPROVED: { label: "Aprovado", color: "bg-green-100 text-green-700", icon: CheckCircle },
   REJECTED: { label: "Recusado", color: "bg-red-100 text-red-700", icon: XCircle },
 };
+
+const CATEGORY_COLORS: Record<string, string> = {
+  "Frutas": "bg-orange-100 text-orange-700",
+  "Hortifruti / Verduras": "bg-green-100 text-green-700",
+  "Industrializados": "bg-blue-100 text-blue-700",
+};
+
+function emptyItem(): SpecialItem {
+  return { productName: "", quantity: "", brand: "", category: "", productType: "external" };
+}
 
 function CompanyMissing() {
   return (
@@ -40,7 +63,10 @@ export default function SpecialOrderPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ requestedDay: "", requestedDate: "", description: "", quantity: "", observations: "" });
+  const [requestedDay, setRequestedDay] = useState("");
+  const [requestedDate, setRequestedDate] = useState("");
+  const [observations, setObservations] = useState("");
+  const [items, setItems] = useState<SpecialItem[]>([emptyItem()]);
   const [filterStatus, setFilterStatus] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -59,7 +85,13 @@ export default function SpecialOrderPage() {
       const res = await fetch('/api/special-order-requests', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, companyId: company!.id }),
+        body: JSON.stringify({
+          companyId: company!.id,
+          requestedDay,
+          requestedDate: requestedDate || null,
+          observations,
+          items,
+        }),
       });
       if (!res.ok) throw new Error('Erro ao enviar');
       return res.json();
@@ -68,10 +100,28 @@ export default function SpecialOrderPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/special-order-requests/company', company?.id] });
       toast({ title: "Pedido pontual enviado! Aguarde a aprovação da VivaFrutaz." });
       setShowForm(false);
-      setForm({ requestedDay: "", requestedDate: "", description: "", quantity: "", observations: "" });
+      setRequestedDay(""); setRequestedDate(""); setObservations("");
+      setItems([emptyItem()]);
     },
     onError: () => toast({ title: "Erro ao enviar solicitação.", variant: "destructive" }),
   });
+
+  const addItem = () => setItems(prev => [...prev, emptyItem()]);
+  const removeItem = (idx: number) => setItems(prev => prev.filter((_, i) => i !== idx));
+  const updateItem = (idx: number, field: keyof SpecialItem, value: string) => {
+    setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  };
+
+  const handleSubmit = () => {
+    if (!requestedDay || !requestedDate) {
+      toast({ title: "Selecione o dia e a data do pedido.", variant: "destructive" }); return;
+    }
+    const invalidItem = items.find(it => !it.productName.trim() || !it.quantity.trim() || !it.category);
+    if (invalidItem) {
+      toast({ title: "Preencha nome, quantidade e categoria de todos os produtos.", variant: "destructive" }); return;
+    }
+    submit.mutate();
+  };
 
   const hasDateFilter = filterDateFrom || filterDateTo;
   const hasFilters = filterStatus || filterDateFrom || filterDateTo;
@@ -94,7 +144,7 @@ export default function SpecialOrderPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-foreground">Pedido Pontual</h1>
-          <p className="text-muted-foreground mt-1">Solicite pedidos especiais fora da rotina semanal.</p>
+          <p className="text-muted-foreground mt-1">Solicite produtos especiais fora da rotina semanal.</p>
         </div>
         <button onClick={() => setShowForm(!showForm)}
           data-testid="button-new-special-order"
@@ -109,7 +159,7 @@ export default function SpecialOrderPage() {
         <div>
           <p className="text-sm font-bold text-foreground">O que é um Pedido Pontual?</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Pedidos pontuais são solicitações especiais fora da rotina habitual — eventos, demandas extras, produtos específicos.
+            Pedidos pontuais são solicitações especiais fora da rotina habitual — eventos, demandas extras, produtos específicos ou fora do catálogo.
             A equipe VivaFrutaz irá analisar e entrar em contato para confirmar.
           </p>
         </div>
@@ -121,10 +171,12 @@ export default function SpecialOrderPage() {
           <h2 className="text-lg font-bold text-foreground mb-5 flex items-center gap-2">
             <Send className="w-5 h-5 text-secondary" /> Nova Solicitação de Pedido Pontual
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* Date/day */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
             <div>
               <label className="block text-sm font-semibold mb-1.5">Dia Desejado *</label>
-              <select required value={form.requestedDay} onChange={e => setForm({ ...form, requestedDay: e.target.value })}
+              <select value={requestedDay} onChange={e => setRequestedDay(e.target.value)}
                 data-testid="select-requested-day"
                 className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none bg-background">
                 <option value="">Selecione um dia...</option>
@@ -135,50 +187,104 @@ export default function SpecialOrderPage() {
               <label className="block text-sm font-semibold mb-1.5 flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-primary" /> Data do Pedido *
               </label>
-              <input
-                type="date"
-                required
-                value={form.requestedDate}
-                onChange={e => setForm({ ...form, requestedDate: e.target.value })}
+              <input type="date" value={requestedDate}
+                onChange={e => setRequestedDate(e.target.value)}
                 data-testid="input-requested-date"
                 min={new Date().toISOString().split('T')[0]}
-                className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none bg-background"
-              />
-              {form.requestedDate && (
+                className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none bg-background" />
+              {requestedDate && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  {new Date(form.requestedDate + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                  {new Date(requestedDate + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
               )}
             </div>
-            <div>
-              <label className="block text-sm font-semibold mb-1.5">Quantidade Aproximada *</label>
-              <input required value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })}
-                data-testid="input-quantity"
-                placeholder="Ex: 20kg, 3 caixas, 50 unidades..."
-                className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none" />
+          </div>
+
+          {/* Products */}
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Package className="w-4 h-4 text-primary" /> Produtos Solicitados
+              </p>
+              <button type="button" onClick={addItem} data-testid="button-add-product"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 rounded-xl border border-primary/30 transition-colors">
+                <Plus className="w-3.5 h-3.5" /> Adicionar Produto
+              </button>
             </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-semibold mb-1.5">Descrição do Pedido *</label>
-              <textarea required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-                data-testid="input-description"
-                rows={3} placeholder="Descreva os produtos ou o pedido especial em detalhes..."
-                className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none resize-none" />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-semibold mb-1.5">Observações</label>
-              <textarea value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })}
-                rows={2} placeholder="Informações adicionais (opcional)..."
-                className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none resize-none" />
+            <div className="space-y-4">
+              {items.map((item, idx) => (
+                <div key={idx} className="p-4 rounded-xl border-2 border-border bg-muted/10 relative">
+                  {items.length > 1 && (
+                    <button type="button" onClick={() => removeItem(idx)}
+                      data-testid={`button-remove-item-${idx}`}
+                      className="absolute top-3 right-3 p-1 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-semibold mb-1 text-muted-foreground">Nome do Produto *</label>
+                      <input value={item.productName}
+                        onChange={e => updateItem(idx, 'productName', e.target.value)}
+                        data-testid={`input-product-name-${idx}`}
+                        placeholder="Ex: Manga Tommy, Alface Americana..."
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-muted-foreground">Quantidade *</label>
+                      <input value={item.quantity}
+                        onChange={e => updateItem(idx, 'quantity', e.target.value)}
+                        data-testid={`input-item-quantity-${idx}`}
+                        placeholder="Ex: 5kg, 2 caixas, 10 unidades"
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-muted-foreground">Marca (opcional)</label>
+                      <input value={item.brand}
+                        onChange={e => updateItem(idx, 'brand', e.target.value)}
+                        data-testid={`input-item-brand-${idx}`}
+                        placeholder="Ex: Sadia, Forno de Minas..."
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-muted-foreground">Categoria *</label>
+                      <select value={item.category}
+                        onChange={e => updateItem(idx, 'category', e.target.value)}
+                        data-testid={`select-item-category-${idx}`}
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm bg-background">
+                        <option value="">Selecione...</option>
+                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-muted-foreground">Tipo do Produto *</label>
+                      <select value={item.productType}
+                        onChange={e => updateItem(idx, 'productType', e.target.value)}
+                        data-testid={`select-item-type-${idx}`}
+                        className="w-full px-3 py-2 rounded-xl border-2 border-border focus:border-primary outline-none text-sm bg-background">
+                        {PRODUCT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="flex gap-3 mt-5">
+
+          {/* Observations */}
+          <div className="mb-5">
+            <label className="block text-sm font-semibold mb-1.5">Observações Gerais</label>
+            <textarea value={observations} onChange={e => setObservations(e.target.value)}
+              rows={2} placeholder="Informações adicionais sobre o pedido (opcional)..."
+              className="w-full px-4 py-3 rounded-xl border-2 border-border focus:border-primary outline-none resize-none" />
+          </div>
+
+          <div className="flex gap-3">
             <button type="button" onClick={() => setShowForm(false)}
               className="px-5 py-2.5 border-2 border-border text-muted-foreground font-bold rounded-xl hover:bg-muted transition-colors">
               Cancelar
             </button>
-            <button type="button"
-              onClick={() => { if (!form.requestedDay || !form.requestedDate || !form.description || !form.quantity) { toast({ title: "Preencha todos os campos obrigatórios.", variant: "destructive" }); return; } submit.mutate(); }}
-              disabled={submit.isPending}
+            <button type="button" onClick={handleSubmit} disabled={submit.isPending}
               data-testid="button-submit-special-order"
               className="px-8 py-2.5 bg-secondary text-secondary-foreground font-bold rounded-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 flex items-center gap-2">
               <Send className="w-4 h-4" />
@@ -250,20 +356,63 @@ export default function SpecialOrderPage() {
           filteredRequests.map(req => {
             const status = STATUS_MAP[req.status] || { label: req.status, color: 'bg-muted text-muted-foreground', icon: Clock };
             const StatusIcon = status.icon;
+            const reqItems: SpecialItem[] = Array.isArray(req.items) ? req.items : [];
             return (
-              <div key={req.id} className="bg-card rounded-2xl border border-border/50 premium-shadow p-5">
+              <div key={req.id} data-testid={`special-order-card-${req.id}`} className="bg-card rounded-2xl border border-border/50 premium-shadow p-5">
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <Calendar className="w-4 h-4 text-primary" />
                       <span className="font-bold text-foreground">{req.requestedDay}</span>
-                      <span className={`ml-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${status.color}`}>
+                      {req.requestedDate && (
+                        <span className="text-muted-foreground text-sm">
+                          — {new Date(req.requestedDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                        </span>
+                      )}
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${status.color}`}>
                         <StatusIcon className="w-3 h-3" /> {status.label}
                       </span>
                     </div>
-                    <p className="text-foreground">{req.description}</p>
-                    <p className="text-sm text-muted-foreground mt-1">Quantidade: {req.quantity}</p>
-                    {req.observations && <p className="text-sm text-muted-foreground mt-1 italic">{req.observations}</p>}
+
+                    {/* Items list */}
+                    {reqItems.length > 0 ? (
+                      <div className="space-y-2 mt-3">
+                        {reqItems.map((item, idx) => (
+                          <div key={idx} className="flex items-start gap-2 text-sm">
+                            <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{idx + 1}</span>
+                            <div className="flex-1">
+                              <span className="font-semibold text-foreground">{item.productName}</span>
+                              {item.brand && <span className="text-muted-foreground ml-1">({item.brand})</span>}
+                              <span className="text-muted-foreground ml-2">· {item.quantity}</span>
+                              {item.category && (
+                                <span className={`ml-2 px-1.5 py-0.5 rounded text-xs font-bold ${CATEGORY_COLORS[item.category] || 'bg-muted text-muted-foreground'}`}>
+                                  {item.category}
+                                </span>
+                              )}
+                              {item.productType === 'external' && (
+                                <span className="ml-1 px-1.5 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700">
+                                  Fora do catálogo
+                                </span>
+                              )}
+                              {req.status === 'APPROVED' && (item as any).approvedQuantity && (item as any).approvedQuantity !== item.quantity && (
+                                <span className="ml-2 text-xs text-green-700 font-bold">
+                                  ✓ Qtd aprovada: {(item as any).approvedQuantity}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-foreground mt-1">{req.description}</p>
+                    )}
+
+                    {req.observations && <p className="text-sm text-muted-foreground mt-2 italic">{req.observations}</p>}
+                    {req.estimatedDeliveryDate && req.status === 'APPROVED' && (
+                      <p className="text-sm text-green-700 font-semibold mt-2 flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5" /> Previsão de entrega: {new Date(req.estimatedDeliveryDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      </p>
+                    )}
                     {req.adminNote && (
                       <div className={`mt-3 p-3 rounded-xl border ${req.status === 'REJECTED' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
                         <p className={`text-sm font-bold ${req.status === 'REJECTED' ? 'text-red-800' : 'text-blue-800'}`}>
@@ -276,6 +425,7 @@ export default function SpecialOrderPage() {
                   <div className="text-right flex-shrink-0">
                     <p className="text-xs text-muted-foreground">{format(new Date(req.createdAt), "d 'de' MMM yyyy", { locale: ptBR })}</p>
                     {req.resolvedAt && <p className="text-xs text-muted-foreground mt-0.5">Resolvido: {format(new Date(req.resolvedAt), "d 'de' MMM", { locale: ptBR })}</p>}
+                    <p className="text-xs text-muted-foreground mt-1">{reqItems.length || 1} produto{(reqItems.length || 1) !== 1 ? 's' : ''}</p>
                   </div>
                 </div>
               </div>
