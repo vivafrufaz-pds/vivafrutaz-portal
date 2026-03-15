@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { ContextualTip } from '@/components/ContextualTip';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -281,6 +282,13 @@ export default function FiscalManagement() {
 
   return (
     <div className="space-y-6">
+      <ContextualTip
+        tipId="fiscal-management-intro"
+        variant="info"
+        title="Gestão de Notas Fiscais"
+        message="Utilize esta área para gerar e exportar notas fiscais para o Bling, visualizar DANFEs e acompanhar o faturamento. Notas de entrada também podem ser importadas via OCR para atualizar o inventário automaticamente."
+        learnMoreMessage="Como funciona a gestão de notas fiscais e a exportação para o Bling?"
+      />
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">

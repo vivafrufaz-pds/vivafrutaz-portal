@@ -3,7 +3,7 @@ import {
   MessageCircle, X, Send, Bot, User, Clock, RefreshCw, ChevronRight,
   Loader2, Download, ArrowLeft, FileSpreadsheet, TrendingUp, Package,
   Truck, ShoppingCart, AlertTriangle, Users, BarChart3, Plus, CheckSquare,
-  Building2, Leaf, Search
+  Building2, Leaf, Search, HelpCircle, Sparkles, Link2, Receipt, Tag, Globe
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useQuery } from '@tanstack/react-query';
@@ -117,6 +117,17 @@ const PANEL_SECTIONS_ADMIN = [
       { label: 'Criar empresa', icon: Plus, message: 'Adicionar nova empresa no sistema' },
     ],
   },
+  {
+    title: '❓ Perguntas Rápidas',
+    items: [
+      { label: 'Escopo contratual', icon: Link2, message: 'Como funciona o escopo contratual?' },
+      { label: 'Gerar NF', icon: Receipt, message: 'Como gerar uma nota fiscal?' },
+      { label: 'Cadastrar produto', icon: Package, message: 'Como cadastrar um novo produto?' },
+      { label: 'Custo médio', icon: TrendingUp, message: 'Como funciona o cálculo de custo médio?' },
+      { label: 'Exportar Bling', icon: Globe, message: 'Como exportar notas fiscais para o Bling?' },
+      { label: 'ID de produto', icon: Tag, message: 'Como funciona o ID de produto base?' },
+    ],
+  },
 ];
 
 const PANEL_SECTIONS_CLIENT = [
@@ -126,6 +137,15 @@ const PANEL_SECTIONS_CLIENT = [
       { label: 'Ver meus pedidos', icon: Package, message: 'Como estão meus pedidos?' },
       { label: 'Previsão de entrega', icon: Truck, message: 'Qual a previsão de entrega?' },
       { label: 'Suporte', icon: Users, message: 'Como entrar em contato com o suporte?' },
+    ],
+  },
+  {
+    title: '📋 Meu Contrato',
+    items: [
+      { label: 'Meu escopo', icon: Link2, message: 'Quais produtos recebo no meu contrato?' },
+      { label: 'Dias de entrega', icon: Truck, message: 'Em quais dias recebo entregas?' },
+      { label: 'Alterar escopo', icon: Sparkles, message: 'Como solicitar alteração de escopo?' },
+      { label: 'Falar com equipe', icon: HelpCircle, message: 'Como falar com o atendimento?' },
     ],
   },
 ];

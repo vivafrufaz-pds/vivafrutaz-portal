@@ -5358,13 +5358,86 @@ export async function registerRoutes(
       } catch { response = '⚙️ Acesse **Menu → IA Operacional** para análise de eficiência do sistema.'; }
     }
 
+    // ── Knowledge base: new features explanations ────────────────────────────
+    else if (/como funciona o escopo contratual|escopo contratual\?|o que é o escopo contratual|explica (o )?escopo/.test(msg)) {
+      intent = 'explain_scope';
+      if (isInternal) {
+        response = `📋 **Escopo Contratual**\n\nO escopo contratual define os produtos, quantidades e dias de entrega fixos para clientes do tipo **Contratual**.\n\n**Como funciona:**\n1. Acesse **Menu → Gestão de Contratos** e selecione o cliente\n2. Na aba **Escopo Contratual**, adicione itens: produto, quantidade, dia da semana e preço unitário\n3. Clique em **Gerar Pedidos da Semana** para criar os pedidos automaticamente\n\n**Benefícios:**\n• Pedidos gerados automaticamente toda semana\n• Aparece no Planejamento de Compras consolidado\n• O cliente pode visualizar seu escopo pelo portal\n\n💡 Use **Simulação Comercial** para testar um escopo antes de formalizar.`;
+      } else {
+        response = `📋 **Seu Escopo Contratual**\n\nO escopo contratual define os produtos e quantidades que você recebe em cada dia da semana, conforme seu contrato com a VivaFrutaz.\n\nPara ver seu escopo atual, acesse **Menu → Meu Escopo Contratual** ou pergunte: _"Quais frutas recebo?"_\n\nPara solicitar alterações, diga: _"Quero alterar meu escopo"_`;
+      }
+    }
+
+    else if (/como (gerar|criar|emitir) (uma )?nota fiscal|nota fiscal\?|o que é danfe|como funciona (a )?gestão de notas|notas fiscais\?/.test(msg)) {
+      intent = 'explain_fiscal';
+      response = isInternal
+        ? `🧾 **Gestão de Notas Fiscais**\n\nA área de Notas Fiscais (**Menu → Gestão de Notas Fiscais**) centraliza:\n\n**Emissão de DANFE:**\n• Acesse um pedido → clique em **Gerar DANFE** para pré-visualizar e baixar o PDF\n• Preencha nº da nota, série, chave de acesso e valor\n\n**Exportação para Bling:**\n• Em cada pedido faturado, clique em **Exportar para Bling** para enviar ao ERP\n• O sistema registra o status da exportação (Pendente / Exportado)\n\n**Importação de Notas de Entrada (OCR):**\n• Acesse **Menu → Compras → Notas Fiscais de Entrada**\n• Faça upload do PDF do DANFE — o sistema lê automaticamente via OCR\n• Os itens são adicionados ao inventário com cálculo de custo médio\n\n💡 Dica: o status fiscal de cada pedido fica visível na coluna "Fiscal" da tabela de pedidos.`
+        : `🧾 Informações sobre notas fiscais são gerenciadas pela equipe administrativa. Em caso de dúvidas sobre documentos fiscais, entre em contato com o suporte: _"Como falar com o atendimento?"_`;
+    }
+
+    else if (/como (exportar|enviar) (para o )?bling|bling\?|integração com bling|exportação bling/.test(msg)) {
+      intent = 'explain_bling';
+      response = isInternal
+        ? `🔗 **Exportação para o Bling**\n\nO sistema integra com o **Bling ERP** para envio de pedidos faturados.\n\n**Como exportar:**\n1. Acesse **Menu → Gestão de Notas Fiscais**\n2. Selecione pedidos com status **Faturado**\n3. Clique em **Exportar para Bling** no pedido desejado\n4. O sistema envia os dados e registra o status: _Pendente → Exportado_\n\n**Dados enviados:** número da nota, série, chave de acesso, cliente, produtos, valores e impostos.\n\n⚙️ Configure as credenciais do Bling em **Menu → Configurações Fiscais**.`
+        : `🔗 A exportação para sistemas de gestão é realizada pela equipe administrativa. Em caso de dúvidas, entre em contato com o suporte.`;
+    }
+
+    else if (/como funciona (o )?custo médio|custo médio\?|calcula custo médio|o que é custo médio/.test(msg)) {
+      intent = 'explain_avg_cost';
+      response = isInternal
+        ? `📊 **Cálculo de Custo Médio Ponderado**\n\nO sistema recalcula automaticamente o custo médio de cada produto ao importar uma nota fiscal de entrada.\n\n**Fórmula:**\n\`Novo Custo Médio = (Custo Médio Atual × Estoque Atual + Preço da NF × Quantidade Comprada) ÷ (Estoque Atual + Quantidade Comprada)\`\n\n**Exemplo:**\n• Estoque: 100 kg de Manga a R$ 5,00/kg\n• Compra: 50 kg a R$ 6,50/kg\n• Novo custo médio: **R$ 5,50/kg**\n\n**Onde verificar:** Menu → Estoque / Inventário → coluna "Custo Médio"\n\n💡 O custo médio é utilizado para análise de margem nos contratos e simulações comerciais.`
+        : `📊 Informações sobre custos são gerenciadas internamente. Para consultas sobre preços, entre em contato com nossa equipe.`;
+    }
+
+    else if (/como funciona (o )?id de produto|id de produto\?|código de produto|produto base|produtos derivados/.test(msg)) {
+      intent = 'explain_product_id';
+      response = isInternal
+        ? `🏷️ **ID de Produto Base**\n\nO **ID de Produto Base** (código único) é utilizado para agrupar produtos relacionados — chamados de **produtos derivados**.\n\n**Exemplo:**\nOs produtos _Manga In Natura_, _Manga Higienizada_ e _Manga Pote BIO_ podem ter o mesmo código **002**, indicando que são derivados do mesmo produto base.\n\n**Como usar:**\n1. Acesse **Menu → Produtos** → Novo Produto ou editar existente\n2. No campo **ID do Produto Base**, insira o código manualmente ou clique em **Gerar Auto**\n3. Produtos com o mesmo código são agrupados nos alertas de variação de preço\n\n**Benefícios:**\n• Alertas de custo impactam todos os derivados simultaneamente\n• Facilita análise de categoria e margem`
+        : `🏷️ Informações sobre cadastro de produtos são gerenciadas pela equipe. Em caso de dúvidas, entre em contato com o suporte.`;
+    }
+
+    else if (/como funciona (o )?portal do cliente|portal do cliente\?|como o cliente (acessa|vê|visualiza)|o que o cliente pode fazer/.test(msg)) {
+      intent = 'explain_client_portal';
+      response = isInternal
+        ? `🖥️ **Portal do Cliente**\n\nO portal permite que clientes acessem o sistema com login próprio. Cada cliente vê apenas suas informações.\n\n**O que o cliente pode fazer:**\n• Ver seus pedidos e status de entrega\n• Consultar e visualizar seu escopo contratual\n• Ver os produtos disponíveis no catálogo\n• Solicitar alterações de escopo via Flora IA\n• Fazer contato com o suporte\n\n**Tipos de cliente no portal:**\n• **Avulso/Mensal**: visualiza pedidos e catálogo\n• **Contratual**: também acessa escopo contratual com dados de entrega e valor\n\n**Configuração:** O acesso é criado em **Menu → Empresas** → aba **Acesso ao Portal** da empresa.`
+        : `🖥️ Você está usando o **Portal do Cliente** da VivaFrutaz. Aqui você pode:\n• Ver seus pedidos e previsão de entrega\n• Consultar seu escopo contratual\n• Solicitar alterações\n\nSe precisar de ajuda, diga: _"Quero falar com o atendimento"_`;
+    }
+
+    else if (/como funciona (a )?simulação (comercial|de escopo)|simulação comercial\?|o que é simulação comercial/.test(msg)) {
+      intent = 'explain_scope_simulation';
+      response = isInternal
+        ? `📈 **Simulação de Escopo Comercial**\n\nA **Simulação Comercial** (Menu → Simulação Comercial) permite criar e analisar propostas de escopo antes de formalizar um contrato.\n\n**Como funciona:**\n1. Crie uma nova simulação com nome, empresa-alvo e margem desejada\n2. Na aba **Escopo**, adicione produtos, quantidades e preços\n3. Na aba **Análise**, veja automaticamente: valor semanal, mensal, anual e margem calculada\n4. Quando aprovada, clique em **Converter em Cliente** para criar a empresa e o escopo definitivo\n\n**Ideal para:** equipe comercial precificar propostas e apresentar ao cliente antes do fechamento.`
+        : `📈 Informações sobre propostas e contratos são tratadas pela equipe comercial. Entre em contato conosco para mais informações.`;
+    }
+
+    else if (!isInternal && /como falar|contato|atendimento|suporte|falar com (alguém|equipe|vocês)/.test(msg)) {
+      intent = 'client_support';
+      try {
+        const supportConfig = await storage.getSetting('support_config');
+        const config = supportConfig ? JSON.parse(supportConfig) : null;
+        const whatsapp = config?.whatsapp || null;
+        const email = config?.email || null;
+        let contactLine = '';
+        if (whatsapp) contactLine += `• WhatsApp: **${whatsapp}**\n`;
+        if (email) contactLine += `• E-mail: **${email}**\n`;
+        response = `📞 **Entre em contato com nossa equipe:**\n\n${contactLine || '• Acesse o menu **Suporte** para informações de contato.\n'}\nEstamos disponíveis em horário comercial para ajudá-lo!`;
+      } catch {
+        response = `📞 Para falar com nossa equipe, acesse o menu **Suporte** ou verifique as informações de contato na página principal.`;
+      }
+    }
+
+    else if (!isInternal && /como solicitar (alteração|mudança)|quero alterar|alterar escopo|mudar meu contrato/.test(msg) && company?.clientType !== 'contratual') {
+      intent = 'client_scope_change_general';
+      response = `🔄 Para solicitar alterações em seu contrato, entre em contato diretamente com nossa equipe comercial.\n\nDigite **"Como falar com o atendimento"** para ver nossos canais de contato.`;
+    }
+
     else if (/ajuda|menu|opções|opcoes|o que (você|voce) (faz|pode)/.test(msg)) {
       intent = 'help';
       if (isInternal) {
         const extras = isAdmin ? '\n• "Criar empresa" — cadastrar nova empresa' : '';
-        response = `🤖 **O que posso fazer:**\n\n📦 Consultas:\n• "Pedidos hoje" / "pedidos pendentes"\n• "Empresas que não fizeram pedido"\n\n📊 Inteligência:\n• "Analisar clientes" / "Clientes em risco"\n• "Prever faturamento" / "Ranking de clientes"\n• "Analisar logística" / "Agenda de entregas"\n• "Eficiência do sistema"\n\n📦 Operacional:\n• "Estoque baixo" / "Lista de compras"\n• "Criar tarefa"${extras}\n\n🌤️ Clima:\n• "Qual o clima em São Paulo?"`;
+        response = `🤖 **O que posso fazer:**\n\n📦 Consultas:\n• "Pedidos hoje" / "pedidos pendentes"\n• "Empresas que não fizeram pedido"\n\n📊 Inteligência:\n• "Analisar clientes" / "Clientes em risco"\n• "Prever faturamento" / "Ranking de clientes"\n• "Analisar logística" / "Agenda de entregas"\n• "Eficiência do sistema"\n\n📦 Operacional:\n• "Estoque baixo" / "Lista de compras"\n• "Criar tarefa"${extras}\n\n🌤️ Clima:\n• "Qual o clima em São Paulo?"\n\n❓ Novas funcionalidades:\n• "Como funciona o escopo contratual?"\n• "Como gerar uma nota fiscal?"\n• "Como funciona o custo médio?"\n• "Como funciona o ID de produto base?"`;
       } else {
-        response = `🤖 **Posso ajudar com:**\n\n• "Meus pedidos" — ver status\n• "Previsão de entrega" — datas da janela\n• "Clima" — previsão do tempo\n• "Suporte" — contato com a equipe`;
+        response = `🤖 **Posso ajudar com:**\n\n• "Meus pedidos" — ver status\n• "Previsão de entrega" — datas da janela\n• "Meu escopo" — frutas e quantidades do contrato\n• "Clima" — previsão do tempo\n• "Suporte" — contato com a equipe`;
       }
     }
 
@@ -5456,8 +5529,59 @@ export async function registerRoutes(
 
     else {
       intent = 'unknown';
-      if (isInternal) {
-        response = `Hmm, não entendi completamente 🤔 Sou a **Flora** e posso ajudar com:\n\n📦 **Pedidos**: "pedidos hoje", "pedidos pendentes"\n🏢 **Empresas**: "empresas inativas", "quem não fez pedido"\n📊 **Comercial**: "clientes em risco", "oportunidades de venda"\n💰 **Financeiro**: "prever faturamento", "ranking de clientes"\n🚚 **Logística**: "analisar logística", "agenda de entregas"\n📦 **Estoque**: "estoque baixo", "lista de compras"\n✅ **Tarefas**: "criar tarefa"\n🌤️ **Clima**: "clima em São Paulo"\n⚙️ **Sistema**: "status do sistema", "eficiência do sistema"${isAdmin ? '\n➕ **Criar**: "criar empresa"' : ''}\n\nTente reformular sua pergunta!`;
+
+      // ── Safety filter: block prohibited/sensitive topics ───────────────────
+      const BLOCKED_TERMS = [
+        'pornografia', 'porno', 'sexo', 'nude', 'adulto', 'erótico', 'erotico',
+        'violência', 'violencia', 'matar', 'arma', 'explosivo',
+        'droga', 'cocaína', 'heroína', 'crack', 'cannabis ilegal',
+        'aposta', 'cassino', 'jogo de azar', 'bet',
+        'hack', 'invadir', 'roubar', 'fraude',
+        // Competitors (general fruit/food wholesale)
+        'hortifruti', 'ceagesp', 'ceasinha',
+      ];
+      // Sensitive internal data that must NOT be shared externally
+      const HAS_SENSITIVE_DATA = /cnpj|cpf|senha|contrato\s+\d|pedido\s+#\d|nota fiscal \d|cliente\s+\d{3,}/.test(msg);
+
+      const isBlockedQuery = BLOCKED_TERMS.some(term => msg.toLowerCase().includes(term));
+
+      if (isBlockedQuery) {
+        response = `🚫 Essa pesquisa não está disponível nas políticas da plataforma.\n\nPosso ajudar com operações do sistema, produtos, pedidos e logística. Como posso te ajudar?`;
+      } else if (isInternal && !HAS_SENSITIVE_DATA && msg.split(' ').length >= 3) {
+        // ── External search via DuckDuckGo Instant Answer API ─────────────────
+        // Only search for meaningful queries (3+ words), never with internal data
+        try {
+          const searchQuery = encodeURIComponent(msg.trim().slice(0, 100));
+          const ddgUrl = `https://api.duckduckgo.com/?q=${searchQuery}&format=json&no_redirect=1&no_html=1&skip_disambig=1`;
+          const ddgRes = await fetch(ddgUrl, { signal: AbortSignal.timeout(4000) });
+          const ddgData = await ddgRes.json() as any;
+
+          const abstractText = ddgData?.AbstractText?.trim();
+          const abstractSource = ddgData?.AbstractURL?.trim();
+          const relatedTopics = ddgData?.RelatedTopics?.slice(0, 3)?.map((t: any) => t?.Text).filter(Boolean) || [];
+
+          if (abstractText && abstractText.length > 30) {
+            intent = 'external_search';
+            const sourceNote = abstractSource ? `\n\n🌐 Fonte: ${abstractSource}` : '';
+            response = `🔍 **Pesquisa externa:**\n\n${abstractText}${relatedTopics.length > 0 ? `\n\n**Relacionados:**\n${relatedTopics.map((t: string) => `• ${t.slice(0, 80)}`).join('\n')}` : ''}${sourceNote}\n\n_Esta resposta é proveniente de busca externa. Para operações do sistema, use os atalhos do painel._`;
+          } else {
+            // No useful external result — fallback
+            if (isInternal) {
+              response = `Hmm, não encontrei informações sobre isso 🤔\n\nPosso ajudar com:\n📦 **Pedidos**: "pedidos hoje", "pedidos pendentes"\n📊 **Inteligência**: "clientes em risco", "prever faturamento"\n📦 **Estoque**: "estoque baixo", "lista de compras"\n❓ **Tutoriais**: "como funciona o escopo contratual?", "como gerar nota fiscal?"`;
+            } else {
+              response = `Não entendi 🤔 Tente:\n• "meus pedidos"\n• "previsão de entrega"\n• "suporte"`;
+            }
+          }
+        } catch {
+          // External search failed — fallback gracefully
+          if (isInternal) {
+            response = `Hmm, não entendi completamente 🤔 Sou a **Flora** e posso ajudar com:\n\n📦 **Pedidos**: "pedidos hoje", "pedidos pendentes"\n🏢 **Empresas**: "empresas inativas", "quem não fez pedido"\n📊 **Comercial**: "clientes em risco", "oportunidades de venda"\n💰 **Financeiro**: "prever faturamento", "ranking de clientes"\n🚚 **Logística**: "analisar logística", "agenda de entregas"\n📦 **Estoque**: "estoque baixo", "lista de compras"\n✅ **Tarefas**: "criar tarefa"\n🌤️ **Clima**: "clima em São Paulo"\n⚙️ **Sistema**: "status do sistema", "eficiência do sistema"${isAdmin ? '\n➕ **Criar**: "criar empresa"' : ''}\n\nTente reformular sua pergunta!`;
+          } else {
+            response = `Não entendi 🤔 Tente:\n• "meus pedidos"\n• "previsão de entrega"\n• "clima em São Paulo"\n• "suporte"`;
+          }
+        }
+      } else if (isInternal) {
+        response = `Hmm, não entendi completamente 🤔 Sou a **Flora** e posso ajudar com:\n\n📦 **Pedidos**: "pedidos hoje", "pedidos pendentes"\n🏢 **Empresas**: "empresas inativas", "quem não fez pedido"\n📊 **Comercial**: "clientes em risco", "oportunidades de venda"\n💰 **Financeiro**: "prever faturamento", "ranking de clientes"\n🚚 **Logística**: "analisar logística", "agenda de entregas"\n📦 **Estoque**: "estoque baixo", "lista de compras"\n✅ **Tarefas**: "criar tarefa"\n🌤️ **Clima**: "clima em São Paulo"\n⚙️ **Sistema**: "status do sistema", "eficiência do sistema"${isAdmin ? '\n➕ **Criar**: "criar empresa"' : ''}\n\n❓ **Tutoriais**: "como funciona o escopo contratual?", "como gerar nota fiscal?"\n\nTente reformular sua pergunta!`;
       } else if (company?.clientType === 'contratual') {
         response = `Não entendi 🤔 Sou a **Flora** e posso ajudar com:\n\n📋 **Escopo**: "quais frutas recebo", "meu volume semanal"\n📅 **Entregas**: "quais dias tenho entrega"\n💰 **Valor**: "qual o valor do meu contrato"\n🔄 **Alterações**: "quero alterar meu escopo"`;
       } else {

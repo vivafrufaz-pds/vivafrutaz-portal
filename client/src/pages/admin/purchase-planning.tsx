@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { ContextualTip } from "@/components/ContextualTip";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -299,6 +300,13 @@ export default function PurchasePlanningPage() {
 
   return (
     <div className="p-5 space-y-5 max-w-6xl mx-auto">
+      <ContextualTip
+        tipId="purchase-planning-intro"
+        variant="help"
+        title="Planejamento de Compras"
+        message="Os pedidos gerados a partir de escopos contratuais aparecem automaticamente aqui, já consolidados por produto. Use os filtros para visualizar por origem, categoria e urgência."
+        learnMoreMessage="Como os pedidos do escopo contratual chegam no planejamento de compras?"
+      />
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>

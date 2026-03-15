@@ -12,6 +12,7 @@ import {
 
 import { VirtualAssistant } from './VirtualAssistant';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
+import { WhatsNewModal } from './WhatsNewModal';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -324,6 +325,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 md:ml-0">
         <VirtualAssistant />
+        <WhatsNewModal />
         <PWAInstallPrompt />
 
         {testModeActive && (

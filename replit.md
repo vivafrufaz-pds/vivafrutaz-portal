@@ -1,7 +1,25 @@
 # VivaFrutaz B2B Ordering System
 
 ## Overview
-VivaFrutaz is a B2B corporate fruit ordering platform in Brazilian Portuguese (PT-BR), designed for companies to place weekly fruit orders. It features a dual-portal system for admin and client companies, supporting role-based access, time-windowed ordering, comprehensive reporting, and a built-in logistics module. Key capabilities include an executive dashboard, Flora IA (an intelligent chat assistant with smart export and intelligence modules), and an incident management system for both internal and client-related issues. The project aims to streamline the B2B fruit ordering process, improve logistics, and provide advanced analytics for better decision-making.
+VivaFrutaz is a B2B corporate fruit ordering platform in Brazilian Portuguese (PT-BR), designed for companies to place weekly fruit orders. It features a dual-portal system for admin and client companies, supporting role-based access, time-windowed ordering, comprehensive reporting, and a built-in logistics module. Key capabilities include an executive dashboard, Flora IA (an intelligent chat assistant with smart export, intelligence, and external search modules), contextual onboarding, and an incident management system for both internal and client-related issues.
+
+## New Components (v2.5.0)
+- **WhatsNewModal** (`client/src/components/WhatsNewModal.tsx`): Shows new feature announcements on first login per version. Tracks seen status via localStorage key `vf_whats_new_seen_v2.5.0`. Staff only.
+- **ContextualTip** (`client/src/components/ContextualTip.tsx`): First-use dismissible tip component. Tracks per-tip dismissal in localStorage (`vf_tip_dismissed_{tipId}`). Used in contracts, fiscal, and purchase-planning pages.
+- **PriceAlertsSection** (in `products.tsx`): Shows cost variation alerts (≥20%) compared to latest fiscal invoice. Grouped by `productCode` (derived products). Dismissible per-product.
+
+## Flora IA Updates (v2.5.0)
+- New intents: `explain_scope`, `explain_fiscal`, `explain_bling`, `explain_avg_cost`, `explain_product_id`, `explain_client_portal`, `explain_scope_simulation`, `client_support`
+- Panel quick questions: "Escopo contratual", "Gerar NF", "Cadastrar produto", "Custo médio", "Exportar Bling", "ID de produto"
+- Client panel sections: "Meus Pedidos", "Meu Contrato" (escopo, dias, alterar, atendimento)
+- External search: DuckDuckGo Instant Answer API for unrecognized queries (staff only, ≥3 words, no sensitive data)
+- Safety filters: blocked terms list (adult, violence, drugs, gambling, competitors), sensitive data detection (CNPJ, CPF, contracts, order IDs)
+
+## Product Enhancements (v2.5.0)
+- `productCode` field: auto-generated padded code ("001", "002"), displayed as badge on cards
+- `categoryAvailability`: 'all' (default) or 'specific' — shown as "Cats. restritas" badge
+- `allowedCategories`: JSONB array of category names when availability is 'specific'
+- New routes: `GET /api/products/next-code` (auto-increment), `GET /api/products/price-alerts` (≥20% variation)
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

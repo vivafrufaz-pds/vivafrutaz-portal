@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ContextualTip } from "@/components/ContextualTip";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
@@ -739,6 +740,14 @@ export default function ContractsPage() {
             </p>
           </div>
         </div>
+
+        <ContextualTip
+          tipId="contracts-scope-intro"
+          variant="new"
+          title="Escopo Contratual"
+          message="Você pode configurar o escopo contratual de cada cliente nesta área — definindo produtos, quantidades e dias de entrega fixos. Use 'Gerar Pedidos da Semana' para criar os pedidos automaticamente."
+          learnMoreMessage="Como funciona o escopo contratual e a geração automática de pedidos?"
+        />
 
         {/* Alerts */}
         {alerts.length > 0 && (
