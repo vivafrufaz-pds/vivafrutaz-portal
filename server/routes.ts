@@ -6229,16 +6229,16 @@ export async function registerRoutes(
         results.push({ id: o.id, label: `Pedido #${o.id}`, sublabel: o.company_name as string, href: '/admin/orders', category: 'Pedidos' });
       }
 
-      // Contratos
-      const conts = await db.execute(sql`SELECT cc.id, c.company_name FROM company_contracts cc LEFT JOIN companies c ON cc.company_id = c.id WHERE LOWER(COALESCE(c.company_name,'')) LIKE ${term} LIMIT 5`);
+      // Contratos (empresas com clientType='contratual')
+      const conts = await db.execute(sql`SELECT id, company_name, contract_start_date FROM companies WHERE client_type = 'contratual' AND (LOWER(company_name) LIKE ${term}) LIMIT 5`);
       for (const c of conts.rows) {
-        results.push({ id: c.id, label: `Contrato: ${c.company_name}`, href: '/admin/contracts', category: 'Contratos' });
+        results.push({ id: c.id, label: `Contrato: ${c.company_name}`, sublabel: c.contract_start_date ? `Início: ${c.contract_start_date}` : undefined, href: '/admin/contracts', category: 'Contratos' });
       }
 
       // Notas Fiscais
-      const nfs = await db.execute(sql`SELECT id, invoice_number, supplier_name FROM fiscal_invoices WHERE LOWER(COALESCE(invoice_number,'')) LIKE ${term} OR LOWER(COALESCE(supplier_name,'')) LIKE ${term} LIMIT 5`);
+      const nfs = await db.execute(sql`SELECT id, invoice_number, supplier FROM fiscal_invoices WHERE LOWER(COALESCE(invoice_number,'')) LIKE ${term} OR LOWER(COALESCE(supplier,'')) LIKE ${term} LIMIT 5`);
       for (const n of nfs.rows) {
-        results.push({ id: n.id, label: `NF ${n.invoice_number || n.id}`, sublabel: n.supplier_name as string, href: '/admin/fiscal', category: 'Notas Fiscais' });
+        results.push({ id: n.id, label: `NF ${n.invoice_number || n.id}`, sublabel: n.supplier as string, href: '/admin/fiscal', category: 'Notas Fiscais' });
       }
 
       // Categorias
@@ -6333,7 +6333,7 @@ export async function registerRoutes(
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const masterUser = await storage.getUser(req.session.userId);
       if (!masterUser || masterUser.role !== 'MASTER') return res.status(403).json({ message: 'Acesso exclusivo para usuário MASTER' });
-      const logs = await storage.getLogs({ limit: 200 });
+      const logs = await storage.getLogs(200);
       res.json(logs);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -6359,6 +6359,19 @@ async function seedDatabase() {
         role: "DEVELOPER",
         active: true,
       });
+    }
+
+    // Ensure default MASTER user always exists
+    const masterUser = await storage.getUserByEmail("master@vivafrutaz.com");
+    if (!masterUser) {
+      await storage.createUser({
+        name: "Master VivaFrutaz",
+        email: "master@vivafrutaz.com",
+        password: "Master@2026!",
+        role: "MASTER",
+        active: true,
+      });
+      console.log("[SEED] Usuário MASTER criado: master@vivafrutaz.com / Master@2026!");
     }
 
     const admin = await storage.getUserByEmail("admin@vivafrutaz.com");

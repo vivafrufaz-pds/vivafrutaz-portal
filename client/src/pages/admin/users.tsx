@@ -67,6 +67,7 @@ const ALL_TABS: { key: string; label: string; roles: string[] }[] = [
 ];
 
 const ROLES = [
+  { value: "MASTER", label: "Master", desc: "Controle absoluto do sistema — acesso irrestrito", icon: Shield, color: "text-purple-700 bg-purple-100" },
   { value: "ADMIN", label: "Administrador", desc: "Acesso total ao sistema", icon: Shield, color: "text-red-600 bg-red-100" },
   { value: "DIRECTOR", label: "Diretor", desc: "Acesso total + alterar qualquer senha", icon: Crown, color: "text-yellow-700 bg-yellow-100" },
   { value: "OPERATIONS_MANAGER", label: "Gerente de Operações", desc: "Janelas de pedido e pedidos", icon: ShieldCheck, color: "text-blue-600 bg-blue-100" },
@@ -77,7 +78,7 @@ const ROLES = [
   { value: "SISTEMA_TESTE", label: "Usuário de Teste", desc: "Acesso para testes — pedidos marcados como TESTE", icon: FlaskConical, color: "text-cyan-700 bg-cyan-100" },
 ];
 
-const PRIVILEGED_ROLES = ['ADMIN', 'DIRECTOR', 'DEVELOPER'];
+const PRIVILEGED_ROLES = ['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'];
 const TEMP_PASSWORD = "Viva2026@";
 
 const blank = {

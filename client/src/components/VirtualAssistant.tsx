@@ -198,36 +198,6 @@ export function VirtualAssistant() {
     ? (intelligenceData?.summary?.critical ?? 0) + (intelligenceData?.summary?.high ?? 0)
     : 0;
 
-  useEffect(() => {
-    if (isLoggedIn && !initialized) {
-      setMessages([INITIAL_BOT_MESSAGE(!!isClient, name)]);
-      setInitialized(true);
-    }
-  }, [isLoggedIn, initialized, isClient, name]);
-
-  // Listen for external "Ask Flora" events (from training mode, contextual tips, etc.)
-  useEffect(() => {
-    const handler = (e: CustomEvent) => {
-      const msg = e.detail?.message;
-      if (msg) {
-        setOpen(true);
-        setMode('chat');
-        setTimeout(() => sendMessage(msg), 150);
-      }
-    };
-    window.addEventListener('flora:ask', handler as EventListener);
-    return () => window.removeEventListener('flora:ask', handler as EventListener);
-  }, [sendMessage]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
-
-  useEffect(() => {
-    if (open && mode === 'chat') setTimeout(() => inputRef.current?.focus(), 100);
-    if (open && mode === 'panel') setTimeout(() => searchRef.current?.focus(), 100);
-  }, [open, mode]);
-
   const sendMessage = useCallback(async (messageText: string) => {
     if (!messageText.trim() || isTyping) return;
 
@@ -278,6 +248,36 @@ export function VirtualAssistant() {
       setIsTyping(false);
     }
   }, [sessionContext, isTyping]);
+
+  useEffect(() => {
+    if (isLoggedIn && !initialized) {
+      setMessages([INITIAL_BOT_MESSAGE(!!isClient, name)]);
+      setInitialized(true);
+    }
+  }, [isLoggedIn, initialized, isClient, name]);
+
+  // Listen for external "Ask Flora" events (from training mode, contextual tips, etc.)
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const msg = e.detail?.message;
+      if (msg) {
+        setOpen(true);
+        setMode('chat');
+        setTimeout(() => sendMessage(msg), 150);
+      }
+    };
+    window.addEventListener('flora:ask', handler as EventListener);
+    return () => window.removeEventListener('flora:ask', handler as EventListener);
+  }, [sendMessage]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+  useEffect(() => {
+    if (open && mode === 'chat') setTimeout(() => inputRef.current?.focus(), 100);
+    if (open && mode === 'panel') setTimeout(() => searchRef.current?.focus(), 100);
+  }, [open, mode]);
 
   const handleDirectDownload = (exportParams: string) => {
     window.open(`/api/flora/export?${exportParams}`, '_blank');
