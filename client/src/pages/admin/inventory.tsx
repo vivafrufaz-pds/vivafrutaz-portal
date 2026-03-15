@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { FiscalInvoiceOCR } from "@/components/FiscalInvoiceOCR";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -252,11 +253,12 @@ export default function InventoryPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 w-full max-w-xl">
+        <TabsList className="grid grid-cols-5 w-full max-w-2xl">
           <TabsTrigger value="panel" data-testid="tab-panel">Painel</TabsTrigger>
           <TabsTrigger value="entries" data-testid="tab-entries">Entradas</TabsTrigger>
           <TabsTrigger value="movements" data-testid="tab-movements">Movimentações</TabsTrigger>
           <TabsTrigger value="physical" data-testid="tab-physical">Inventário Físico</TabsTrigger>
+          <TabsTrigger value="invoices" data-testid="tab-invoices">Notas Fiscais</TabsTrigger>
         </TabsList>
 
         {/* ─── PAINEL DE ESTOQUE ─────────────────────────────────── */}
@@ -639,6 +641,11 @@ export default function InventoryPage() {
               </Table>
             </div>
           )}
+        </TabsContent>
+
+        {/* ─── NOTAS FISCAIS (OCR IMPORT) ─────────────────────────── */}
+        <TabsContent value="invoices" className="space-y-4 mt-4">
+          <FiscalInvoiceOCR />
         </TabsContent>
       </Tabs>
 

@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -20,7 +20,8 @@ import {
   type InventorySettings, type InsertInventorySettings,
   type InventoryEntry, type InsertInventoryEntry,
   type InventoryMovement, type InsertInventoryMovement,
-  type InventoryPhysicalCount, type InsertInventoryPhysicalCount
+  type InventoryPhysicalCount, type InsertInventoryPhysicalCount,
+  type FiscalInvoice, type InsertFiscalInvoice
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -189,6 +190,13 @@ export interface IStorage {
   // Inventory — Physical Counts
   getInventoryPhysicalCounts(): Promise<InventoryPhysicalCount[]>;
   createInventoryPhysicalCount(data: InsertInventoryPhysicalCount): Promise<InventoryPhysicalCount>;
+
+  // Fiscal Invoices (OCR import)
+  getFiscalInvoices(): Promise<FiscalInvoice[]>;
+  getFiscalInvoiceById(id: number): Promise<FiscalInvoice | undefined>;
+  createFiscalInvoice(data: InsertFiscalInvoice): Promise<FiscalInvoice>;
+  deleteFiscalInvoice(id: number): Promise<void>;
+  checkFiscalInvoiceDuplicate(invoiceNumber: string, cnpj?: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1057,6 +1065,27 @@ export class DatabaseStorage implements IStorage {
   async createInventoryPhysicalCount(data: InsertInventoryPhysicalCount): Promise<InventoryPhysicalCount> {
     const [r] = await db.insert(inventoryPhysicalCounts).values(data).returning();
     return r;
+  }
+
+  // ─── Fiscal Invoices ─────────────────────────────────────────────────────
+  async getFiscalInvoices(): Promise<FiscalInvoice[]> {
+    return db.select().from(fiscalInvoices).orderBy(desc(fiscalInvoices.importedAt));
+  }
+  async getFiscalInvoiceById(id: number): Promise<FiscalInvoice | undefined> {
+    const [r] = await db.select().from(fiscalInvoices).where(eq(fiscalInvoices.id, id));
+    return r;
+  }
+  async createFiscalInvoice(data: InsertFiscalInvoice): Promise<FiscalInvoice> {
+    const [r] = await db.insert(fiscalInvoices).values(data as any).returning();
+    return r;
+  }
+  async deleteFiscalInvoice(id: number): Promise<void> {
+    await db.delete(fiscalInvoices).where(eq(fiscalInvoices.id, id));
+  }
+  async checkFiscalInvoiceDuplicate(invoiceNumber: string, cnpj?: string): Promise<boolean> {
+    const key = `${invoiceNumber}_${cnpj || ''}`;
+    const [r] = await db.select().from(fiscalInvoices).where(eq(fiscalInvoices.duplicateKey, key));
+    return !!r;
   }
 }
 

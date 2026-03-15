@@ -612,3 +612,31 @@ export const inventoryPhysicalCounts = pgTable("inventory_physical_counts", {
 export const insertInventoryPhysicalCountSchema = createInsertSchema(inventoryPhysicalCounts).omit({ id: true, createdAt: true });
 export type InventoryPhysicalCount = typeof inventoryPhysicalCounts.$inferSelect;
 export type InsertInventoryPhysicalCount = z.infer<typeof insertInventoryPhysicalCountSchema>;
+
+// ─── Notas Fiscais Importadas (OCR) ─────────────────────────────────────────
+export const fiscalInvoices = pgTable("fiscal_invoices", {
+  id: serial("id").primaryKey(),
+  // NF-e header info
+  invoiceNumber: text("invoice_number").notNull(),
+  supplier: text("supplier").notNull(),
+  supplierCnpj: text("supplier_cnpj"),
+  issueDate: text("issue_date"),
+  totalValue: numeric("total_value", { precision: 12, scale: 2 }),
+  // Items as JSONB: [{name, quantity, unit, unitPrice, totalPrice, linkedProductId?, linkedProductName?}]
+  items: jsonb("items").notNull().default([]),
+  // Status: PENDING (review), CONFIRMED (imported to stock)
+  status: text("status").notNull().default("CONFIRMED"),
+  // Audit
+  importedBy: integer("imported_by").references(() => users.id),
+  importedAt: timestamp("imported_at").defaultNow().notNull(),
+  notes: text("notes"),
+  // Original file stored as base64 for display
+  fileType: text("file_type"), // 'pdf' | 'image'
+  fileName: text("file_name"),
+  // Check duplicate key
+  duplicateKey: text("duplicate_key"), // `${invoiceNumber}_${cnpj}`
+});
+
+export const insertFiscalInvoiceSchema = createInsertSchema(fiscalInvoices).omit({ id: true, importedAt: true });
+export type FiscalInvoice = typeof fiscalInvoices.$inferSelect;
+export type InsertFiscalInvoice = z.infer<typeof insertFiscalInvoiceSchema>;
