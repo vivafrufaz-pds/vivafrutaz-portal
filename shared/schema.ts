@@ -718,6 +718,21 @@ export const insertSmtpConfigSchema = createInsertSchema(smtpConfig).omit({ id: 
 export type SmtpConfig = typeof smtpConfig.$inferSelect;
 export type InsertSmtpConfig = z.infer<typeof insertSmtpConfigSchema>;
 
+// ─── Flora Training (IA Treinamento) ────────────────────────────────────────
+export const floraTraining = pgTable("flora_training", {
+  id: serial("id").primaryKey(),
+  question: text("question").notNull(),
+  answer: text("answer").notNull(),
+  userId: integer("user_id"),
+  userName: text("user_name"),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type FloraTraining = typeof floraTraining.$inferSelect;
+export const insertFloraTrainingSchema = createInsertSchema(floraTraining).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertFloraTraining = z.infer<typeof insertFloraTrainingSchema>;
+
 // ─── IA Interações ─────────────────────────────────────────────────────────
 export const aiInteractions = pgTable("ai_interactions", {
   id: serial("id").primaryKey(),

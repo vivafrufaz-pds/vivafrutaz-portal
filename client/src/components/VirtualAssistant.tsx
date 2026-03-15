@@ -60,9 +60,13 @@ function TypingIndicator() {
 }
 
 const QUICK_ACTIONS_ADMIN = [
-  { label: '📦 Pedidos hoje', message: 'Como está o movimento de pedidos hoje?' },
+  { label: '📦 Pedidos', message: 'Como está o movimento de pedidos hoje?' },
   { label: '⏳ Pendentes', message: 'Quais pedidos estão pendentes?' },
   { label: '🏢 Sem pedido', message: 'Quais empresas ainda não fizeram pedido nesta semana?' },
+  { label: '⚠️ Estoque baixo', message: 'Quais produtos estão com estoque baixo?' },
+  { label: '🛒 Lista de compras', message: 'Lista de compras da semana' },
+  { label: '🚚 Logística', message: 'Rotas e entregas ativas' },
+  { label: '✅ Nova tarefa', message: 'Criar tarefa' },
   { label: '🌤️ Clima', message: 'Qual a previsão do tempo hoje em São Paulo?' },
   { label: '🔧 Sistema', message: 'Como está o sistema?' },
   { label: '➕ Criar empresa', message: 'Adicionar nova empresa no sistema' },
@@ -82,8 +86,8 @@ const INITIAL_BOT_MESSAGE = (isClient: boolean, name: string) => ({
   id: nextId(),
   from: 'bot' as const,
   text: isClient
-    ? `Olá${name ? `, ${name}` : ''}! 👋 Sou o Assistente VivaFrutaz.\n\nPosso ajudar com informações sobre seus pedidos, previsão de entrega e clima. Use os atalhos abaixo ou escreva sua pergunta:`
-    : `Olá${name ? `, ${name}` : ''}! 👋 Sou o Assistente IA VivaFrutaz.\n\nPosso consultar pedidos, empresas, clima e executar tarefas no sistema. Use os atalhos abaixo ou escreva sua pergunta livremente:`,
+    ? `Olá${name ? `, ${name}` : ''}! 👋 Sou a **Flora**, assistente da VivaFrutaz.\n\nPosso ajudar com seus pedidos, previsão de entrega e clima. Use os atalhos abaixo ou escreva sua pergunta:`
+    : `Olá${name ? `, ${name}` : ''}! 👋 Sou a **Flora**, assistente inteligente da VivaFrutaz.\n\nPosso consultar pedidos, empresas, estoque, logística, criar tarefas e muito mais. Use os atalhos abaixo ou escreva livremente:`,
   timestamp: new Date(),
 });
 
@@ -227,7 +231,7 @@ export function VirtualAssistant() {
               <Bot className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-sm leading-none">Assistente IA</p>
+              <p className="font-bold text-sm leading-none">Flora IA</p>
               <p className="text-xs text-primary-foreground/70 mt-0.5">VivaFrutaz • Online</p>
             </div>
             <div className="flex items-center gap-1">

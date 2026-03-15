@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs, aboutUs, smtpConfig,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs, aboutUs, smtpConfig, floraTraining,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -25,7 +25,8 @@ import {
   type EmailSchedule, type InsertEmailSchedule,
   type EmailLog, type InsertEmailLog,
   type AboutUs, type InsertAboutUs,
-  type SmtpConfig, type InsertSmtpConfig
+  type SmtpConfig, type InsertSmtpConfig,
+  type FloraTraining, type InsertFloraTraining
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -213,6 +214,12 @@ export interface IStorage {
   getEmailLogs(opts?: { limit?: number; type?: string; companyId?: number }): Promise<EmailLog[]>;
   createEmailLog(data: InsertEmailLog): Promise<EmailLog>;
   wasEmailSentToday(type: string, toEmail: string): Promise<boolean>;
+
+  // Flora Training
+  getFloraTrainings(): Promise<FloraTraining[]>;
+  createFloraTraining(data: InsertFloraTraining): Promise<FloraTraining>;
+  updateFloraTraining(id: number, data: Partial<InsertFloraTraining>): Promise<FloraTraining>;
+  deleteFloraTraining(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1189,6 +1196,21 @@ export class DatabaseStorage implements IStorage {
       const [r] = await db.insert(smtpConfig).values({ ...data } as InsertSmtpConfig).returning();
       return r;
     }
+  }
+
+  async getFloraTrainings(): Promise<FloraTraining[]> {
+    return db.select().from(floraTraining).orderBy(desc(floraTraining.createdAt));
+  }
+  async createFloraTraining(data: InsertFloraTraining): Promise<FloraTraining> {
+    const [r] = await db.insert(floraTraining).values(data).returning();
+    return r;
+  }
+  async updateFloraTraining(id: number, data: Partial<InsertFloraTraining>): Promise<FloraTraining> {
+    const [r] = await db.update(floraTraining).set({ ...data, updatedAt: new Date() }).where(eq(floraTraining.id, id)).returning();
+    return r;
+  }
+  async deleteFloraTraining(id: number): Promise<void> {
+    await db.delete(floraTraining).where(eq(floraTraining.id, id));
   }
 }
 

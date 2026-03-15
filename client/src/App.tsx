@@ -54,6 +54,7 @@ import AdminEmailManagement from "@/pages/admin/email-management";
 import AdminAboutUs from "@/pages/admin/about-us";
 import AdminSmtpConfig from "@/pages/admin/smtp-config";
 import AdminIntelligence from "@/pages/admin/intelligence";
+import AdminFloraTraining from "@/pages/admin/flora-training";
 
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
@@ -279,6 +280,9 @@ function Router() {
       </Route>
       <Route path="/admin/smtp-config">
         {() => <ProtectedRoute component={AdminSmtpConfig} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER']} tabKey="smtp-config" />}
+      </Route>
+      <Route path="/admin/flora-training">
+        {() => <ProtectedRoute component={AdminFloraTraining} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER']} tabKey="flora-training" />}
       </Route>
       <Route path="/admin/intelligence">
         {() => <ProtectedRoute component={AdminIntelligence} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS']} tabKey="intelligence" />}

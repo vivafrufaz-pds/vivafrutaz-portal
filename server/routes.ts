@@ -3980,11 +3980,81 @@ export async function registerRoutes(
       }
     }
 
+    // ── Task creation multi-turn ─────────────────────────────────────
+    if (sessionContext?.action === 'create_task') {
+      const step = sessionContext.step;
+      const data = sessionContext.data || {};
+
+      if (msg === 'cancelar' || msg === 'cancela' || msg === 'não' || msg === 'nao') {
+        intent = 'cancel';
+        response = '❌ Criação de tarefa cancelada.';
+        newContext = null;
+      } else if (step === 'title') {
+        data.title = message.trim();
+        newContext = { action: 'create_task', step: 'description', data };
+        intent = 'create_task';
+        response = `✅ Título: **${data.title}**\n\nDescreva a tarefa (ou "pular"):`;
+      } else if (step === 'description') {
+        data.description = msg === 'pular' ? '' : message.trim();
+        newContext = { action: 'create_task', step: 'priority', data };
+        intent = 'create_task';
+        response = `✅ Descrição salva.\n\nQual a **prioridade**?\n• alta\n• media\n• baixa`;
+      } else if (step === 'priority') {
+        const priorityMap: Record<string, string> = { alta: 'high', alto: 'high', media: 'medium', médio: 'medium', baixa: 'low', baixo: 'low' };
+        data.priority = priorityMap[msg] || 'medium';
+        newContext = { action: 'create_task', step: 'confirm', data };
+        intent = 'create_task';
+        response = `📋 **Resumo da tarefa:**\n\n• Título: ${data.title}\n• Descrição: ${data.description || '—'}\n• Prioridade: ${data.priority}\n\nDigite **"confirmar"** para criar ou **"cancelar"** para desistir.`;
+      } else if (step === 'confirm' && (msg === 'confirmar' || msg === 'sim' || msg === 'ok')) {
+        try {
+          const newTask = await storage.createTask({
+            title: data.title,
+            description: data.description || '',
+            priority: data.priority || 'medium',
+            assignedToId: user?.id,
+            assignedToName: user?.name,
+            createdById: user?.id,
+            createdByName: user?.name,
+          });
+          actionExecuted = 'create_task';
+          actionData = { taskId: newTask.id, title: data.title };
+          intent = 'create_task_done';
+          response = `✅ **Tarefa criada com sucesso!**\n\n• Título: ${data.title}\n• Prioridade: ${data.priority}\n\nAcesse **Menu → Tarefas** para visualizar e gerenciar.`;
+          newContext = null;
+        } catch (e: any) {
+          response = `❌ Erro ao criar tarefa: ${e.message}`;
+          newContext = null;
+        }
+      } else {
+        response = 'Por favor responda à pergunta anterior ou digite **"cancelar"** para desistir.';
+        newContext = sessionContext;
+      }
+    }
+
     // ── Single-turn intents ─────────────────────────────────────────
-    else if (/^(oi|olá|ola|bom dia|boa tarde|boa noite|oi tudo|tudo bem|olá assistente)/.test(msg)) {
+    // Check Flora training data first
+    else if (await (async () => {
+      try {
+        const trainings = await storage.getFloraTrainings();
+        const active = trainings.filter((t: any) => t.active);
+        for (const t of active) {
+          const q = t.question.toLowerCase().trim();
+          const words = q.split(/\s+/).filter((w: string) => w.length > 3);
+          const matches = words.filter((w: string) => msg.includes(w));
+          if (matches.length >= Math.min(2, Math.ceil(words.length * 0.5))) {
+            intent = 'trained_response';
+            response = t.answer;
+            return true;
+          }
+        }
+      } catch { /* ignore */ }
+      return false;
+    })()) { /* response already set above */ }
+
+    else if (/^(oi|olá|ola|bom dia|boa tarde|boa noite|oi tudo|tudo bem|olá flora|flora)/.test(msg)) {
       intent = 'greeting';
       const name = user?.name?.split(' ')[0] || company?.companyName?.split(' ')[0] || '';
-      response = `Olá${name ? `, ${name}` : ''}! 👋 Sou o Assistente IA VivaFrutaz. Como posso ajudar você hoje?\n\nVocê pode me perguntar sobre:\n• Pedidos e entregas\n• Empresas e cadastros\n• Estoque e produtos\n• Clima para entregas\n• Criar cadastros (admin)`;
+      response = `Olá${name ? `, ${name}` : ''}! 👋 Sou a **Flora**, assistente inteligente da VivaFrutaz.\n\nPosso ajudar com:\n• 📦 Pedidos e entregas\n• 🏢 Empresas e cadastros\n• 📊 Estoque e produtos\n• 🚚 Logística e rotas\n• 🛒 Planejamento de compras\n• 🌤️ Clima para entregas\n• ✅ Criar tarefas e cadastros`;
     }
 
     else if (/clima|tempo|previsão do tempo|previsao do tempo|chuva|temperatura|vai chover|como está o tempo/.test(msg)) {
@@ -4082,20 +4152,94 @@ export async function registerRoutes(
       } catch { response = '⚠️ Não foi possível consultar as empresas agora.'; }
     }
 
-    else if (isInternal && /estoque|inventário|inventario|produto/.test(msg)) {
+    else if (isInternal && /estoque|inventário|inventario|produto|produtos/.test(msg)) {
       intent = 'query_stock';
       try {
         const prods = await storage.getProducts();
         const active = prods.filter((p: any) => p.active !== false);
-        response = `📦 **Produtos Cadastrados**\n\n• Total: ${prods.length}\n• Ativos: ${active.length}\n\nPara ver estoque detalhado, acesse → Menu → Estoque → Painel.\nPara alertas preditivos → Menu → IA Operacional.`;
-      } catch { response = '⚠️ Não foi possível consultar os produtos agora.'; }
+        const inventorySettings = await storage.getInventorySettings();
+
+        if (/baixo|crítico|critico|faltando|pouco|mínimo|minimo/.test(msg)) {
+          const lowStock = inventorySettings.filter((s: any) => {
+            const current = parseFloat(s.currentStock || '0');
+            const min = parseFloat(s.minStock || '0');
+            return min > 0 && current <= min;
+          });
+          if (lowStock.length === 0) {
+            response = `✅ **Estoque OK** — Nenhum produto com estoque crítico no momento.`;
+          } else {
+            const lines = lowStock.slice(0, 10).map((s: any) => `• **${s.productName}**: ${s.currentStock} ${s.unit || 'un'} (mínimo: ${s.minStock})`).join('\n');
+            response = `⚠️ **Estoque Crítico (${lowStock.length} produto(s))**\n\n${lines}${lowStock.length > 10 ? `\n\n...e mais ${lowStock.length - 10}` : ''}\n\nAcesse **Menu → Estoque** para detalhes.`;
+          }
+        } else {
+          const tracked = inventorySettings.length;
+          response = `📦 **Estoque VivaFrutaz**\n\n• Produtos cadastrados: **${prods.length}**\n• Produtos ativos: **${active.length}**\n• Produtos com controle de estoque: **${tracked}**\n\nDicas:\n• "Flora, produtos com estoque baixo"\n• "Flora, lista de compras"\n\nAcesse **Menu → Estoque** para painel completo.`;
+        }
+      } catch { response = '⚠️ Não foi possível consultar o estoque agora.'; }
     }
 
-    else if (isInternal && /rota|rotas|logística|logistica|entrega|entregas/.test(msg)) {
+    else if (isInternal && /compra|compras|lista de compras|plano de compras|planejamento|o que comprar|precisa comprar/.test(msg)) {
+      intent = 'query_purchases';
+      try {
+        const allOrders = await storage.getOrders();
+        const activeWindow = await storage.getActiveOrderWindow();
+        const weekRef = activeWindow?.weekReference;
+        const weekOrders = weekRef ? allOrders.filter((o: any) => o.weekReference === weekRef && o.status !== 'CANCELLED') : [];
+        const prods = await storage.getProducts();
+        const inventorySettings = await storage.getInventorySettings();
+
+        if (weekOrders.length === 0) {
+          response = `🛒 **Planejamento de Compras**\n\n${weekRef ? `Semana: ${weekRef}\n` : ''}Nenhum pedido ativo para a semana atual.\n\nAcesse **Menu → Planejamento de Compras** para gerar a lista completa.`;
+        } else {
+          const lowStock = inventorySettings.filter((s: any) => parseFloat(s.currentStock || '0') <= parseFloat(s.minStock || '0'));
+          response = `🛒 **Planejamento de Compras**\n\n${weekRef ? `📅 Semana: **${weekRef}**` : ''}\n• Pedidos ativos: **${weekOrders.length}**\n• Produtos com estoque baixo: **${lowStock.length}**\n\n${lowStock.length > 0 ? `⚠️ Reposição urgente:\n${lowStock.slice(0, 5).map((s: any) => `• ${s.productName}: ${s.currentStock} (mín: ${s.minStock})`).join('\n')}\n\n` : ''}Acesse **Menu → Planejamento de Compras** para a lista completa com quantidades.`;
+        }
+      } catch { response = '🛒 Acesse **Menu → Planejamento de Compras** para ver a lista detalhada.'; }
+    }
+
+    else if (isInternal && /criar tarefa|nova tarefa|adicionar tarefa|agendar tarefa/.test(msg)) {
+      intent = 'create_task';
+      newContext = { action: 'create_task', step: 'title', data: {} };
+      response = `✅ **Criar Nova Tarefa**\n\nVou te guiar. Digite **"cancelar"** a qualquer momento.\n\nQual é o **título** da tarefa?`;
+    }
+
+    else if (isInternal && /rota|rotas|logística|logistica|entrega|entregas|janela de entrega|janelas|horário de entrega/.test(msg)) {
       intent = 'query_routes';
       try {
-        const routes = await (storage as any).getLogisticsRoutes?.() || [];
-        response = `🚚 **Logística e Rotas**\n\n• Rotas cadastradas: ${(routes as any[]).length}\n\nPara gerenciar rotas → Menu → Logística → Rotas\nPara o assistente de rotas → Menu → Logística → Aba "Assistente"`;
+        const routes = await storage.getRoutes();
+        const activeWindow = await storage.getActiveOrderWindow();
+        let routeLines = '';
+        if (routes.length > 0) {
+          routeLines = routes.slice(0, 8).map((r: any) => `• **${r.name}** — ${r.status || 'Ativa'}${r.driverName ? ` — Motorista: ${r.driverName}` : ''}`).join('\n');
+        }
+
+        // Check if asking about a specific company's delivery window
+        const companyMatch = message.match(/(?:empresa|cliente|para)\s+([A-Za-záàâãéèêíïóôõöúçñü\s]+)/i);
+        if (companyMatch) {
+          const searchName = companyMatch[1].trim().toLowerCase();
+          const allCompanies = await storage.getCompanies();
+          const found = allCompanies.find((c: any) => c.companyName?.toLowerCase().includes(searchName));
+          if (found) {
+            let deliveryInfo = `🚚 **Logística — ${found.companyName}**\n\n`;
+            if (found.deliveryConfigJson) {
+              try {
+                const cfg = typeof found.deliveryConfigJson === 'string' ? JSON.parse(found.deliveryConfigJson) : found.deliveryConfigJson;
+                const days = Object.entries(cfg).filter(([, v]: any) => v?.enabled).map(([day, v]: any) => `• ${day}: ${v.startTime} às ${v.endTime}`).join('\n');
+                deliveryInfo += days.length > 0 ? `Janelas de entrega:\n${days}` : 'Nenhuma janela configurada.';
+              } catch { deliveryInfo += 'Configuração não disponível.'; }
+            } else {
+              deliveryInfo += found.deliveryTime ? `Horário padrão: **${found.deliveryTime}**` : 'Nenhuma janela de entrega configurada para esta empresa.';
+            }
+            if (found.allowedOrderDays?.length > 0) {
+              deliveryInfo += `\n\nDias de pedido: ${found.allowedOrderDays.join(', ')}`;
+            }
+            response = deliveryInfo;
+          } else {
+            response = `⚠️ Empresa "**${companyMatch[1].trim()}**" não encontrada. Verifique o nome e tente novamente.`;
+          }
+        } else {
+          response = `🚚 **Logística e Rotas**\n\n• Rotas cadastradas: **${routes.length}**\n${routeLines ? `\n${routeLines}\n` : ''}\n${activeWindow ? `📅 Janela ativa: **${activeWindow.weekReference}** — entrega de ${new Date(activeWindow.deliveryStartDate).toLocaleDateString('pt-BR')} a ${new Date(activeWindow.deliveryEndDate).toLocaleDateString('pt-BR')}` : '⚠️ Nenhuma janela de entrega ativa'}\n\nDica: "Flora, qual o horário de entrega da empresa [Nome]?"`;
+        }
       } catch { response = '🚚 Acesse **Menu → Logística** para ver rotas, motoristas e veículos.'; }
     }
 
@@ -4156,9 +4300,9 @@ export async function registerRoutes(
     else {
       intent = 'unknown';
       if (isInternal) {
-        response = `Não entendi completamente. Posso ajudar com:\n\n• **Pedidos**: "pedidos hoje", "pedidos pendentes", "quantos pedidos"\n• **Empresas**: "empresas que não fizeram pedido", "empresas inativas"\n• **Clima**: "qual o clima em São Paulo?"\n• **Sistema**: "status do sistema"${isAdmin ? '\n• **Criar**: "criar empresa"' : ''}\n\nTente reformular sua pergunta!`;
+        response = `Hmm, não entendi completamente 🤔 Sou a **Flora** e posso ajudar com:\n\n• **Pedidos**: "pedidos hoje", "pedidos pendentes"\n• **Empresas**: "empresas inativas", "quem não fez pedido"\n• **Estoque**: "estoque baixo", "lista de compras"\n• **Logística**: "rotas ativas", "janela de entrega empresa X"\n• **Tarefas**: "criar tarefa"\n• **Clima**: "clima em São Paulo"\n• **Sistema**: "status do sistema"${isAdmin ? '\n• **Criar**: "criar empresa"' : ''}\n\nTente reformular sua pergunta!`;
       } else {
-        response = `Não entendi. Tente:\n• "meus pedidos"\n• "previsão de entrega"\n• "clima"\n• "suporte"`;
+        response = `Não entendi 🤔 Tente:\n• "meus pedidos"\n• "previsão de entrega"\n• "clima em São Paulo"\n• "suporte"`;
       }
     }
 
@@ -4178,6 +4322,48 @@ export async function registerRoutes(
     } catch { /* ignore history save errors */ }
 
     res.json({ response, intent, sessionContext: newContext || null });
+  });
+
+  // ─── Flora Training Routes ────────────────────────────────────────────────
+  app.get('/api/flora-training', async (req: any, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const trainings = await storage.getFloraTrainings();
+      res.json(trainings);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post('/api/flora-training', async (req: any, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const { question, answer } = req.body;
+      if (!question?.trim() || !answer?.trim()) return res.status(400).json({ message: 'Pergunta e resposta são obrigatórios' });
+      const result = await storage.createFloraTraining({ question: question.trim(), answer: answer.trim(), userId: user.id, userName: user.name, active: true });
+      res.json(result);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put('/api/flora-training/:id', async (req: any, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const { question, answer, active } = req.body;
+      const result = await storage.updateFloraTraining(Number(req.params.id), { question: question?.trim(), answer: answer?.trim(), active });
+      res.json(result);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete('/api/flora-training/:id', async (req: any, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      await storage.deleteFloraTraining(Number(req.params.id));
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   // Seed DB Function

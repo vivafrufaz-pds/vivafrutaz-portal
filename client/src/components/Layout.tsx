@@ -6,7 +6,7 @@ import {
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
-  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain
+  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain, GraduationCap
 } from 'lucide-react';
 import { VirtualAssistant } from './VirtualAssistant';
 
@@ -59,6 +59,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/smtp-config', label: 'Configuração SMTP', icon: Settings, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'smtp-config' },
     { href: '/admin/about-us', label: 'Quem Somos Nós', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'], tabKey: 'about-us' },
     { href: '/admin/intelligence', label: 'IA Operacional', icon: Brain, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'], tabKey: 'intelligence' },
+    { href: '/admin/flora-training', label: 'Treinar Flora', icon: GraduationCap, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'flora-training' },
   ];
 
   const clientLinks = [
