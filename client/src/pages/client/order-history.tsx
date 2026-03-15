@@ -361,9 +361,16 @@ export default function OrderHistoryPage() {
           <h1 className="text-3xl font-display font-bold text-foreground">Meus Pedidos</h1>
           <p className="text-muted-foreground mt-1">Histórico completo de entregas e pedidos.</p>
         </div>
-        <Link href="/client/order" className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25">
-          <Plus className="w-4 h-4" /> Novo Pedido
-        </Link>
+        {company?.clientType !== 'contratual' && (
+          <Link href="/client/order" className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25">
+            <Plus className="w-4 h-4" /> Novo Pedido
+          </Link>
+        )}
+        {company?.clientType === 'contratual' && (
+          <Link href="/client/contract-scope" className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/25">
+            <FileText className="w-4 h-4" /> Meu Escopo Contratual
+          </Link>
+        )}
       </div>
 
       {/* Filters */}

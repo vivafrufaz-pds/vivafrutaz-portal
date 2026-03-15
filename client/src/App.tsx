@@ -69,6 +69,7 @@ import ClientIncidents from "@/pages/client/incidents";
 import ClientQuotations from "@/pages/client/quotations";
 import ClientProfile from "@/pages/client/profile";
 import ClientAboutUs from "@/pages/client/about-us";
+import ClientContractScope from "@/pages/client/contract-scope";
 
 // Maintenance screen for blocked clients
 function MaintenanceScreen() {
@@ -331,6 +332,9 @@ function Router() {
       </Route>
       <Route path="/client/about-us">
         {() => <ProtectedRoute component={ClientAboutUs} role="client" />}
+      </Route>
+      <Route path="/client/contract-scope">
+        {() => <ProtectedRoute component={ClientContractScope} role="client" />}
       </Route>
 
       <Route component={NotFound} />

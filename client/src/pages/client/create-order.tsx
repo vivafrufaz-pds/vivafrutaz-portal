@@ -339,6 +339,29 @@ export default function CreateOrderPage() {
     return <Layout><div className="p-8 text-center text-muted-foreground">Carregando...</div></Layout>;
   }
 
+  if (company?.clientType === 'contratual') {
+    return (
+      <Layout>
+        <div className="max-w-xl mx-auto mt-16 text-center space-y-6">
+          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+            <Lock className="w-10 h-10 text-primary" />
+          </div>
+          <h1 className="text-2xl font-display font-bold text-foreground">Pedidos automáticos</h1>
+          <p className="text-muted-foreground">
+            Este cliente possui contrato ativo. Os pedidos são gerados automaticamente conforme o escopo contratual.
+          </p>
+          <a
+            href="/client/contract-scope"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors"
+            data-testid="link-view-contract-scope"
+          >
+            Ver Meu Escopo Contratual
+          </a>
+        </div>
+      </Layout>
+    );
+  }
+
   if (successOrder) {
     return (
       <Layout>

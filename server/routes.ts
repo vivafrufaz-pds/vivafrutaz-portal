@@ -4776,10 +4776,98 @@ export async function registerRoutes(
       }
     }
 
+    // ── Contratual client: scope change request ─────────────────────────────
+    else if (!isInternal && company?.clientType === 'contratual' && sessionContext?.action === 'scope_change_confirm') {
+      if (msg === 'confirmar' || msg === 'sim' || msg === 'ok') {
+        intent = 'scope_change_confirmed';
+        try {
+          await storage.createTask({
+            title: `Solicitação de alteração de escopo — ${company.companyName}`,
+            description: `Cliente: ${company.companyName} (ID #${company.id})\nContato: ${company.contactName || '—'}\n\nMensagem do cliente:\n${sessionContext.data?.message || '(sem detalhes)'}`,
+            priority: 'medium',
+            createdByName: company.companyName,
+          });
+          response = `✅ Solicitação registrada! Nossa equipe entrará em contato em breve para confirmar as alterações no seu escopo contratual.`;
+          newContext = null;
+        } catch {
+          response = `⚠️ Não foi possível registrar a solicitação. Tente novamente ou entre em contato diretamente conosco.`;
+        }
+      } else if (msg === 'cancelar' || msg === 'não' || msg === 'nao') {
+        intent = 'scope_change_cancelled';
+        response = `❌ Solicitação cancelada. Se precisar de ajuda, estou aqui!`;
+        newContext = null;
+      } else {
+        response = `Digite **"confirmar"** para enviar a solicitação de alteração ou **"cancelar"** para desistir.`;
+        newContext = sessionContext;
+      }
+    }
+
+    // ── Contratual client: scope queries ─────────────────────────────────────
+    else if (!isInternal && company?.clientType === 'contratual' &&
+      /escopo|contrato|frutas|frutas que recebo|volume|valor|entrega|dias|quantidade|banana|manga|maçã|maca|alterar|alteração|mudar|solicitar|quero/.test(msg)) {
+      intent = 'scope_query';
+      try {
+        const scopes = await storage.getContractScopes(company.id);
+
+        if (/alterar|alteração|mudar|solicitar|quero|adicionar|trocar|reduzir|aumentar/.test(msg)) {
+          const request = message.trim();
+          newContext = { action: 'scope_change_confirm', data: { message: request } };
+          response = `Entendi! Você deseja solicitar uma alteração no seu escopo contratual.\n\n📝 Sua solicitação:\n_"${request}"_\n\nDeseja que eu encaminhe essa solicitação para nossa equipe administrativa?\nDigite **"confirmar"** para enviar ou **"cancelar"** para desistir.`;
+        } else {
+          const DAY_LABELS: Record<string, string> = {
+            'Segunda-feira': 'Segunda', 'Terça-feira': 'Terça', 'Quarta-feira': 'Quarta',
+            'Quinta-feira': 'Quinta', 'Sexta-feira': 'Sexta',
+          };
+          const byDay: Record<string, typeof scopes> = {};
+          for (const s of scopes) {
+            const d = s.dayOfWeek || 'Sem dia';
+            if (!byDay[d]) byDay[d] = [];
+            byDay[d].push(s);
+          }
+          const valorSemanal = scopes.reduce((sum, s) => sum + Number(s.quantity) * (s.unitPrice ? Number(s.unitPrice) : 0), 0);
+          const entregas = Object.keys(byDay).length;
+
+          if (/valor|preço|custo|quanto custa|quanto pago/.test(msg)) {
+            response = `💰 **Valor do seu contrato**\n\n• Valor semanal estimado: **R$ ${valorSemanal.toFixed(2).replace('.', ',')}**\n• Valor mensal estimado: **R$ ${(valorSemanal * 4).toFixed(2).replace('.', ',')}**\n• Entregas por semana: **${entregas}**\n\nPara mais detalhes acesse **Meu Escopo Contratual** no menu.`;
+          } else if (/dia|dias|quando|entrega/.test(msg)) {
+            const diasList = Object.keys(byDay).map(d => `• **${d}** — ${byDay[d].length} item(s)`).join('\n');
+            response = `📅 **Seus dias de entrega**\n\n${diasList || '• Nenhum dia configurado ainda'}\n\nTotal de **${entregas}** entrega(s) por semana.`;
+          } else if (/quantas|quantidade|quantos/.test(msg)) {
+            const match = msg.match(/(banana|manga|maçã|maca|limão|limao|laranja|melão|melao|uva|morango)/);
+            if (match) {
+              const fruit = match[1];
+              const items = scopes.filter(s => s.productName?.toLowerCase().includes(fruit) || s.categoryName?.toLowerCase().includes(fruit));
+              if (items.length === 0) {
+                response = `🔍 Não encontrei **${fruit}** no seu escopo contratual atual.`;
+              } else {
+                const total = items.reduce((s, i) => s + Number(i.quantity), 0);
+                const lines = items.map(i => `• ${i.dayOfWeek}: **${i.quantity} un** de ${i.productName || fruit}`).join('\n');
+                response = `🍎 **${fruit.charAt(0).toUpperCase() + fruit.slice(1)} no seu escopo:**\n\n${lines}\n\nTotal semanal: **${total} un**`;
+              }
+            } else {
+              const totalItems = scopes.reduce((s, i) => s + Number(i.quantity), 0);
+              response = `📦 **Volume total do seu escopo:** **${totalItems} unidades/semana**\n\n${scopes.map(s => `• ${s.dayOfWeek}: ${s.quantity} un de ${s.productName || s.categoryName || 'item'}`).join('\n')}`;
+            }
+          } else {
+            const sections = Object.entries(byDay).map(([day, items]) => {
+              const lines = items.map(i => `  • ${i.quantity} un de **${i.productName || i.categoryName || 'item'}**${i.unitPrice ? ` — R$ ${Number(i.unitPrice).toFixed(2).replace('.', ',')} cada` : ''}`).join('\n');
+              const subtotal = items.reduce((s, i) => s + Number(i.quantity) * (i.unitPrice ? Number(i.unitPrice) : 0), 0);
+              return `**${day}**\n${lines}${subtotal > 0 ? `\n  Subtotal: R$ ${subtotal.toFixed(2).replace('.', ',')}` : ''}`;
+            }).join('\n\n');
+            response = `🍃 **Seu escopo contratual:**\n\n${sections || 'Nenhum item configurado ainda.'}\n\n💰 Valor semanal estimado: **R$ ${valorSemanal.toFixed(2).replace('.', ',')}**\n\nPara solicitar alterações diga: _"Quero alterar..."_`;
+          }
+        }
+      } catch {
+        response = `⚠️ Não consegui acessar os dados do seu escopo agora. Tente novamente em instantes.`;
+      }
+    }
+
     else {
       intent = 'unknown';
       if (isInternal) {
         response = `Hmm, não entendi completamente 🤔 Sou a **Flora** e posso ajudar com:\n\n📦 **Pedidos**: "pedidos hoje", "pedidos pendentes"\n🏢 **Empresas**: "empresas inativas", "quem não fez pedido"\n📊 **Comercial**: "clientes em risco", "oportunidades de venda"\n💰 **Financeiro**: "prever faturamento", "ranking de clientes"\n🚚 **Logística**: "analisar logística", "agenda de entregas"\n📦 **Estoque**: "estoque baixo", "lista de compras"\n✅ **Tarefas**: "criar tarefa"\n🌤️ **Clima**: "clima em São Paulo"\n⚙️ **Sistema**: "status do sistema", "eficiência do sistema"${isAdmin ? '\n➕ **Criar**: "criar empresa"' : ''}\n\nTente reformular sua pergunta!`;
+      } else if (company?.clientType === 'contratual') {
+        response = `Não entendi 🤔 Sou a **Flora** e posso ajudar com:\n\n📋 **Escopo**: "quais frutas recebo", "meu volume semanal"\n📅 **Entregas**: "quais dias tenho entrega"\n💰 **Valor**: "qual o valor do meu contrato"\n🔄 **Alterações**: "quero alterar meu escopo"`;
       } else {
         response = `Não entendi 🤔 Tente:\n• "meus pedidos"\n• "previsão de entrega"\n• "clima em São Paulo"\n• "suporte"`;
       }
@@ -5082,6 +5170,48 @@ export async function registerRoutes(
         totalActiveDeliveries: activeOrders.length,
         generatedAt: new Date().toISOString(),
       });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Client Contract Scope Routes ────────────────────────────────────────
+  app.get('/api/client/contract-scope', async (req: any, res) => {
+    const companyId = req.session?.companyId;
+    if (!companyId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const company = await storage.getCompany(companyId);
+      if (!company || company.clientType !== 'contratual') return res.status(403).json({ message: 'Acesso restrito a clientes contratuais' });
+      const rawScopes = await storage.getContractScopes(companyId);
+      const allProducts = await storage.getProducts();
+      const productMap = new Map(allProducts.map((p: any) => [p.id, p]));
+      const scopes = rawScopes.map((s: any) => {
+        const product = productMap.get(s.productId);
+        return {
+          ...s,
+          productName: product?.name || null,
+          categoryName: s.scopeCategory || product?.category || null,
+        };
+      });
+      res.json({ scopes, company });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post('/api/client/scope-change-request', async (req: any, res) => {
+    const companyId = req.session?.companyId;
+    if (!companyId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const company = await storage.getCompany(companyId);
+      if (!company || company.clientType !== 'contratual') return res.status(403).json({ message: 'Acesso restrito a clientes contratuais' });
+      const { message } = req.body;
+      if (!message || typeof message !== 'string' || message.trim().length < 5) {
+        return res.status(400).json({ message: 'Mensagem inválida' });
+      }
+      const task = await storage.createTask({
+        title: `Solicitação de alteração de escopo — ${company.companyName}`,
+        description: `Cliente: ${company.companyName} (ID #${company.id})\nContato: ${company.contactName || '—'}\n\nMensagem do cliente:\n${message.trim()}`,
+        priority: 'medium',
+        createdByName: company.companyName,
+      });
+      res.json({ success: true, taskId: task.id });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

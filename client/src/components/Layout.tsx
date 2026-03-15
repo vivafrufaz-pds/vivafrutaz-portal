@@ -6,7 +6,7 @@ import {
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
-  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain, GraduationCap, DollarSign, Route, Menu, X, Bell
+  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain, GraduationCap, DollarSign, Route, Menu, X, Bell, BookOpen
 } from 'lucide-react';
 
 import { VirtualAssistant } from './VirtualAssistant';
@@ -107,11 +107,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/notification-settings', label: 'Notificações Push', icon: Bell, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'notification-settings' },
   ];
 
+  const isContratual = company?.clientType === 'contratual';
   const clientLinks = [
     { href: '/client', label: 'Início', icon: LayoutDashboard },
-    { href: '/client/order', label: 'Novo Pedido', icon: ShoppingCart },
+    ...(isContratual
+      ? [{ href: '/client/contract-scope', label: 'Meu Escopo Contratual', icon: FileText }]
+      : [{ href: '/client/order', label: 'Novo Pedido', icon: ShoppingCart }]
+    ),
     { href: '/client/history', label: 'Histórico de Pedidos', icon: Receipt },
-    { href: '/client/special-order', label: 'Pedidos Pontuais', icon: Star },
+    ...(!isContratual ? [{ href: '/client/special-order', label: 'Pedidos Pontuais', icon: Star }] : []),
     { href: '/client/incidents', label: 'Ocorrências', icon: AlertTriangle },
     { href: '/client/profile', label: 'Perfil da Empresa', icon: UserCircle },
     { href: '/client/about-us', label: 'Quem Somos Nós', icon: Building2 },

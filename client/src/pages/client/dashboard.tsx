@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useActiveOrderWindow, useCompanyOrders } from "@/hooks/use-ordering";
 import { Layout } from "@/components/Layout";
 import { Link, useLocation } from "wouter";
-import { ShoppingCart, History, AlertCircle, CheckCircle2, Info, Clock, AlertTriangle, Wrench, FlaskConical, Megaphone, X, Truck } from "lucide-react";
+import { ShoppingCart, History, AlertCircle, CheckCircle2, Info, Clock, AlertTriangle, Wrench, FlaskConical, Megaphone, X, Truck, FileText } from "lucide-react";
 import { FruitCuriosities } from "@/components/FruitCuriosities";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -180,7 +180,13 @@ export default function ClientDashboard() {
             </p>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              {testModeActive ? (
+              {company?.clientType === 'contratual' ? (
+                <Link href="/client/contract-scope"
+                  data-testid="link-contract-scope"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-primary font-bold rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all">
+                  <FileText className="w-5 h-5" /> Meu Escopo Contratual
+                </Link>
+              ) : testModeActive ? (
                 <div className="inline-flex items-center gap-2 px-6 py-3.5 bg-amber-100/80 text-amber-800 font-bold rounded-xl border-2 border-amber-300 cursor-not-allowed opacity-80"
                   data-testid="button-new-order-blocked-test">
                   <FlaskConical className="w-5 h-5" /> Pedidos Bloqueados (Modo Teste)
@@ -192,15 +198,28 @@ export default function ClientDashboard() {
                   <ShoppingCart className="w-5 h-5" /> Novo Pedido
                 </Link>
               )}
-              <Link href="/client/history" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-white font-bold rounded-xl transition-all">
-                <History className="w-5 h-5" /> Meus Pedidos
-              </Link>
+              {company?.clientType !== 'contratual' && (
+                <Link href="/client/history" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-white font-bold rounded-xl transition-all">
+                  <History className="w-5 h-5" /> Meus Pedidos
+                </Link>
+              )}
+              {company?.clientType === 'contratual' && (
+                <Link href="/client/history" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-white font-bold rounded-xl transition-all">
+                  <History className="w-5 h-5" /> Histórico
+                </Link>
+              )}
             </div>
 
-            {testModeActive && (
+            {testModeActive && company?.clientType !== 'contratual' && (
               <div className="mt-3 flex items-center gap-2 text-amber-200 text-xs font-medium">
                 <FlaskConical className="w-3.5 h-3.5 flex-shrink-0" />
                 Sistema em modo teste. Criação de pedidos temporariamente bloqueada.
+              </div>
+            )}
+            {company?.clientType === 'contratual' && (
+              <div className="mt-3 flex items-center gap-2 text-primary-foreground/70 text-xs font-medium">
+                <FileText className="w-3.5 h-3.5 flex-shrink-0" />
+                Seus pedidos são gerados automaticamente conforme o escopo contratual.
               </div>
             )}
           </div>

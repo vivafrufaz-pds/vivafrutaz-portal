@@ -48,6 +48,13 @@ Preferred communication style: Simple, everyday language.
 - **System Automation**: Daily DB backups, automated email system, cron for log cleanup.
 - **Developer Tools**: System Logs, Auditoria (KPIs), System Sync, AI Bug Detector, System Health.
 - **Logistics Module**: Manages routes, drivers, vehicles, maintenance, quotations, and includes a Route Assistant with geocoding integration for optimized delivery planning.
+- **Contratual Client Module**: Dedicated experience for companies with `clientType='contratual'`:
+  - Blocked manual ordering (redirect with explanation on `/client/order`)
+  - "Meu Escopo Contratual" tab replacing "Novo Pedido" in both dashboard and sidebar navigation
+  - View-only scope page (`/client/contract-scope`) with summary cards (valor semanal, mensal, entregas/semana, volume) and items grouped by day
+  - "Solicitar alteração de escopo" dialog → creates admin task via `POST /api/client/scope-change-request`
+  - Email scheduler already blocks window/order emails for contratual clients
+  - Flora IA updated with scope query handling: product queries, volume, value, delivery days, change requests via chat (multi-turn confirmation flow)
 - **Executive Dashboard**: Provides KPIs, charts, and alerts.
 - **Virtual Assistant (Flora IA)**: Panel-first interface with smart export capabilities (e.g., "exportar pedidos da semana"), intelligence modules (commercial risk, financial forecast), and a trainable chat mode.
 - **Incident Management**: Tracks client and internal incidents with workflows and status.
