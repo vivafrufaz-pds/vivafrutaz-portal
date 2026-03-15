@@ -151,6 +151,11 @@ export const orders = pgTable("orders", {
   // Dados fiscais
   fiscalStatus: text("fiscal_status").default("nota_pendente"), // nota_pendente | nota_exportada | nota_emitida | nota_cancelada
   preNotaNumber: text("pre_nota_number"), // VF-NF-000001
+  // Exportação ERP Bling
+  erpExportStatus: text("status_exportacao_erp").default("nao_exportado"), // nao_exportado | exportando | exportado | erro
+  erpExportedAt: timestamp("data_exportacao_erp"),
+  erpId: text("id_erp"),
+  erpExportError: text("erro_exportacao_erp"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

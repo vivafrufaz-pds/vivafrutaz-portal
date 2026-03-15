@@ -95,7 +95,7 @@ export interface IStorage {
   getOrder(id: number): Promise<{ order: Order, items: OrderItem[] } | undefined>;
   getCompanyOrders(companyId: number): Promise<Order[]>;
   createOrder(order: InsertOrder, items: InsertOrderItem[]): Promise<Order>;
-  updateOrder(id: number, updates: { status?: string; adminNote?: string; reopenReason?: string | null; reopenRequestedAt?: Date | null; totalValue?: string; fiscalStatus?: string | null; preNotaNumber?: string | null; nimbiExpiration?: string | null; orderNote?: string | null; deliveryDate?: string; [key: string]: any }): Promise<Order>;
+  updateOrder(id: number, updates: { status?: string; adminNote?: string; reopenReason?: string | null; reopenRequestedAt?: Date | null; totalValue?: string; fiscalStatus?: string | null; preNotaNumber?: string | null; nimbiExpiration?: string | null; orderNote?: string | null; deliveryDate?: string; erpExportStatus?: string | null; erpExportedAt?: Date | null; erpId?: string | null; erpExportError?: string | null; [key: string]: any }): Promise<Order>;
   updateOrderItems(orderId: number, newItems: { productId: number; quantity: number; unitPrice: string; totalPrice: string }[]): Promise<void>;
   getPurchasingReport(filters: { dateFrom?: string; dateTo?: string; companyId?: number; productId?: number }): Promise<any>;
   getIndustrializedReport(filters: { dateFrom?: string; dateTo?: string; companyId?: number; productId?: number }): Promise<any>;

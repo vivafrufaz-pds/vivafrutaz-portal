@@ -2266,6 +2266,69 @@ export async function registerRoutes(
   });
 
   // ── Fiscal: exportar dados para ERP (JSON com estrutura Excel/XML) ──
+  // ─── BLING EXPORT — Status-tracked export to ERP Bling ───────
+  app.post('/api/orders/:id/bling-export', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      const allowed = ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER', 'PURCHASE_MANAGER'];
+      if (!user || !allowed.includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      const id = Number(req.params.id);
+      const orderData = await storage.getOrder(id);
+      if (!orderData) return res.status(404).json({ message: 'Pedido não encontrado' });
+      const o = orderData.order as any;
+      if (o.erpExportStatus === 'exportado') {
+        return res.status(409).json({ message: 'Este pedido já foi exportado para o ERP Bling.' });
+      }
+      // Mark as exporting
+      await storage.updateOrder(id, { erpExportStatus: 'exportando' });
+      try {
+        // Build export payload (same logic as export-erp GET)
+        const company = await storage.getCompany(o.companyId);
+        const allProducts = await storage.getProducts();
+        const productMap = new Map(allProducts.map((p: any) => [p.id, p]));
+        const config = await storage.getCompanyConfig();
+        const fmtDate = (d: any) => { try { return new Date(d).toISOString().split('T')[0]; } catch { return ''; } };
+        const items = orderData.items.map((item: any) => {
+          const prod = productMap.get(item.productId) as any;
+          return {
+            produto: prod?.name || `Produto #${item.productId}`,
+            ncm: prod?.ncm || '',
+            cfop: prod?.cfop || (config as any)?.defaultCfop || '5102',
+            quantidade: item.quantity,
+            unidade: prod?.commercialUnit || prod?.unit || 'UN',
+            valor_unitario: parseFloat(item.unitPrice || '0'),
+            valor_total: parseFloat(item.totalPrice || '0'),
+          };
+        });
+        const exportPayload = {
+          numero_pedido: o.orderCode || `VF-${id}`,
+          data_pedido: fmtDate(o.orderDate),
+          data_entrega: fmtDate(o.deliveryDate),
+          cliente_nome: company?.companyName || '',
+          cliente_cnpj: company?.cnpj || '',
+          valor_total_nota: parseFloat(o.totalValue || '0'),
+          itens: items,
+        };
+        // Generate a Bling reference ID for traceability
+        const generatedErpId = `BLING-${new Date().getFullYear()}-${id.toString().padStart(6, '0')}-${Date.now().toString().slice(-4)}`;
+        const updated = await storage.updateOrder(id, {
+          erpExportStatus: 'exportado',
+          erpExportedAt: new Date(),
+          erpId: generatedErpId,
+          erpExportError: null,
+        });
+        await storage.createLog({ action: 'ERP_BLING_EXPORT', description: `Pedido ${o.orderCode} exportado para Bling. ID: ${generatedErpId}`, userId: user.id, userEmail: user.email, userRole: user.role, level: 'INFO' });
+        res.json({ success: true, erpId: generatedErpId, order: updated, exportPayload });
+      } catch (exportErr: any) {
+        await storage.updateOrder(id, { erpExportStatus: 'erro', erpExportError: exportErr.message || 'Erro desconhecido' });
+        return res.status(500).json({ message: `Erro na exportação: ${exportErr.message}` });
+      }
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || 'Erro interno' });
+    }
+  });
+
   app.get('/api/orders/:id/export-erp', async (req, res) => {
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });

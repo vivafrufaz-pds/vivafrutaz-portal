@@ -13,7 +13,7 @@ import {
   XCircle, Edit3, AlertTriangle, CheckCircle, StickyNote, Save, Trash2, Calendar,
   Lock, Unlock, ThumbsUp, ThumbsDown, ClipboardEdit, Bell, Building2,
   Download, Eye, History, Loader2, FileDown, FileSpreadsheet, Code2,
-  FileCheck, FileX, FileClock, Tag
+  FileCheck, FileX, FileClock, Tag, Send, ShieldCheck, ShieldX, Clock, RefreshCw
 } from "lucide-react";
 import { api } from "@shared/routes";
 import { downloadDanfe, openDanfe, exportToExcel, exportToXML, type DanfeData } from "@/lib/danfe-generator";
@@ -30,6 +30,20 @@ const FISCAL_BADGE: Record<string, string> = {
   nota_exportada: "bg-blue-100 text-blue-700 border-blue-300",
   nota_emitida: "bg-green-100 text-green-700 border-green-300",
   nota_cancelada: "bg-red-100 text-red-700 border-red-300",
+};
+
+const ERP_STATUS_LABEL: Record<string, string> = {
+  nao_exportado: "Não exportado",
+  exportando: "Exportando...",
+  exportado: "Exportado",
+  erro: "Erro Bling",
+};
+
+const ERP_STATUS_BADGE: Record<string, string> = {
+  nao_exportado: "bg-gray-100 text-gray-500 border-gray-300",
+  exportando: "bg-blue-100 text-blue-600 border-blue-300 animate-pulse",
+  exportado: "bg-emerald-100 text-emerald-700 border-emerald-300",
+  erro: "bg-red-100 text-red-700 border-red-300",
 };
 
 type Order = any;
@@ -572,7 +586,7 @@ function DanfePanel({ order, company, products, queryClient }: { order: Order; c
 
 // ─── Order Row ────────────────────────────────────────────────
 function OrderRow({
-  order, company, companyName, products, onNoteEdit, onEdit, onCancel, onRestore, onPatchNimbi, onApproveReopen, onDenyReopen
+  order, company, companyName, products, onNoteEdit, onEdit, onCancel, onRestore, onPatchNimbi, onApproveReopen, onDenyReopen, onBlingExport
 }: {
   order: Order;
   company: any;
@@ -585,18 +599,26 @@ function OrderRow({
   onPatchNimbi: (id: number, date: string) => Promise<void>;
   onApproveReopen: (order: Order) => void;
   onDenyReopen: (order: Order) => void;
+  onBlingExport: (order: Order) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [nimbiDate, setNimbiDate] = useState(order.nimbiExpiration || '');
   const [savingNimbi, setSavingNimbi] = useState(false);
+  const [blingExporting, setBlingExporting] = useState(false);
   const { data: detail } = useOrderDetail(expanded ? order.id : undefined);
   const qc = useQueryClient();
   const isCancelled = order.status === 'CANCELLED';
   const isReopenRequested = order.status === 'REOPEN_REQUESTED';
+  const erpStatus = order.erpExportStatus || 'nao_exportado';
 
   const handleSaveNimbi = async () => {
     setSavingNimbi(true);
     try { await onPatchNimbi(order.id, nimbiDate); } finally { setSavingNimbi(false); }
+  };
+
+  const handleBlingExport = async () => {
+    setBlingExporting(true);
+    try { await onBlingExport(order); } finally { setBlingExporting(false); }
   };
 
   return (
@@ -619,6 +641,12 @@ function OrderRow({
                 )}
                 {order.preNotaNumber && (
                   <span className="text-xs text-violet-600 font-mono">{order.preNotaNumber}</span>
+                )}
+                {(order.erpExportStatus && order.erpExportStatus !== 'nao_exportado') && (
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md border flex items-center gap-0.5 ${ERP_STATUS_BADGE[order.erpExportStatus] || ERP_STATUS_BADGE.nao_exportado}`}>
+                    <Send className="w-2.5 h-2.5" />
+                    {ERP_STATUS_LABEL[order.erpExportStatus] || order.erpExportStatus}
+                  </span>
                 )}
               </div>
             </div>
@@ -728,22 +756,61 @@ function OrderRow({
         <tr>
           <td colSpan={8} className="px-5 py-0 bg-muted/10 border-b border-border/50">
             <div className="py-4 space-y-3">
-              {/* Nimbi Expiration inline edit */}
-              <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
-                <Calendar className="w-4 h-4 text-orange-600 flex-shrink-0" />
-                <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">Expiração Nimbi</span>
-                <input type="date" value={nimbiDate} onChange={e => setNimbiDate(e.target.value)}
-                  data-testid={`input-nimbi-${order.id}`}
-                  className="px-3 py-1.5 border-2 border-orange-200 rounded-lg text-sm focus:border-orange-400 outline-none bg-white" />
-                <button onClick={handleSaveNimbi} disabled={savingNimbi}
-                  data-testid={`button-save-nimbi-${order.id}`}
-                  className="px-3 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50">
-                  {savingNimbi ? '...' : 'Salvar'}
-                </button>
-                {nimbiDate && <button onClick={() => { setNimbiDate(''); onPatchNimbi(order.id, ''); }}
-                  className="px-3 py-1.5 border border-orange-300 text-orange-600 text-xs font-bold rounded-lg hover:bg-orange-100 transition-colors">
-                  Limpar
-                </button>}
+              {/* Bling Export — data de exportação manual + status automático */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
+                  <Calendar className="w-4 h-4 text-orange-600 flex-shrink-0" />
+                  <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">Exportar para Bling</span>
+                  <input type="date" value={nimbiDate} onChange={e => setNimbiDate(e.target.value)}
+                    data-testid={`input-nimbi-${order.id}`}
+                    className="px-3 py-1.5 border-2 border-orange-200 rounded-lg text-sm focus:border-orange-400 outline-none bg-white" />
+                  <button onClick={handleSaveNimbi} disabled={savingNimbi}
+                    data-testid={`button-save-nimbi-${order.id}`}
+                    className="px-3 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50">
+                    {savingNimbi ? '...' : 'Salvar'}
+                  </button>
+                  {nimbiDate && <button onClick={() => { setNimbiDate(''); onPatchNimbi(order.id, ''); }}
+                    className="px-3 py-1.5 border border-orange-300 text-orange-600 text-xs font-bold rounded-lg hover:bg-orange-100 transition-colors">
+                    Limpar
+                  </button>}
+                </div>
+                {/* ERP Bling status & export button */}
+                <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                  <Send className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <div className="flex-1 flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Status Bling:</span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${ERP_STATUS_BADGE[erpStatus]}`}>
+                      {erpStatus === 'exportando' && <Clock className="w-2.5 h-2.5 inline mr-0.5" />}
+                      {erpStatus === 'exportado' && <ShieldCheck className="w-2.5 h-2.5 inline mr-0.5" />}
+                      {erpStatus === 'erro' && <ShieldX className="w-2.5 h-2.5 inline mr-0.5" />}
+                      {ERP_STATUS_LABEL[erpStatus] || erpStatus}
+                    </span>
+                    {order.erpId && (
+                      <span className="text-xs text-emerald-600 font-mono">{order.erpId}</span>
+                    )}
+                    {order.erpExportedAt && (
+                      <span className="text-xs text-emerald-600">
+                        {format(new Date(order.erpExportedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      </span>
+                    )}
+                    {order.erpExportError && erpStatus === 'erro' && (
+                      <span className="text-xs text-red-600">{order.erpExportError}</span>
+                    )}
+                  </div>
+                  {erpStatus === 'exportado' ? (
+                    <span className="text-xs text-emerald-600 font-medium">✓ Já exportado</span>
+                  ) : (
+                    <button
+                      onClick={handleBlingExport}
+                      disabled={blingExporting || erpStatus === 'exportando'}
+                      data-testid={`button-bling-export-${order.id}`}
+                      className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 flex items-center gap-1.5">
+                      {blingExporting || erpStatus === 'exportando'
+                        ? <><RefreshCw className="w-3 h-3 animate-spin" /> Exportando...</>
+                        : <><Send className="w-3 h-3" /> Exportar para Bling</>}
+                    </button>
+                  )}
+                </div>
               </div>
               {order.reopenReason && (
                 <div className="flex items-start gap-2 p-3 bg-orange-50 rounded-xl border border-orange-200">
@@ -875,7 +942,26 @@ export default function OrdersPage() {
 
   const saveNimbi = async (id: number, date: string) => {
     await patchOrder(id, { nimbiExpiration: date || null });
-    toast({ title: date ? "Expiração Nimbi salva!" : "Expiração Nimbi removida." });
+    toast({ title: date ? "Data de exportação Bling salva!" : "Data de exportação Bling removida." });
+  };
+
+  const blingExport = async (order: Order) => {
+    try {
+      const res = await fetch(`/api/orders/${order.id}/bling-export`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: data.message || "Erro ao exportar para Bling", variant: "destructive" });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: [api.orders.list.path] });
+      toast({ title: `Pedido exportado para Bling com sucesso! ID: ${data.erpId}` });
+    } catch (e: any) {
+      toast({ title: e.message || "Erro ao exportar para Bling", variant: "destructive" });
+    }
   };
 
   const restoreOrder = async (order: Order) => {
@@ -1090,6 +1176,7 @@ export default function OrdersPage() {
                       onPatchNimbi={saveNimbi}
                       onApproveReopen={approveReopen}
                       onDenyReopen={denyReopen}
+                      onBlingExport={blingExport}
                     />
                   );
                 })
