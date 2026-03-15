@@ -514,3 +514,83 @@ export const purchasePlanStatus = pgTable("purchase_plan_status", {
 export const insertPurchasePlanStatusSchema = createInsertSchema(purchasePlanStatus).omit({ id: true, createdAt: true, updatedAt: true });
 export type PurchasePlanStatus = typeof purchasePlanStatus.$inferSelect;
 export type InsertPurchasePlanStatus = z.infer<typeof insertPurchasePlanStatusSchema>;
+
+// ─── Estoque / Inventário ────────────────────────────────────────
+
+// Configuração de estoque por produto (estoque atual + mínimo)
+export const inventorySettings = pgTable("inventory_settings", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id"),
+  productName: text("product_name").notNull(),
+  unit: text("unit").notNull().default("kg"),
+  currentStock: numeric("current_stock", { precision: 10, scale: 3 }).notNull().default("0"),
+  minStock: numeric("min_stock", { precision: 10, scale: 3 }).notNull().default("0"),
+  avgPurchasePrice: numeric("avg_purchase_price", { precision: 10, scale: 2 }).default("0"),
+  category: text("category"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertInventorySettingsSchema = createInsertSchema(inventorySettings).omit({ id: true, updatedAt: true });
+export type InventorySettings = typeof inventorySettings.$inferSelect;
+export type InsertInventorySettings = z.infer<typeof insertInventorySettingsSchema>;
+
+// Entradas de estoque (NF ou manual)
+export const inventoryEntries = pgTable("inventory_entries", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id"),
+  productName: text("product_name").notNull(),
+  category: text("category"),
+  supplier: text("supplier"),
+  quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
+  unit: text("unit").notNull().default("kg"),
+  purchasePrice: numeric("purchase_price", { precision: 10, scale: 2 }),
+  invoiceNumber: text("invoice_number"),
+  invoiceDate: date("invoice_date"),
+  entryDate: date("entry_date").notNull(),
+  expiryDate: date("expiry_date"),
+  notes: text("notes"),
+  createdBy: text("created_by").notNull(),
+  createdById: integer("created_by_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertInventoryEntrySchema = createInsertSchema(inventoryEntries).omit({ id: true, createdAt: true });
+export type InventoryEntry = typeof inventoryEntries.$inferSelect;
+export type InsertInventoryEntry = z.infer<typeof insertInventoryEntrySchema>;
+
+// Movimentações de estoque (entradas, saídas, ajustes, desperdícios)
+export const inventoryMovements = pgTable("inventory_movements", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id"),
+  productName: text("product_name").notNull(),
+  movementType: text("movement_type").notNull(), // ENTRY | EXIT | ADJUSTMENT | WASTE
+  quantity: numeric("quantity", { precision: 10, scale: 3 }).notNull(),
+  balanceAfter: numeric("balance_after", { precision: 10, scale: 3 }),
+  unit: text("unit").notNull().default("kg"),
+  referenceType: text("reference_type"), // order | entry | waste | adjustment
+  referenceId: integer("reference_id"),
+  notes: text("notes"),
+  date: date("date").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertInventoryMovementSchema = createInsertSchema(inventoryMovements).omit({ id: true, createdAt: true });
+export type InventoryMovement = typeof inventoryMovements.$inferSelect;
+export type InsertInventoryMovement = z.infer<typeof insertInventoryMovementSchema>;
+
+// Inventário Físico (conferência manual)
+export const inventoryPhysicalCounts = pgTable("inventory_physical_counts", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id"),
+  productName: text("product_name").notNull(),
+  unit: text("unit").notNull().default("kg"),
+  systemStock: numeric("system_stock", { precision: 10, scale: 3 }).notNull(),
+  physicalStock: numeric("physical_stock", { precision: 10, scale: 3 }).notNull(),
+  difference: numeric("difference", { precision: 10, scale: 3 }).notNull(),
+  notes: text("notes"),
+  date: date("date").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdById: integer("created_by_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertInventoryPhysicalCountSchema = createInsertSchema(inventoryPhysicalCounts).omit({ id: true, createdAt: true });
+export type InventoryPhysicalCount = typeof inventoryPhysicalCounts.$inferSelect;
+export type InsertInventoryPhysicalCount = z.infer<typeof insertInventoryPhysicalCountSchema>;

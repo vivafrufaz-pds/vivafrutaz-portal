@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -16,7 +16,11 @@ import {
   type CompanyConfig, type InsertCompanyConfig,
   type Announcement, type InsertAnnouncement,
   type WasteControl, type InsertWasteControl,
-  type PurchasePlanStatus, type InsertPurchasePlanStatus
+  type PurchasePlanStatus, type InsertPurchasePlanStatus,
+  type InventorySettings, type InsertInventorySettings,
+  type InventoryEntry, type InsertInventoryEntry,
+  type InventoryMovement, type InsertInventoryMovement,
+  type InventoryPhysicalCount, type InsertInventoryPhysicalCount
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -169,6 +173,22 @@ export interface IStorage {
   getPurchasePlanStatuses(weekRef: string): Promise<PurchasePlanStatus[]>;
   upsertPurchasePlanStatus(data: Partial<InsertPurchasePlanStatus> & { weekRef: string; productName: string }): Promise<PurchasePlanStatus>;
   deletePurchasePlanStatus(id: number): Promise<void>;
+  // Inventory — Settings (stock levels per product)
+  getInventorySettings(): Promise<InventorySettings[]>;
+  getInventorySettingByProductId(productId: number): Promise<InventorySettings | undefined>;
+  getInventorySettingByProductName(productName: string): Promise<InventorySettings | undefined>;
+  upsertInventorySetting(data: InsertInventorySettings): Promise<InventorySettings>;
+  updateInventoryStock(id: number, currentStock: number): Promise<InventorySettings>;
+  // Inventory — Entries
+  getInventoryEntries(filters?: { from?: string; to?: string }): Promise<InventoryEntry[]>;
+  createInventoryEntry(data: InsertInventoryEntry): Promise<InventoryEntry>;
+  deleteInventoryEntry(id: number): Promise<void>;
+  // Inventory — Movements
+  getInventoryMovements(filters?: { from?: string; to?: string; productId?: number }): Promise<InventoryMovement[]>;
+  createInventoryMovement(data: InsertInventoryMovement): Promise<InventoryMovement>;
+  // Inventory — Physical Counts
+  getInventoryPhysicalCounts(): Promise<InventoryPhysicalCount[]>;
+  createInventoryPhysicalCount(data: InsertInventoryPhysicalCount): Promise<InventoryPhysicalCount>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -972,6 +992,71 @@ export class DatabaseStorage implements IStorage {
   }
   async deletePurchasePlanStatus(id: number): Promise<void> {
     await db.delete(purchasePlanStatus).where(eq(purchasePlanStatus.id, id));
+  }
+
+  // ─── Inventory Settings ───────────────────────────────────────
+  async getInventorySettings(): Promise<InventorySettings[]> {
+    return db.select().from(inventorySettings).orderBy(inventorySettings.productName);
+  }
+  async getInventorySettingByProductId(productId: number): Promise<InventorySettings | undefined> {
+    const [r] = await db.select().from(inventorySettings).where(eq(inventorySettings.productId, productId));
+    return r;
+  }
+  async getInventorySettingByProductName(productName: string): Promise<InventorySettings | undefined> {
+    const [r] = await db.select().from(inventorySettings).where(eq(inventorySettings.productName, productName));
+    return r;
+  }
+  async upsertInventorySetting(data: InsertInventorySettings): Promise<InventorySettings> {
+    if (data.productId) {
+      const existing = await this.getInventorySettingByProductId(data.productId);
+      if (existing) {
+        const [r] = await db.update(inventorySettings).set({ ...data, updatedAt: new Date() }).where(eq(inventorySettings.id, existing.id)).returning();
+        return r;
+      }
+    }
+    const [r] = await db.insert(inventorySettings).values({ ...data, updatedAt: new Date() } as any).returning();
+    return r;
+  }
+  async updateInventoryStock(id: number, currentStock: number): Promise<InventorySettings> {
+    const [r] = await db.update(inventorySettings).set({ currentStock: String(currentStock), updatedAt: new Date() }).where(eq(inventorySettings.id, id)).returning();
+    return r;
+  }
+
+  // ─── Inventory Entries ────────────────────────────────────────
+  async getInventoryEntries(filters?: { from?: string; to?: string }): Promise<InventoryEntry[]> {
+    let q = db.select().from(inventoryEntries).$dynamic();
+    if (filters?.from) q = q.where(gte(inventoryEntries.entryDate, filters.from));
+    if (filters?.to) q = q.where(lte(inventoryEntries.entryDate, filters.to));
+    return q.orderBy(desc(inventoryEntries.createdAt));
+  }
+  async createInventoryEntry(data: InsertInventoryEntry): Promise<InventoryEntry> {
+    const [r] = await db.insert(inventoryEntries).values(data).returning();
+    return r;
+  }
+  async deleteInventoryEntry(id: number): Promise<void> {
+    await db.delete(inventoryEntries).where(eq(inventoryEntries.id, id));
+  }
+
+  // ─── Inventory Movements ─────────────────────────────────────
+  async getInventoryMovements(filters?: { from?: string; to?: string; productId?: number }): Promise<InventoryMovement[]> {
+    let q = db.select().from(inventoryMovements).$dynamic();
+    if (filters?.from) q = q.where(gte(inventoryMovements.date, filters.from));
+    if (filters?.to) q = q.where(lte(inventoryMovements.date, filters.to));
+    if (filters?.productId) q = q.where(eq(inventoryMovements.productId, filters.productId));
+    return q.orderBy(desc(inventoryMovements.createdAt));
+  }
+  async createInventoryMovement(data: InsertInventoryMovement): Promise<InventoryMovement> {
+    const [r] = await db.insert(inventoryMovements).values(data).returning();
+    return r;
+  }
+
+  // ─── Inventory Physical Counts ────────────────────────────────
+  async getInventoryPhysicalCounts(): Promise<InventoryPhysicalCount[]> {
+    return db.select().from(inventoryPhysicalCounts).orderBy(desc(inventoryPhysicalCounts.createdAt));
+  }
+  async createInventoryPhysicalCount(data: InsertInventoryPhysicalCount): Promise<InventoryPhysicalCount> {
+    const [r] = await db.insert(inventoryPhysicalCounts).values(data).returning();
+    return r;
   }
 }
 

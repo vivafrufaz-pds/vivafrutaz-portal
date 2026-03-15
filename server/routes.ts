@@ -1216,6 +1216,44 @@ export async function registerRoutes(
           console.error("[EMAIL] Erro ao enviar email de status:", emailErr);
         }
       }
+      // Auto-deduct inventory when order is CONFIRMED (non-blocking)
+      if (status === 'CONFIRMED') {
+        (async () => {
+          try {
+            const orderData = await storage.getOrder(id);
+            if (!orderData) return;
+            const allProducts = await storage.getProducts();
+            const productMap = new Map(allProducts.map(p => [p.id, p]));
+            const today = new Date().toISOString().split('T')[0];
+            for (const item of orderData.items) {
+              const product = productMap.get(item.productId);
+              const productName = product?.name || `Produto #${item.productId}`;
+              const setting = await storage.getInventorySettingByProductId(item.productId)
+                || await storage.getInventorySettingByProductName(productName);
+              if (!setting) continue;
+              const prev = parseFloat(setting.currentStock || '0');
+              const qty = parseFloat(String(item.quantity || 0));
+              const newStock = Math.max(0, prev - qty);
+              await storage.upsertInventorySetting({ ...setting, currentStock: String(newStock) });
+              await storage.createInventoryMovement({
+                productId: item.productId || null,
+                productName,
+                movementType: 'EXIT',
+                quantity: String(qty),
+                balanceAfter: String(newStock),
+                unit: setting.unit,
+                referenceType: 'order',
+                referenceId: id,
+                notes: `Pedido confirmado: ${orderData.order.orderCode || `#${id}`}`,
+                date: today,
+                createdBy: 'Sistema',
+              });
+            }
+          } catch (invErr) {
+            console.error('[INVENTORY] Erro ao baixar estoque do pedido:', invErr);
+          }
+        })();
+      }
     } catch (err) {
       console.error("Update order error:", err);
       res.status(400).json({ message: "Bad request" });
@@ -2719,6 +2757,178 @@ export async function registerRoutes(
     if (!weekRef) return res.status(400).json({ message: 'weekRef required' });
     const statuses = await storage.getPurchasePlanStatuses(weekRef);
     res.json(statuses);
+  });
+
+  // ── Estoque / Inventário ────────────────────────────────────
+
+  // GET /api/inventory/settings — dashboard de estoque
+  app.get('/api/inventory/settings', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const settings = await storage.getInventorySettings();
+    res.json(settings);
+  });
+
+  // PUT /api/inventory/settings/:id — atualiza estoque mínimo
+  app.put('/api/inventory/settings/:id', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const id = parseInt(req.params.id);
+    const { minStock, avgPurchasePrice, category } = req.body;
+    const existing = (await storage.getInventorySettings()).find(s => s.id === id);
+    if (!existing) return res.status(404).json({ message: 'Configuração não encontrada' });
+    const updated = await storage.upsertInventorySetting({ ...existing, minStock: String(minStock ?? existing.minStock), avgPurchasePrice: avgPurchasePrice != null ? String(avgPurchasePrice) : existing.avgPurchasePrice, category: category ?? existing.category });
+    res.json(updated);
+  });
+
+  // POST /api/inventory/settings — cria configuração de produto (se não existe)
+  app.post('/api/inventory/settings', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const { productId, productName, unit, minStock, category } = req.body;
+    if (!productName || !unit) return res.status(400).json({ message: 'productName e unit são obrigatórios' });
+    const result = await storage.upsertInventorySetting({ productId, productName, unit, minStock: String(minStock ?? 0), currentStock: '0', category });
+    res.json(result);
+  });
+
+  // GET /api/inventory/entries — lista entradas
+  app.get('/api/inventory/entries', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const { from, to } = req.query as Record<string, string>;
+    const entries = await storage.getInventoryEntries({ from, to });
+    res.json(entries);
+  });
+
+  // POST /api/inventory/entries — registra entrada de estoque
+  app.post('/api/inventory/entries', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const { productId, productName, category, supplier, quantity, unit, purchasePrice, invoiceNumber, invoiceDate, entryDate, expiryDate, notes } = req.body;
+    if (!productName || !quantity || !unit || !entryDate) return res.status(400).json({ message: 'Campos obrigatórios: productName, quantity, unit, entryDate' });
+    try {
+      const entry = await storage.createInventoryEntry({
+        productId: productId || null,
+        productName,
+        category: category || null,
+        supplier: supplier || null,
+        quantity: String(quantity),
+        unit,
+        purchasePrice: purchasePrice ? String(purchasePrice) : null,
+        invoiceNumber: invoiceNumber || null,
+        invoiceDate: invoiceDate || null,
+        entryDate,
+        expiryDate: expiryDate || null,
+        notes: notes || null,
+        createdBy: session.userName || 'Admin',
+        createdById: session.userId,
+      });
+      // Atualiza ou cria configuração de estoque
+      let setting = productId ? await storage.getInventorySettingByProductId(productId) : await storage.getInventorySettingByProductName(productName);
+      if (!setting) {
+        setting = await storage.upsertInventorySetting({ productId, productName, unit, currentStock: '0', minStock: '0', category: category || null, avgPurchasePrice: purchasePrice ? String(purchasePrice) : null });
+      }
+      const newStock = parseFloat(setting.currentStock || '0') + parseFloat(String(quantity));
+      // Atualiza preço médio de compra
+      let newAvg = setting.avgPurchasePrice ? parseFloat(setting.avgPurchasePrice) : 0;
+      if (purchasePrice) {
+        const oldStock = parseFloat(setting.currentStock || '0');
+        const oldAvg = parseFloat(setting.avgPurchasePrice || '0');
+        const totalOld = oldStock * oldAvg;
+        const totalNew = parseFloat(String(quantity)) * parseFloat(String(purchasePrice));
+        newAvg = oldStock + parseFloat(String(quantity)) > 0 ? (totalOld + totalNew) / (oldStock + parseFloat(String(quantity))) : parseFloat(String(purchasePrice));
+      }
+      await storage.upsertInventorySetting({ ...setting, currentStock: String(newStock), avgPurchasePrice: String(newAvg) });
+      // Registra movimentação
+      await storage.createInventoryMovement({
+        productId: productId || null,
+        productName,
+        movementType: 'ENTRY',
+        quantity: String(quantity),
+        balanceAfter: String(newStock),
+        unit,
+        referenceType: 'entry',
+        referenceId: entry.id,
+        notes: invoiceNumber ? `NF ${invoiceNumber}` : (notes || null),
+        date: entryDate,
+        createdBy: session.userName || 'Admin',
+      });
+      res.json(entry);
+    } catch (e: any) {
+      console.error('Inventory entry error:', e);
+      res.status(500).json({ message: 'Erro ao registrar entrada' });
+    }
+  });
+
+  // DELETE /api/inventory/entries/:id
+  app.delete('/api/inventory/entries/:id', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    await storage.deleteInventoryEntry(parseInt(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // GET /api/inventory/movements — histórico de movimentações
+  app.get('/api/inventory/movements', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const { from, to, productId } = req.query as Record<string, string>;
+    const movements = await storage.getInventoryMovements({ from, to, productId: productId ? parseInt(productId) : undefined });
+    res.json(movements);
+  });
+
+  // GET /api/inventory/physical-counts — inventário físico
+  app.get('/api/inventory/physical-counts', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    res.json(await storage.getInventoryPhysicalCounts());
+  });
+
+  // POST /api/inventory/physical-counts — registra contagem física
+  app.post('/api/inventory/physical-counts', async (req, res) => {
+    const session = req.session as any;
+    if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
+    const { productId, productName, unit, physicalStock, notes, date } = req.body;
+    if (!productName || physicalStock == null || !date) return res.status(400).json({ message: 'productName, physicalStock e date são obrigatórios' });
+    try {
+      let setting = productId ? await storage.getInventorySettingByProductId(productId) : await storage.getInventorySettingByProductName(productName);
+      const systemStockVal = setting ? parseFloat(setting.currentStock || '0') : 0;
+      const physicalVal = parseFloat(String(physicalStock));
+      const diff = physicalVal - systemStockVal;
+      const count = await storage.createInventoryPhysicalCount({
+        productId: productId || null,
+        productName,
+        unit: unit || (setting?.unit ?? 'kg'),
+        systemStock: String(systemStockVal),
+        physicalStock: String(physicalVal),
+        difference: String(diff),
+        notes: notes || null,
+        date,
+        createdBy: session.userName || 'Admin',
+        createdById: session.userId,
+      });
+      // Aplica ajuste no estoque
+      if (setting) {
+        await storage.upsertInventorySetting({ ...setting, currentStock: String(physicalVal) });
+        await storage.createInventoryMovement({
+          productId: productId || null,
+          productName,
+          movementType: 'ADJUSTMENT',
+          quantity: String(Math.abs(diff)),
+          balanceAfter: String(physicalVal),
+          unit: unit || setting.unit,
+          referenceType: 'adjustment',
+          referenceId: count.id,
+          notes: diff >= 0 ? `Ajuste +${diff.toFixed(3)} (contagem física)` : `Ajuste ${diff.toFixed(3)} (contagem física)`,
+          date,
+          createdBy: session.userName || 'Admin',
+        });
+      }
+      res.json(count);
+    } catch (e: any) {
+      console.error('Physical count error:', e);
+      res.status(500).json({ message: 'Erro ao registrar contagem física' });
+    }
   });
 
   // ── Geocoding proxy (Nominatim) ────────────────────────────
