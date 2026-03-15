@@ -31,6 +31,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [isStaff, push.isSupported, push.isSubscribed, push.permission]);
 
+  // Auto-prompt for push permission for client users (only once per browser)
+  useEffect(() => {
+    if (!isClient || !push.isSupported || push.isSubscribed || push.permission === 'denied') return;
+    const alreadyAsked = localStorage.getItem('push-permission-client-asked');
+    if (alreadyAsked) return;
+    const t = setTimeout(async () => {
+      localStorage.setItem('push-permission-client-asked', '1');
+      await push.subscribe();
+    }, 10000); // Wait 10s before prompting clients
+    return () => clearTimeout(t);
+  }, [isClient, push.isSupported, push.isSubscribed, push.permission]);
+
   // Close sidebar on navigation (mobile)
   useEffect(() => {
     setSidebarOpen(false);

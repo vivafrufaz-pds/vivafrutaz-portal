@@ -775,8 +775,16 @@ export default function CompaniesPage() {
                       })()}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${company.clientType === 'pontual' ? 'bg-orange-100 text-orange-700' : company.clientType === 'semanal' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                        {company.clientType === 'pontual' ? 'Pontual' : company.clientType === 'semanal' ? 'Semanal' : 'Mensal'}
+                      <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
+                        company.clientType === 'pontual' ? 'bg-orange-100 text-orange-700' :
+                        company.clientType === 'semanal' ? 'bg-green-100 text-green-700' :
+                        company.clientType === 'contratual' ? 'bg-purple-100 text-purple-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                        {company.clientType === 'pontual' ? 'Pontual' :
+                         company.clientType === 'semanal' ? 'Semanal' :
+                         company.clientType === 'contratual' ? 'Contratual' :
+                         'Mensal'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -823,18 +831,24 @@ export default function CompaniesPage() {
           <div className="flex border-b border-border/50 mb-6 -mx-0">
             {TABS.map(tab => {
               const Icon = tab.icon;
+              const isContratualLocked = tab.key === 'contrato' && formData.clientType !== 'contratual';
               return (
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setActiveTab(tab.key)}
+                  onClick={() => !isContratualLocked && setActiveTab(tab.key)}
+                  title={isContratualLocked ? 'Disponível apenas para Cliente Contratual' : undefined}
                   className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all ${
-                    activeTab === tab.key
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                    isContratualLocked
+                      ? 'border-transparent text-muted-foreground/40 cursor-not-allowed'
+                      : activeTab === tab.key
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  <Icon className="w-4 h-4" /> {tab.label}
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                  {isContratualLocked && <Lock className="w-3 h-3 ml-0.5 opacity-50" />}
                 </button>
               );
             })}
@@ -1093,7 +1107,13 @@ export default function CompaniesPage() {
                   ].map(opt => (
                     <button key={opt.value} type="button"
                       data-testid={`button-clienttype-${opt.value}`}
-                      onClick={() => { set("clientType", opt.value); if (opt.value !== 'contratual') set("contractModel", ""); }}
+                      onClick={() => {
+                        set("clientType", opt.value);
+                        if (opt.value !== 'contratual') {
+                          set("contractModel", "");
+                          if (activeTab === 'contrato') setActiveTab('config');
+                        }
+                      }}
                       className={`flex-1 min-w-[100px] px-4 py-3 rounded-xl font-bold text-sm border-2 transition-all text-left ${formData.clientType === opt.value ? 'bg-primary text-white border-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>
                       <p>{opt.label}</p>
                       <p className={`text-xs font-normal mt-0.5 ${formData.clientType === opt.value ? 'text-white/80' : 'text-muted-foreground'}`}>{opt.desc}</p>
@@ -1391,10 +1411,19 @@ export default function CompaniesPage() {
             <div className="flex gap-2">
               {TABS.map(tab => {
                 const Icon = tab.icon;
+                const isContratualLocked = tab.key === 'contrato' && formData.clientType !== 'contratual';
                 return (
-                  <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
-                    className={`p-2 rounded-lg transition-colors ${activeTab === tab.key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'}`}>
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => !isContratualLocked && setActiveTab(tab.key)}
+                    title={isContratualLocked ? 'Disponível apenas para Cliente Contratual' : tab.label}
+                    className={`p-2 rounded-lg transition-colors relative ${
+                      isContratualLocked ? 'text-muted-foreground/30 cursor-not-allowed' :
+                      activeTab === tab.key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                    }`}>
                     <Icon className="w-4 h-4" />
+                    {isContratualLocked && <Lock className="w-2.5 h-2.5 absolute bottom-0.5 right-0.5 opacity-50" />}
                   </button>
                 );
               })}

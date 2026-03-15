@@ -1,8 +1,12 @@
 /**
  * email-scheduler.ts
- * Runs every minute to dispatch automated emails based on configured schedules.
- * - Window Open Reminders: sent when a new order window opens
- * - Unfinalised Order Reminders: sent on configured day+time if client has no confirmed order
+ * Runs every minute to dispatch automated emails and push notifications based on clientType.
+ *
+ * Rules by clientType:
+ *   semanal    → window_open_reminder (email + push) + unfinalised_reminder (email + push, weekly)
+ *   mensal     → window_open_reminder (email + push) + unfinalised_reminder (email + push, once per month)
+ *   pontual    → no reminders; order-confirmation emails only (handled in routes.ts)
+ *   contratual → no reminders at all
  */
 
 import { storage } from "./storage";
@@ -10,10 +14,10 @@ import {
   sendWindowOpenReminder,
   sendUnfinalisedReminder,
 } from "./mailer";
+import { sendClientPush } from "./pushService";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-// Track which windows we've already sent open-reminders for (reset on server restart)
 const sentWindowReminders = new Set<number>();
 
 function fmtDate(d: Date | string | null | undefined) {
@@ -22,32 +26,54 @@ function fmtDate(d: Date | string | null | undefined) {
   catch { return String(d); }
 }
 
+/** Returns true if the clientType should receive order-window reminder emails/push. */
+function receivesWindowReminder(clientType: string | null | undefined): boolean {
+  const ct = clientType || 'mensal';
+  return ct === 'semanal' || ct === 'mensal';
+}
+
+/** Returns true if the clientType should receive unfinalised-order reminder emails/push. */
+function receivesUnfinalisedReminder(clientType: string | null | undefined): boolean {
+  const ct = clientType || 'mensal';
+  return ct === 'semanal' || ct === 'mensal';
+}
+
+/** For mensal clients, unfinalised reminders should only fire once per calendar month. */
+function requiresMonthlyThrottle(clientType: string | null | undefined): boolean {
+  return (clientType || 'mensal') === 'mensal';
+}
+
 async function runSchedulerTick() {
   try {
     const now = new Date();
-    const currentDow = now.getDay(); // 0=Sun..6=Sat
+    const currentDow = now.getDay();
     const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     // ── 1. Get active order window ─────────────────────────────────────────
     const activeWindow = await storage.getActiveOrderWindow();
 
     // ── 2. Window-Open Reminder ────────────────────────────────────────────
-    // Fire once per server session when a window becomes active
     if (activeWindow && !sentWindowReminders.has(activeWindow.id)) {
       sentWindowReminders.add(activeWindow.id);
 
-      // Get all active CLIENT users with emails
       const allUsers = await storage.getUsers();
       const clientUsers = allUsers.filter(u => u.role === 'CLIENT' && u.email && u.active);
 
       for (const user of clientUsers) {
         if (!user.email) continue;
-        // Check if already sent today
+
+        const company = user.companyId ? await storage.getCompany(user.companyId) : null;
+        const clientType = company?.clientType || 'mensal';
+
+        // Skip contratual and pontual — they do not receive window reminders
+        if (!receivesWindowReminder(clientType)) {
+          console.log(`[EMAIL-SCHEDULER] Skipping window_open_reminder for ${user.email} (clientType: ${clientType})`);
+          continue;
+        }
+
         const alreadySent = await storage.wasEmailSentToday('window_open_reminder', user.email);
         if (alreadySent) continue;
 
-        // Get company info
-        const company = user.companyId ? await storage.getCompany(user.companyId) : null;
         const companyName = company?.companyName || user.email;
 
         const result = await sendWindowOpenReminder({
@@ -67,13 +93,21 @@ async function runSchedulerTick() {
           subject: `Janela de pedidos aberta — ${activeWindow.weekReference}`,
           status: result.sent ? 'sent' : 'failed',
           errorMessage: result.sent ? null : (result.reason || null),
-          metadata: { windowId: activeWindow.id, weekReference: activeWindow.weekReference },
+          metadata: { windowId: activeWindow.id, weekReference: activeWindow.weekReference, clientType },
         });
+
+        // Push notification for clients (semanal/mensal only)
+        if (result.sent && user.companyId) {
+          await sendClientPush(user.companyId, {
+            title: "🛒 Janela de pedidos aberta",
+            body: `${companyName} — ${activeWindow.weekReference}. Envie seu pedido!`,
+            url: "/create-order",
+          });
+        }
       }
     }
 
     // ── 3. Unfinalised Order Reminders ─────────────────────────────────────
-    // Check all enabled "unfinalised_reminder" schedules for current day+time
     const schedules = await storage.getEmailSchedules();
     const unfinalisedSchedules = schedules.filter(s =>
       s.enabled &&
@@ -87,23 +121,35 @@ async function runSchedulerTick() {
       const clientUsers = allUsers.filter(u => u.role === 'CLIENT' && u.email && u.active);
 
       for (const user of clientUsers) {
-        if (!user.email) continue;
+        if (!user.email || !user.companyId) continue;
 
-        // Check if already sent today for this type
-        const alreadySent = await storage.wasEmailSentToday('unfinalised_reminder', user.email);
-        if (alreadySent) continue;
+        const company = await storage.getCompany(user.companyId);
+        const clientType = company?.clientType || 'mensal';
 
-        // Check if user has a confirmed/active order in this window (matched by weekReference)
-        if (!user.companyId) continue;
+        // Skip contratual and pontual
+        if (!receivesUnfinalisedReminder(clientType)) {
+          console.log(`[EMAIL-SCHEDULER] Skipping unfinalised_reminder for ${user.email} (clientType: ${clientType})`);
+          continue;
+        }
+
+        // Mensal clients: only send once per calendar month
+        if (requiresMonthlyThrottle(clientType)) {
+          const alreadySentThisMonth = await storage.wasEmailSentThisMonth('unfinalised_reminder', user.email);
+          if (alreadySentThisMonth) continue;
+        } else {
+          // Semanal clients: only send once per day
+          const alreadySentToday = await storage.wasEmailSentToday('unfinalised_reminder', user.email);
+          if (alreadySentToday) continue;
+        }
+
         const companyOrders = await storage.getOrdersByCompanyId(user.companyId);
         const hasActiveOrder = companyOrders.some(o =>
           ['CONFIRMED', 'ACTIVE', 'OPEN_FOR_EDITING'].includes(o.status) &&
           o.weekReference === activeWindow.weekReference
         );
 
-        if (hasActiveOrder) continue; // already has an order — skip
+        if (hasActiveOrder) continue;
 
-        const company = await storage.getCompany(user.companyId);
         const companyName = company?.companyName || user.email;
 
         const result = await sendUnfinalisedReminder({
@@ -122,8 +168,17 @@ async function runSchedulerTick() {
           subject: `Lembrete: finalize seu pedido — ${activeWindow.weekReference}`,
           status: result.sent ? 'sent' : 'failed',
           errorMessage: result.sent ? null : (result.reason || null),
-          metadata: { windowId: activeWindow.id, weekReference: activeWindow.weekReference },
+          metadata: { windowId: activeWindow.id, weekReference: activeWindow.weekReference, clientType },
         });
+
+        // Push notification for unfinalised reminder
+        if (result.sent && user.companyId) {
+          await sendClientPush(user.companyId, {
+            title: clientType === 'mensal' ? "📅 Lembrete mensal de pedido" : "⏰ Lembrete semanal de pedido",
+            body: `${companyName} — Finalize seu pedido antes do encerramento da janela.`,
+            url: "/create-order",
+          });
+        }
       }
     }
   } catch (err) {
@@ -133,7 +188,6 @@ async function runSchedulerTick() {
 
 export function startEmailScheduler() {
   console.log('[EMAIL-SCHEDULER] Iniciado. Verificação a cada minuto.');
-  // Run immediately once, then every minute
   runSchedulerTick();
   setInterval(runSchedulerTick, 60_000);
 }

@@ -216,6 +216,7 @@ export interface IStorage {
   getEmailLogs(opts?: { limit?: number; type?: string; companyId?: number }): Promise<EmailLog[]>;
   createEmailLog(data: InsertEmailLog): Promise<EmailLog>;
   wasEmailSentToday(type: string, toEmail: string): Promise<boolean>;
+  wasEmailSentThisMonth(type: string, toEmail: string): Promise<boolean>;
 
   // Flora Training
   getFloraTrainings(): Promise<FloraTraining[]>;
@@ -1158,6 +1159,20 @@ export class DatabaseStorage implements IStorage {
         eq(emailLogs.toEmail, toEmail),
         eq(emailLogs.status, 'sent'),
         gte(emailLogs.sentAt, startOfDay)
+      ));
+    return !!r;
+  }
+
+  async wasEmailSentThisMonth(type: string, toEmail: string): Promise<boolean> {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const [r] = await db.select()
+      .from(emailLogs)
+      .where(and(
+        eq(emailLogs.type, type),
+        eq(emailLogs.toEmail, toEmail),
+        eq(emailLogs.status, 'sent'),
+        gte(emailLogs.sentAt, startOfMonth)
       ));
     return !!r;
   }

@@ -155,6 +155,21 @@ async function sendPushToSubscription(
   }
 }
 
+// Send a push notification directly to a specific company's subscriptions (client-side push)
+export async function sendClientPush(
+  companyId: number,
+  payload: { title: string; body: string; url?: string }
+) {
+  try {
+    const subs = await getActiveSubscriptions("company", companyId);
+    for (const sub of subs) {
+      sendPushToSubscription(sub, payload);
+    }
+  } catch (err) {
+    console.error(`[PUSH] Error sending client push to company ${companyId}:`, err);
+  }
+}
+
 // Main: fire a push event to all relevant subscribers
 export async function fireNotification(
   event: string,
