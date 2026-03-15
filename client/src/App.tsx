@@ -55,6 +55,9 @@ import AdminAboutUs from "@/pages/admin/about-us";
 import AdminSmtpConfig from "@/pages/admin/smtp-config";
 import AdminIntelligence from "@/pages/admin/intelligence";
 import AdminFloraTraining from "@/pages/admin/flora-training";
+import AdminCommercialIntelligence from "@/pages/admin/commercial-intelligence";
+import AdminFinancialIntelligence from "@/pages/admin/financial-intelligence";
+import AdminLogisticsIntelligence from "@/pages/admin/logistics-intelligence";
 
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
@@ -283,6 +286,15 @@ function Router() {
       </Route>
       <Route path="/admin/flora-training">
         {() => <ProtectedRoute component={AdminFloraTraining} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER']} tabKey="flora-training" />}
+      </Route>
+      <Route path="/admin/commercial-intelligence">
+        {() => <ProtectedRoute component={AdminCommercialIntelligence} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER']} tabKey="commercial-intelligence" />}
+      </Route>
+      <Route path="/admin/financial-intelligence">
+        {() => <ProtectedRoute component={AdminFinancialIntelligence} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'FINANCEIRO']} tabKey="financial-intelligence" />}
+      </Route>
+      <Route path="/admin/logistics-intelligence">
+        {() => <ProtectedRoute component={AdminLogisticsIntelligence} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS']} tabKey="logistics-intelligence" />}
       </Route>
       <Route path="/admin/intelligence">
         {() => <ProtectedRoute component={AdminIntelligence} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS']} tabKey="intelligence" />}

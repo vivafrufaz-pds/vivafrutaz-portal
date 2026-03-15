@@ -4287,11 +4287,132 @@ export async function registerRoutes(
       }
     }
 
+    else if (isInternal && /analisar clientes|clientes em risco|clientes inativos|clientes parado|cliente inativo|clientes sem pedido há/.test(msg)) {
+      intent = 'commercial_risk';
+      try {
+        const now = Date.now();
+        const allOrders = await storage.getOrders();
+        const allCompanies = await storage.getCompanies();
+        const activeCompanies = allCompanies.filter((c: any) => c.active);
+        const ordersByCompany: Record<number, any[]> = {};
+        for (const o of allOrders.filter((o: any) => o.status !== 'CANCELLED')) {
+          if (!ordersByCompany[o.companyId]) ordersByCompany[o.companyId] = [];
+          ordersByCompany[o.companyId].push(o);
+        }
+        const atRisk = activeCompanies.filter((c: any) => {
+          const orders = ordersByCompany[c.id] || [];
+          if (orders.length === 0) return false;
+          const lastOrder = orders.reduce((a: any, b: any) => new Date(b.orderDate || b.createdAt) > new Date(a.orderDate || a.createdAt) ? b : a);
+          const days = Math.floor((now - new Date(lastOrder.orderDate || lastOrder.createdAt).getTime()) / 86400000);
+          return days >= 14;
+        }).map((c: any) => {
+          const orders = ordersByCompany[c.id] || [];
+          const last = orders.reduce((a: any, b: any) => new Date(b.orderDate || b.createdAt) > new Date(a.orderDate || a.createdAt) ? b : a);
+          const days = Math.floor((now - new Date(last.orderDate || last.createdAt).getTime()) / 86400000);
+          return { name: c.companyName, days };
+        }).sort((a, b) => b.days - a.days).slice(0, 8);
+
+        if (atRisk.length === 0) {
+          response = `✅ **Clientes em Risco**\n\nNenhum cliente inativo detectado nos últimos 14 dias. Todos os clientes ativos compraram recentemente! 🎉`;
+        } else {
+          const lines = atRisk.map(c => `• **${c.name}** — ${c.days} dias sem pedido`).join('\n');
+          response = `🔴 **Clientes em Risco (${atRisk.length})**\n\n${lines}\n\nAcesse **Menu → Inteligência Comercial** para análise completa e sugestões de ação.`;
+        }
+      } catch { response = '⚠️ Não foi possível analisar os clientes agora. Acesse **Menu → Inteligência Comercial**.'; }
+    }
+
+    else if (isInternal && /oportunidade|oportunidades de venda|produtos parado|produtos que pararam|produto não pedido|venda cruzada/.test(msg)) {
+      intent = 'commercial_opportunities';
+      response = `💡 **Oportunidades de Venda**\n\nAcesse **Menu → Inteligência Comercial** para ver:\n\n• Produtos que clientes pararam de pedir\n• Clientes com queda de volume\n• Sugestões de reposição\n\nO painel atualiza automaticamente com base no histórico de compras.`;
+    }
+
+    else if (isInternal && /prever faturamento|faturamento previsto|previsão de faturamento|previsao de faturamento|forecast|faturamento do mes/.test(msg)) {
+      intent = 'financial_forecast';
+      try {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const allOrders = await storage.getOrders();
+        const validOrders = allOrders.filter((o: any) => o.status !== 'CANCELLED');
+        const thisMonthOrders = validOrders.filter((o: any) => new Date(o.orderDate || o.createdAt) >= startOfMonth);
+        const thisMonthRevenue = thisMonthOrders.reduce((s: number, o: any) => s + parseFloat(o.totalValue || '0'), 0);
+        // Last 3 months avg
+        const last3 = [1, 2, 3].map(i => {
+          const mStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const mEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+          return validOrders.filter((o: any) => { const d = new Date(o.orderDate || o.createdAt); return d >= mStart && d <= mEnd; })
+            .reduce((s: number, o: any) => s + parseFloat(o.totalValue || '0'), 0);
+        });
+        const avg3 = last3.reduce((a, b) => a + b, 0) / 3;
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const forecast = thisMonthRevenue + (avg3 / daysInMonth) * (daysInMonth - now.getDate());
+        const growthPct = avg3 > 0 ? ((forecast - avg3) / avg3) * 100 : 0;
+
+        response = `💰 **Previsão de Faturamento**\n\n📅 Mês atual: **R$ ${thisMonthRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** (até hoje)\n📈 Previsão: **R$ ${forecast.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**\n📊 Média últimos 3 meses: R$ ${avg3.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n${growthPct > 0 ? `🟢 Tendência: +${growthPct.toFixed(1)}%` : `🔴 Tendência: ${growthPct.toFixed(1)}%`}\n\nAcesse **Menu → Inteligência Financeira** para análise completa.`;
+      } catch { response = '💰 Acesse **Menu → Inteligência Financeira** para ver previsão de faturamento e análises detalhadas.'; }
+    }
+
+    else if (isInternal && /faturamento por cliente|ranking de cliente|clientes mais rentáveis|clientes mais rentaveis|top clientes/.test(msg)) {
+      intent = 'financial_ranking';
+      try {
+        const allOrders = await storage.getOrders();
+        const allCompanies = await storage.getCompanies();
+        const validOrders = allOrders.filter((o: any) => o.status !== 'CANCELLED');
+        const byCompany: Record<number, { name: string; total: number }> = {};
+        for (const o of validOrders) {
+          if (!byCompany[o.companyId]) {
+            const c = allCompanies.find((c: any) => c.id === o.companyId);
+            byCompany[o.companyId] = { name: c?.companyName || `#${o.companyId}`, total: 0 };
+          }
+          byCompany[o.companyId].total += parseFloat(o.totalValue || '0');
+        }
+        const top = Object.values(byCompany).sort((a, b) => b.total - a.total).slice(0, 8);
+        const lines = top.map((c, i) => `${i + 1}. **${c.name}** — R$ ${c.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join('\n');
+        response = `🏆 **Top Clientes por Faturamento**\n\n${lines}\n\nAcesse **Menu → Inteligência Financeira** para histórico mensal e análise completa.`;
+      } catch { response = '🏆 Acesse **Menu → Inteligência Financeira** para ver o ranking de clientes.'; }
+    }
+
+    else if (isInternal && /analisar logística|analisar logistica|agenda de entrega|quantas entrega|capacidade de entrega|rotas disponíveis|rotas disponiveis|logística de amanhã|logistica de amanha/.test(msg)) {
+      intent = 'logistics_analysis';
+      try {
+        const allOrders = await storage.getOrders();
+        const routes = await storage.getRoutes();
+        const activeWindow = await storage.getActiveOrderWindow();
+        const activeOrders = allOrders.filter((o: any) => !['CANCELLED'].includes(o.status));
+        const withDelivery = activeOrders.filter((o: any) => o.deliveryDate);
+
+        // Group by delivery date
+        const byDay: Record<string, number> = {};
+        for (const o of withDelivery) {
+          const d = new Date(o.deliveryDate).toLocaleDateString('pt-BR');
+          byDay[d] = (byDay[d] || 0) + 1;
+        }
+        const sortedDays = Object.entries(byDay).sort((a, b) => b[1] - a[1]).slice(0, 5);
+        const dayLines = sortedDays.map(([d, c]) => `• ${d}: ${c} entrega(s)${c >= 5 ? ' ⚠️ sobrecarga' : ''}`).join('\n');
+
+        response = `🚚 **Análise Logística**\n\n• Rotas cadastradas: **${routes.length}**\n• Entregas agendadas: **${activeOrders.length}**\n• Semana atual: ${activeWindow?.weekReference || '—'}\n\n📅 Distribuição de entregas:\n${dayLines || '— Sem entregas agendadas'}\n\n${routes.filter((r: any) => !r.vehicleId || !r.driverId).length > 0 ? `⚠️ ${routes.filter((r: any) => !r.vehicleId || !r.driverId).length} rota(s) sem motorista ou veículo.\n\n` : ''}Acesse **Menu → Inteligência Logística** para análise completa.`;
+      } catch { response = '🚚 Acesse **Menu → Logística** para ver rotas, motoristas e agenda de entregas.'; }
+    }
+
+    else if (isInternal && /analisar eficiência|eficiencia do sistema|analisar sistema|auto otimização|auto otimizacao|gargalo|processos lentos/.test(msg)) {
+      intent = 'system_efficiency';
+      try {
+        const allOrders = await storage.getOrders();
+        const now = Date.now();
+        const recent = allOrders.filter((o: any) => now - new Date(o.orderDate || o.createdAt).getTime() < 7 * 86400000);
+        const pending = recent.filter((o: any) => ['PENDING', 'ACTIVE'].includes(o.status));
+        const confirmed = recent.filter((o: any) => o.status === 'CONFIRMED');
+        const cancelled = recent.filter((o: any) => o.status === 'CANCELLED');
+        const cancellationRate = recent.length > 0 ? ((cancelled.length / recent.length) * 100).toFixed(1) : '0';
+
+        response = `⚙️ **Eficiência Operacional (últimos 7 dias)**\n\n• Pedidos recebidos: **${recent.length}**\n• Confirmados: **${confirmed.length}**\n• Pendentes: **${pending.length}**\n• Cancelados: **${cancelled.length}** (${cancellationRate}%)\n\n${parseFloat(cancellationRate) > 15 ? '⚠️ Taxa de cancelamento elevada. Revisar processo de aprovação.' : '✅ Taxa de cancelamento dentro do esperado.'}\n${pending.length > 5 ? `⚠️ ${pending.length} pedido(s) pendente(s) de aprovação.` : ''}\n\nAcesse **Menu → IA Operacional** para alertas automáticos e análise completa.`;
+      } catch { response = '⚙️ Acesse **Menu → IA Operacional** para análise de eficiência do sistema.'; }
+    }
+
     else if (/ajuda|menu|opções|opcoes|o que (você|voce) (faz|pode)/.test(msg)) {
       intent = 'help';
       if (isInternal) {
         const extras = isAdmin ? '\n• "Criar empresa" — cadastrar nova empresa' : '';
-        response = `🤖 **O que posso fazer:**\n\n📦 Consultas:\n• "Pedidos hoje" / "pedidos pendentes"\n• "Empresas que não fizeram pedido"\n• "Empresas inativas"\n• "Status do sistema"\n• "Estoque"${extras}\n\n🌤️ Clima:\n• "Qual o clima em São Paulo?"\n\n💡 Dica: Você também pode acessar a **IA Operacional** no menu para alertas preditivos automáticos.`;
+        response = `🤖 **O que posso fazer:**\n\n📦 Consultas:\n• "Pedidos hoje" / "pedidos pendentes"\n• "Empresas que não fizeram pedido"\n\n📊 Inteligência:\n• "Analisar clientes" / "Clientes em risco"\n• "Prever faturamento" / "Ranking de clientes"\n• "Analisar logística" / "Agenda de entregas"\n• "Eficiência do sistema"\n\n📦 Operacional:\n• "Estoque baixo" / "Lista de compras"\n• "Criar tarefa"${extras}\n\n🌤️ Clima:\n• "Qual o clima em São Paulo?"`;
       } else {
         response = `🤖 **Posso ajudar com:**\n\n• "Meus pedidos" — ver status\n• "Previsão de entrega" — datas da janela\n• "Clima" — previsão do tempo\n• "Suporte" — contato com a equipe`;
       }
@@ -4300,7 +4421,7 @@ export async function registerRoutes(
     else {
       intent = 'unknown';
       if (isInternal) {
-        response = `Hmm, não entendi completamente 🤔 Sou a **Flora** e posso ajudar com:\n\n• **Pedidos**: "pedidos hoje", "pedidos pendentes"\n• **Empresas**: "empresas inativas", "quem não fez pedido"\n• **Estoque**: "estoque baixo", "lista de compras"\n• **Logística**: "rotas ativas", "janela de entrega empresa X"\n• **Tarefas**: "criar tarefa"\n• **Clima**: "clima em São Paulo"\n• **Sistema**: "status do sistema"${isAdmin ? '\n• **Criar**: "criar empresa"' : ''}\n\nTente reformular sua pergunta!`;
+        response = `Hmm, não entendi completamente 🤔 Sou a **Flora** e posso ajudar com:\n\n📦 **Pedidos**: "pedidos hoje", "pedidos pendentes"\n🏢 **Empresas**: "empresas inativas", "quem não fez pedido"\n📊 **Comercial**: "clientes em risco", "oportunidades de venda"\n💰 **Financeiro**: "prever faturamento", "ranking de clientes"\n🚚 **Logística**: "analisar logística", "agenda de entregas"\n📦 **Estoque**: "estoque baixo", "lista de compras"\n✅ **Tarefas**: "criar tarefa"\n🌤️ **Clima**: "clima em São Paulo"\n⚙️ **Sistema**: "status do sistema", "eficiência do sistema"${isAdmin ? '\n➕ **Criar**: "criar empresa"' : ''}\n\nTente reformular sua pergunta!`;
       } else {
         response = `Não entendi 🤔 Tente:\n• "meus pedidos"\n• "previsão de entrega"\n• "clima em São Paulo"\n• "suporte"`;
       }
@@ -4322,6 +4443,288 @@ export async function registerRoutes(
     } catch { /* ignore history save errors */ }
 
     res.json({ response, intent, sessionContext: newContext || null });
+  });
+
+  // ─── Commercial Intelligence ─────────────────────────────────────────────
+  app.get('/api/commercial-intelligence', async (req: any, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) {
+        return res.status(403).json({ message: 'Sem permissão' });
+      }
+      const now = Date.now();
+      const allOrders = await storage.getOrders();
+      const allCompanies = await storage.getCompanies();
+      const activeCompanies = allCompanies.filter((c: any) => c.active);
+
+      // Group orders by company
+      const ordersByCompany: Record<number, any[]> = {};
+      for (const o of allOrders) {
+        if (!ordersByCompany[o.companyId]) ordersByCompany[o.companyId] = [];
+        ordersByCompany[o.companyId].push(o);
+      }
+
+      // Build product order history per company (for dropped products)
+      const productHistoryByCompany: Record<number, Record<number, { productName: string; lastOrdered: number; totalOrders: number }>> = {};
+      for (const o of allOrders.filter((o: any) => o.status !== 'CANCELLED')) {
+        const orderDate = new Date(o.orderDate || o.createdAt).getTime();
+        if (!productHistoryByCompany[o.companyId]) productHistoryByCompany[o.companyId] = {};
+        try {
+          const { items } = await storage.getOrder(o.id) || { items: [] };
+          for (const item of items) {
+            if (!productHistoryByCompany[o.companyId][item.productId]) {
+              productHistoryByCompany[o.companyId][item.productId] = { productName: (item as any).productName || `Produto #${item.productId}`, lastOrdered: 0, totalOrders: 0 };
+            }
+            if (orderDate > productHistoryByCompany[o.companyId][item.productId].lastOrdered) {
+              productHistoryByCompany[o.companyId][item.productId].lastOrdered = orderDate;
+            }
+            productHistoryByCompany[o.companyId][item.productId].totalOrders++;
+          }
+        } catch { /* skip */ }
+      }
+
+      const atRisk: any[] = [];
+      const opportunities: any[] = [];
+
+      for (const company of activeCompanies) {
+        const compOrders = (ordersByCompany[company.id] || []).filter((o: any) => o.status !== 'CANCELLED');
+        if (compOrders.length === 0) continue; // never ordered — skip (they're just inactive)
+
+        // Sort orders by date
+        const sorted = compOrders.sort((a: any, b: any) => new Date(b.orderDate || b.createdAt).getTime() - new Date(a.orderDate || a.createdAt).getTime());
+        const lastOrderDate = new Date(sorted[0].orderDate || sorted[0].createdAt);
+        const daysSinceLastOrder = Math.floor((now - lastOrderDate.getTime()) / 86400000);
+
+        // Calculate average weekly order value from all historical orders
+        const totalValue = compOrders.reduce((s: number, o: any) => s + parseFloat(o.totalValue || '0'), 0);
+        const avgOrderValue = totalValue / compOrders.length;
+
+        // Find recent orders (last 14 days)
+        const recentOrders = compOrders.filter((o: any) => now - new Date(o.orderDate || o.createdAt).getTime() < 14 * 86400000);
+        const recentValue = recentOrders.reduce((s: number, o: any) => s + parseFloat(o.totalValue || '0'), 0);
+
+        // Older orders (14–28 days ago)
+        const olderOrders = compOrders.filter((o: any) => {
+          const age = now - new Date(o.orderDate || o.createdAt).getTime();
+          return age >= 14 * 86400000 && age < 28 * 86400000;
+        });
+        const olderValue = olderOrders.reduce((s: number, o: any) => s + parseFloat(o.totalValue || '0'), 0);
+
+        // Client at risk: no orders in 14+ days (but had orders in the 28 days before that)
+        if (daysSinceLastOrder >= 14 && olderOrders.length > 0) {
+          let riskLevel: 'high' | 'medium' | 'low' = 'medium';
+          if (daysSinceLastOrder >= 30) riskLevel = 'high';
+          else if (daysSinceLastOrder >= 14) riskLevel = 'medium';
+
+          atRisk.push({
+            companyId: company.id,
+            companyName: company.companyName,
+            daysSinceLastOrder,
+            lastOrderDate: lastOrderDate.toISOString(),
+            avgOrderValue: parseFloat(avgOrderValue.toFixed(2)),
+            totalOrders: compOrders.length,
+            riskLevel,
+          });
+        }
+
+        // Significant drop alert: recent value < 50% of older value
+        if (olderValue > 0 && recentValue < olderValue * 0.5 && recentOrders.length > 0) {
+          const dropPct = Math.round((1 - recentValue / olderValue) * 100);
+          opportunities.push({
+            type: 'volume_drop',
+            companyId: company.id,
+            companyName: company.companyName,
+            dropPercent: dropPct,
+            recentValue: parseFloat(recentValue.toFixed(2)),
+            previousValue: parseFloat(olderValue.toFixed(2)),
+            description: `Queda de ${dropPct}% no volume de compras em relação às 2 semanas anteriores.`,
+            suggestion: 'Entrar em contato para verificar necessidade de reposição.',
+          });
+        }
+
+        // Dropped products: products ordered before but not in the last 14 days
+        const prodHistory = productHistoryByCompany[company.id] || {};
+        for (const [, prod] of Object.entries(prodHistory)) {
+          const daysSinceProduct = Math.floor((now - prod.lastOrdered) / 86400000);
+          if (daysSinceProduct >= 14 && prod.totalOrders >= 2) {
+            opportunities.push({
+              type: 'dropped_product',
+              companyId: company.id,
+              companyName: company.companyName,
+              productName: prod.productName,
+              daysSinceProduct,
+              totalOrders: prod.totalOrders,
+              description: `${company.companyName} não pediu **${prod.productName}** há ${daysSinceProduct} dias.`,
+              suggestion: `Oferecer ${prod.productName} para reposição.`,
+            });
+          }
+        }
+      }
+
+      // Sort at risk by days descending
+      atRisk.sort((a, b) => b.daysSinceLastOrder - a.daysSinceLastOrder);
+
+      res.json({ atRisk, opportunities: opportunities.slice(0, 30), generatedAt: new Date().toISOString() });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Financial Intelligence ───────────────────────────────────────────────
+  app.get('/api/financial-intelligence', async (req: any, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'FINANCEIRO'].includes(user.role)) {
+        return res.status(403).json({ message: 'Sem permissão' });
+      }
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+      const allOrders = await storage.getOrders();
+      const allCompanies = await storage.getCompanies();
+      const confirmedStatuses = ['CONFIRMED', 'ACTIVE'];
+
+      const validOrders = allOrders.filter((o: any) => o.status !== 'CANCELLED');
+      const thisMonthOrders = validOrders.filter((o: any) => new Date(o.orderDate || o.createdAt) >= startOfMonth);
+      const lastMonthOrders = validOrders.filter((o: any) => {
+        const d = new Date(o.orderDate || o.createdAt);
+        return d >= startOfLastMonth && d <= endOfLastMonth;
+      });
+
+      const thisMonthRevenue = thisMonthOrders.reduce((s: number, o: any) => s + parseFloat(o.totalValue || '0'), 0);
+      const lastMonthRevenue = lastMonthOrders.reduce((s: number, o: any) => s + parseFloat(o.totalValue || '0'), 0);
+      const monthGrowth = lastMonthRevenue > 0 ? ((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
+
+      // Revenue by company
+      const revenueByCompany: Record<number, { companyName: string; total: number; orderCount: number }> = {};
+      for (const o of validOrders) {
+        if (!revenueByCompany[o.companyId]) {
+          const comp = allCompanies.find((c: any) => c.id === o.companyId);
+          revenueByCompany[o.companyId] = { companyName: comp?.companyName || `#${o.companyId}`, total: 0, orderCount: 0 };
+        }
+        revenueByCompany[o.companyId].total += parseFloat(o.totalValue || '0');
+        revenueByCompany[o.companyId].orderCount++;
+      }
+
+      const topClients = Object.entries(revenueByCompany)
+        .map(([id, v]) => ({ companyId: Number(id), ...v, avgOrder: v.total / v.orderCount }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10)
+        .map(c => ({ ...c, total: parseFloat(c.total.toFixed(2)), avgOrder: parseFloat(c.avgOrder.toFixed(2)) }));
+
+      // Historical monthly revenue (last 6 months)
+      const monthlyRevenue: { month: string; revenue: number }[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const mStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const mEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+        const mOrders = validOrders.filter((o: any) => {
+          const d = new Date(o.orderDate || o.createdAt);
+          return d >= mStart && d <= mEnd;
+        });
+        const mRevenue = mOrders.reduce((s: number, o: any) => s + parseFloat(o.totalValue || '0'), 0);
+        monthlyRevenue.push({
+          month: mStart.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+          revenue: parseFloat(mRevenue.toFixed(2)),
+        });
+      }
+
+      // Forecast: average of last 3 months * remaining days ratio
+      const last3Avg = monthlyRevenue.slice(-3).reduce((s, m) => s + m.revenue, 0) / 3;
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const dayOfMonth = now.getDate();
+      const forecast = parseFloat((thisMonthRevenue + (last3Avg / daysInMonth) * (daysInMonth - dayOfMonth)).toFixed(2));
+
+      const avgLast3Months = parseFloat(last3Avg.toFixed(2));
+      const revenueAlert = avgLast3Months > 0 && thisMonthRevenue < avgLast3Months * 0.8;
+
+      res.json({
+        thisMonthRevenue: parseFloat(thisMonthRevenue.toFixed(2)),
+        lastMonthRevenue: parseFloat(lastMonthRevenue.toFixed(2)),
+        monthGrowth: parseFloat(monthGrowth.toFixed(1)),
+        forecastRevenue: forecast,
+        avgLast3Months,
+        revenueAlert,
+        topClients,
+        monthlyRevenue,
+        thisMonthOrderCount: thisMonthOrders.length,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── Logistics Intelligence ───────────────────────────────────────────────
+  app.get('/api/logistics-intelligence', async (req: any, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'].includes(user.role)) {
+        return res.status(403).json({ message: 'Sem permissão' });
+      }
+      const now = new Date();
+      const allOrders = await storage.getOrders();
+      const routes = await storage.getRoutes();
+      const activeWindow = await storage.getActiveOrderWindow();
+
+      // Delivery schedule: group active orders by delivery date
+      const activeOrders = allOrders.filter((o: any) => !['CANCELLED'].includes(o.status));
+      const deliverySchedule: Record<string, { date: string; count: number; totalValue: number; companies: string[] }> = {};
+      const allCompanies = await storage.getCompanies();
+
+      for (const o of activeOrders) {
+        if (!o.deliveryDate) continue;
+        const dateKey = new Date(o.deliveryDate).toLocaleDateString('pt-BR');
+        if (!deliverySchedule[dateKey]) {
+          deliverySchedule[dateKey] = { date: dateKey, count: 0, totalValue: 0, companies: [] };
+        }
+        deliverySchedule[dateKey].count++;
+        deliverySchedule[dateKey].totalValue += parseFloat(o.totalValue || '0');
+        const comp = allCompanies.find((c: any) => c.id === o.companyId);
+        if (comp && !deliverySchedule[dateKey].companies.includes(comp.companyName)) {
+          deliverySchedule[dateKey].companies.push(comp.companyName);
+        }
+      }
+
+      const scheduleArray = Object.values(deliverySchedule).sort((a, b) => {
+        const [da, ma, ya] = a.date.split('/').map(Number);
+        const [db, mb, yb] = b.date.split('/').map(Number);
+        return new Date(ya, ma - 1, da).getTime() - new Date(yb, mb - 1, db).getTime();
+      }).map(d => ({ ...d, totalValue: parseFloat(d.totalValue.toFixed(2)) }));
+
+      // Overload threshold: > 5 deliveries on same day
+      const overloadThreshold = 5;
+      const overloadedDays = scheduleArray.filter(d => d.count >= overloadThreshold);
+
+      // Busiest day
+      const busiestDay = scheduleArray.length > 0 ? scheduleArray.reduce((a, b) => b.count > a.count ? b : a) : null;
+
+      // Route capacity (simplified: order count per route based on route assignment)
+      const routeCapacity = routes.map((r: any) => ({
+        routeId: r.id,
+        routeName: r.name,
+        status: r.status || 'active',
+        assignedCompanies: r.assignedCompanies || [],
+        hasVehicle: !!r.vehicleId,
+        hasDriver: !!r.driverId,
+      }));
+
+      const activeRoute = routes.filter((r: any) => r.status !== 'inactive');
+      const unassignedRoutes = routes.filter((r: any) => !r.vehicleId || !r.driverId);
+
+      res.json({
+        activeRoutes: activeRoute.length,
+        totalRoutes: routes.length,
+        unassignedRoutes: unassignedRoutes.length,
+        deliverySchedule: scheduleArray,
+        overloadedDays,
+        busiestDay,
+        routeCapacity,
+        activeWindow: activeWindow ? { weekReference: activeWindow.weekReference } : null,
+        totalActiveDeliveries: activeOrders.length,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   // ─── Flora Training Routes ────────────────────────────────────────────────
