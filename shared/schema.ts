@@ -12,6 +12,10 @@ export const users = pgTable("users", {
   tabPermissions: jsonb("tab_permissions"), // string[] | null — null means no restriction (use role defaults)
   testMode: boolean("test_mode").default(false).notNull(),
   permissions: jsonb("permissions"), // { verPedidos, criarPedidos, editarPedidos, excluirPedidos, verCompras, criarCompras, verFinanceiro, editarFinanceiro, gerarNotaFiscal, exportarBling, editarClientes, excluirClientes, acessarInventario, editarInventario, verRelatorios } | null
+  // Security
+  loginAttempts: integer("login_attempts").default(0).notNull(),
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lastLoginAttempt: timestamp("last_login_attempt"),
 });
 
 export const priceGroups = pgTable("price_groups", {
@@ -71,6 +75,10 @@ export const companies = pgTable("companies", {
   contractStartDate: date("contract_start_date"), // Data de início do contrato
   contractEndDate: date("contract_end_date"), // Data de fim (só para prazo_determinado)
   contractVigencia: text("contract_vigencia"), // 'prazo_indefinido' | 'prazo_determinado'
+  // Security
+  loginAttempts: integer("login_attempts").default(0).notNull(),
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lastLoginAttempt: timestamp("last_login_attempt"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

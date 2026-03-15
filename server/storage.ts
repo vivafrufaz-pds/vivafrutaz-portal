@@ -31,7 +31,7 @@ import {
   type PushSubscription, type InsertPushSubscription,
   type NotificationSetting, type InsertNotificationSetting
 } from "@shared/schema";
-import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, lte, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Auth & Users
@@ -154,6 +154,7 @@ export interface IStorage {
   // System Logs
   createLog(log: { action: string; description: string; userId?: number; companyId?: number; userEmail?: string; userRole?: string; ip?: string; level?: string }): Promise<void>;
   getLogs(limit?: number): Promise<SystemLog[]>;
+  getSecurityLogs(limit?: number): Promise<SystemLog[]>;
   clearLogs(): Promise<void>;
   deleteLogsByIds(ids: number[]): Promise<number>;
   deleteLogsByDateRange(start: Date, end: Date): Promise<number>;
@@ -771,6 +772,14 @@ export class DatabaseStorage implements IStorage {
 
   async getLogs(limit = 200): Promise<SystemLog[]> {
     return db.select().from(systemLogs).orderBy(desc(systemLogs.createdAt)).limit(limit);
+  }
+
+  async getSecurityLogs(limit = 300): Promise<SystemLog[]> {
+    const securityActions = ['LOGIN_FAILED', 'ACCOUNT_LOCKED', 'ACCOUNT_UNLOCKED', 'LOGIN', 'LOGIN_BLOCKED', 'FRONTEND_RUNTIME_ERROR'];
+    return db.select().from(systemLogs)
+      .where(inArray(systemLogs.action, securityActions))
+      .orderBy(desc(systemLogs.createdAt))
+      .limit(limit);
   }
 
   // ─── Tarefas ──────────────────────────────────────────────────

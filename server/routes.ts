@@ -1050,19 +1050,51 @@ export async function registerRoutes(
   app.post(api.auth.login.path, async (req, res) => {
     try {
       const input = api.auth.login.input.parse(req.body);
-      
       const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || '';
       const normalizedEmail = input.email.toLowerCase().trim();
+      const MAX_ATTEMPTS = 3;
+
+      // ── Helper: notify admins about account lockout ──────────────
+      async function notifyAdminsLockout(target: string, targetType: string, attemptsIp: string) {
+        try {
+          const allUsers = await storage.getUsers();
+          const admins = allUsers.filter(u => ['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(u.role) && u.active);
+          for (const admin of admins) {
+            await storage.createLog({
+              action: 'ACCOUNT_LOCKED',
+              description: `[ALERTA SEGURANÇA] Conta ${targetType} bloqueada automaticamente após ${MAX_ATTEMPTS} tentativas erradas. Conta: ${target} | IP: ${attemptsIp}`,
+              userEmail: target, level: 'ERROR', ip: attemptsIp,
+            });
+          }
+        } catch {}
+      }
+
       if (input.type === 'admin') {
         const user = await storage.getUserByEmail(normalizedEmail);
-        if (!user || user.password !== input.password) {
-          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login falhou: ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
+        if (!user) {
+          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login falhou (usuário não encontrado): ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
           return res.status(401).json({ message: "Usuário ou senha incorretos." });
         }
-        if (user.active === false) {
+        // Check account lock
+        if (user.isLocked) {
+          await storage.createLog({ action: 'LOGIN_BLOCKED', description: `Tentativa de acesso a conta bloqueada: ${normalizedEmail}`, userId: user.id, userEmail: normalizedEmail, level: 'ERROR', ip });
+          return res.status(423).json({ message: "Conta temporariamente bloqueada por segurança.\nEntre em contato com o administrador." });
+        }
+        if (!user.active) {
           await storage.createLog({ action: 'LOGIN_BLOCKED', description: `Login bloqueado (usuário inativo): ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
           return res.status(401).json({ message: "Usuário inativo. Entre em contato com o administrador." });
         }
+        if (user.password !== input.password) {
+          const newAttempts = (user.loginAttempts || 0) + 1;
+          const willLock = newAttempts >= MAX_ATTEMPTS;
+          await storage.updateUser(user.id, { loginAttempts: newAttempts, lastLoginAttempt: new Date(), ...(willLock ? { isLocked: true } : {}) });
+          await storage.createLog({ action: 'LOGIN_FAILED', description: `Senha incorreta para usuário interno: ${normalizedEmail} — tentativa ${newAttempts}/${MAX_ATTEMPTS}${willLock ? ' — CONTA BLOQUEADA' : ''}`, userId: user.id, userEmail: normalizedEmail, level: 'WARN', ip });
+          if (willLock) await notifyAdminsLockout(normalizedEmail, 'usuário interno', ip);
+          if (willLock) return res.status(423).json({ message: "Conta temporariamente bloqueada por segurança.\nEntre em contato com o administrador." });
+          return res.status(401).json({ message: `Usuário ou senha incorretos. (${newAttempts}/${MAX_ATTEMPTS} tentativas)` });
+        }
+        // Successful login — reset attempts
+        await storage.updateUser(user.id, { loginAttempts: 0, lastLoginAttempt: new Date() });
         (req.session as any).userId = user.id;
         (req.session as any).userType = 'admin';
         await storage.createLog({ action: 'LOGIN', description: `Login realizado: ${user.name} (${user.role})`, userId: user.id, userEmail: user.email, userRole: user.role, ip });
@@ -1078,14 +1110,26 @@ export async function registerRoutes(
           await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login cliente falhou (usuário não encontrado): ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
           return res.status(401).json({ message: "Usuário não encontrado. Verifique o usuário e tente novamente." });
         }
-        if (company.password !== input.password) {
-          await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login cliente falhou (senha incorreta): ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
-          return res.status(401).json({ message: "Usuário ou senha incorretos." });
+        // Check company account lock
+        if ((company as any).isLocked) {
+          await storage.createLog({ action: 'LOGIN_BLOCKED', description: `Tentativa de acesso a empresa bloqueada: ${normalizedEmail}`, companyId: company.id, userEmail: normalizedEmail, level: 'ERROR', ip });
+          return res.status(423).json({ message: "Conta temporariamente bloqueada por segurança.\nEntre em contato com o administrador." });
         }
         if (!company.active) {
           await storage.createLog({ action: 'LOGIN_BLOCKED', description: `Login cliente bloqueado (conta inativa): ${normalizedEmail}`, companyId: company.id, userEmail: company.email, level: 'WARN', ip });
           return res.status(401).json({ message: "Conta desativada. Entre em contato com a equipe VivaFrutaz para reativar seu acesso." });
         }
+        if (company.password !== input.password) {
+          const newAttempts = ((company as any).loginAttempts || 0) + 1;
+          const willLock = newAttempts >= MAX_ATTEMPTS;
+          await storage.updateCompany(company.id, { loginAttempts: newAttempts, lastLoginAttempt: new Date(), ...(willLock ? { isLocked: true } : {}) } as any);
+          await storage.createLog({ action: 'LOGIN_FAILED', description: `Senha incorreta para empresa: ${normalizedEmail} — tentativa ${newAttempts}/${MAX_ATTEMPTS}${willLock ? ' — CONTA BLOQUEADA' : ''}`, companyId: company.id, userEmail: normalizedEmail, level: 'WARN', ip });
+          if (willLock) await notifyAdminsLockout(normalizedEmail, 'empresa cliente', ip);
+          if (willLock) return res.status(423).json({ message: "Conta temporariamente bloqueada por segurança.\nEntre em contato com o administrador." });
+          return res.status(401).json({ message: `Usuário ou senha incorretos. (${newAttempts}/${MAX_ATTEMPTS} tentativas)` });
+        }
+        // Successful login — reset attempts
+        await storage.updateCompany(company.id, { loginAttempts: 0, lastLoginAttempt: new Date() } as any);
         (req.session as any).companyId = company.id;
         (req.session as any).userType = 'company';
         await storage.createLog({ action: 'LOGIN', description: `Login cliente: ${company.companyName}`, companyId: company.id, userEmail: company.email, userRole: 'CLIENT', ip });
@@ -1116,6 +1160,72 @@ export async function registerRoutes(
     req.session.destroy((err) => {
       res.json({ message: "Logged out successfully" });
     });
+  });
+
+  // ─── Security: Unlock user account ────────────────────────────
+  app.post('/api/admin/users/:id/unlock', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const actor = await storage.getUser(req.session.userId);
+    if (!actor || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão para desbloquear contas.' });
+    try {
+      const id = Number(req.params.id);
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: 'Usuário não encontrado.' });
+      await storage.updateUser(id, { isLocked: false, loginAttempts: 0 });
+      const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || '';
+      await storage.createLog({ action: 'ACCOUNT_UNLOCKED', description: `Conta desbloqueada por ${actor.name} (${actor.role}): ${target.email}`, userId: actor.id, userEmail: target.email, userRole: actor.role, level: 'INFO', ip });
+      return res.json({ message: `Conta de ${target.name} desbloqueada com sucesso.` });
+    } catch (err) {
+      res.status(500).json({ message: 'Erro ao desbloquear conta.' });
+    }
+  });
+
+  // ─── Security: Unlock company account ─────────────────────────
+  app.post('/api/admin/companies/:id/unlock', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const actor = await storage.getUser(req.session.userId);
+    if (!actor || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão para desbloquear contas.' });
+    try {
+      const id = Number(req.params.id);
+      const target = await storage.getCompany(id);
+      if (!target) return res.status(404).json({ message: 'Empresa não encontrada.' });
+      await storage.updateCompany(id, { isLocked: false, loginAttempts: 0 } as any);
+      const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || '';
+      await storage.createLog({ action: 'ACCOUNT_UNLOCKED', description: `Empresa desbloqueada por ${actor.name} (${actor.role}): ${target.companyName} (${target.email})`, userId: actor.id, companyId: id, userEmail: target.email, userRole: actor.role, level: 'INFO', ip });
+      return res.json({ message: `Conta da empresa ${target.companyName} desbloqueada com sucesso.` });
+    } catch (err) {
+      res.status(500).json({ message: 'Erro ao desbloquear empresa.' });
+    }
+  });
+
+  // ─── Security Logs ────────────────────────────────────────────
+  app.get('/api/security-logs', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const actor = await storage.getUser(req.session.userId);
+    if (!actor || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão.' });
+    try {
+      const limit = Math.min(Number(req.query.limit) || 200, 500);
+      const logs = await storage.getSecurityLogs(limit);
+      res.json(logs);
+    } catch {
+      res.status(500).json({ message: 'Erro ao buscar logs de segurança.' });
+    }
+  });
+
+  // ─── Locked accounts summary ──────────────────────────────────
+  app.get('/api/security/locked-accounts', async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
+    const actor = await storage.getUser(req.session.userId);
+    if (!actor || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão.' });
+    try {
+      const allUsers = await storage.getUsers();
+      const allCompanies = await storage.getCompanies();
+      const lockedUsers = allUsers.filter(u => u.isLocked).map(u => ({ id: u.id, type: 'user', name: u.name, email: u.email, role: u.role, loginAttempts: u.loginAttempts, lastLoginAttempt: u.lastLoginAttempt }));
+      const lockedCompanies = allCompanies.filter(c => (c as any).isLocked).map(c => ({ id: c.id, type: 'company', name: c.companyName, email: c.email, role: 'CLIENT', loginAttempts: (c as any).loginAttempts, lastLoginAttempt: (c as any).lastLoginAttempt }));
+      res.json([...lockedUsers, ...lockedCompanies]);
+    } catch {
+      res.status(500).json({ message: 'Erro ao buscar contas bloqueadas.' });
+    }
   });
 
   // Forgot Password — Client submits a request

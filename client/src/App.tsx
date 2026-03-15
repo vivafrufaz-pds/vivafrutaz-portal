@@ -40,6 +40,7 @@ import AdminBackups from "@/pages/admin/backups";
 import AdminDeveloper from "@/pages/admin/developer";
 import AdminSupportConfig from "@/pages/admin/support-config";
 import AdminAnnouncements from "@/pages/admin/announcements";
+import AdminSystemHealth from "@/pages/admin/system-health";
 
 import AdminTasks from "@/pages/admin/tasks";
 import AdminClientIncidents from "@/pages/admin/client-incidents";
@@ -247,6 +248,9 @@ function Router() {
       </Route>
       <Route path="/admin/backups">
         {() => <ProtectedRoute component={AdminBackups} role="admin" allowedRoles={['ADMIN', 'DEVELOPER', 'DIRECTOR']} tabKey="backups" />}
+      </Route>
+      <Route path="/admin/system-health">
+        {() => <ProtectedRoute component={AdminSystemHealth} role="admin" allowedRoles={['ADMIN', 'DEVELOPER', 'DIRECTOR']} tabKey="system-health" />}
       </Route>
       <Route path="/admin/developer">
         {() => <ProtectedRoute component={AdminDeveloper} role="admin" allowedRoles={['DEVELOPER', 'ADMIN', 'DIRECTOR']} tabKey="developer" />}

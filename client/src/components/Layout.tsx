@@ -7,7 +7,7 @@ import {
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
   ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain, GraduationCap, DollarSign, Route, Menu, X, Bell, BookOpen,
-  Search, ScrollText
+  Search, ScrollText, Activity
 } from 'lucide-react';
 
 import { VirtualAssistant } from './VirtualAssistant';
@@ -103,6 +103,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/logistics-intelligence', label: 'Inteligência Logística', icon: Route, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'], tabKey: 'logistics-intelligence', category: 'Inteligência' },
     { href: '/admin/flora-training', label: 'Treinar Flora', icon: GraduationCap, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'flora-training', category: 'Inteligência' },
     { href: '/admin/users', label: 'Usuários do Sistema', icon: UserCog, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'users', category: 'Sistema' },
+    { href: '/admin/system-health', label: 'Saúde do Sistema', icon: Activity, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'system-health', category: 'Sistema' },
     { href: '/admin/backups', label: 'Backup & E-mails', icon: HardDrive, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'backups', category: 'Sistema' },
     { href: '/admin/email-management', label: 'Central de E-mails', icon: Mail, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'], tabKey: 'email-management', category: 'Sistema' },
     { href: '/admin/smtp-config', label: 'Configuração SMTP', icon: Settings, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'smtp-config', category: 'Sistema' },
