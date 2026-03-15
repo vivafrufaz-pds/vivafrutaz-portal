@@ -908,6 +908,11 @@ export async function registerRoutes(
         await storage.createLog({ action: 'LOGIN', description: `Login realizado: ${user.name} (${user.role})`, userId: user.id, userEmail: user.email, userRole: user.role, ip });
         return res.json({ user });
       } else {
+        // Check maintenance mode — block client logins (admin/staff login is never blocked)
+        const maintenanceModeLogin = await storage.getSetting('maintenance_mode');
+        if (maintenanceModeLogin === 'true') {
+          return res.status(503).json({ message: 'MAINTENANCE_MODE' });
+        }
         const company = await storage.getCompanyByEmail(normalizedEmail);
         if (!company) {
           await storage.createLog({ action: 'LOGIN_FAILED', description: `Tentativa de login cliente falhou (usuário não encontrado): ${normalizedEmail}`, userEmail: normalizedEmail, level: 'WARN', ip });
@@ -1647,10 +1652,10 @@ export async function registerRoutes(
         return res.status(503).json({ message: 'Sistema em manutenção. Pedidos temporariamente desabilitados.' });
       }
 
-      // Check if user has SISTEMA_TESTE role — always route to test_orders
+      // Check if user has SISTEMA_TESTE role OR per-user testMode flag — always route to test_orders
       if (req.session?.userId) {
         const actingUser = await storage.getUser(req.session.userId);
-        if (actingUser?.role === 'SISTEMA_TESTE') {
+        if (actingUser?.role === 'SISTEMA_TESTE' || actingUser?.testMode === true) {
           const company = await storage.getCompany(order.companyId);
           const year = new Date().getFullYear();
           const testCode = `TESTE-${year}-${String(Date.now()).slice(-6)}`;
@@ -1911,6 +1916,79 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Update order error:", err);
       res.status(400).json({ message: "Bad request" });
+    }
+  });
+
+  // ─── ORDER DELETION (Admin/Director/Developer only) ────────────────────────
+
+  // Bulk delete orders
+  app.delete('/api/orders/bulk', async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId;
+      if (!userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(userId);
+      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) {
+        return res.status(403).json({ message: 'Sem permissão para excluir pedidos' });
+      }
+      const { orderIds, motivo, confirmar } = req.body;
+      if (!Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({ message: 'Nenhum pedido selecionado' });
+      }
+      // Check for fiscally processed orders requiring double confirmation
+      const orderResults = await Promise.all(orderIds.map((id: number) => storage.getOrder(Number(id))));
+      const fiscalOrders = orderResults.filter(r => r && ['nota_emitida', 'nota_exportada'].includes(r.order.fiscalStatus || ''));
+      if (fiscalOrders.length > 0 && !confirmar) {
+        return res.status(409).json({
+          message: 'Confirmação necessária',
+          requiresConfirmation: true,
+          billedCount: fiscalOrders.length,
+          billedCodes: fiscalOrders.map(r => r!.order.orderCode || String(r!.order.id)),
+        });
+      }
+      await storage.createLog({
+        action: 'BULK_ORDER_DELETE',
+        description: `${orderIds.length} pedido(s) excluído(s) em lote por ${user.name} (${user.role}). Motivo: ${motivo || 'Não informado'}`,
+        userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN',
+      });
+      for (const id of orderIds) await storage.deleteOrder(Number(id));
+      res.json({ success: true, deleted: orderIds.length });
+    } catch (err) {
+      console.error('[DELETE /api/orders/bulk]', err);
+      res.status(500).json({ message: 'Erro ao excluir pedidos' });
+    }
+  });
+
+  // Delete single order
+  app.delete('/api/orders/:id', async (req, res) => {
+    try {
+      const userId = (req.session as any)?.userId;
+      if (!userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(userId);
+      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) {
+        return res.status(403).json({ message: 'Sem permissão para excluir pedidos' });
+      }
+      const id = Number(req.params.id);
+      const { motivo, confirmar } = req.body;
+      const data = await storage.getOrder(id);
+      if (!data) return res.status(404).json({ message: 'Pedido não encontrado' });
+      const isFiscal = ['nota_emitida', 'nota_exportada'].includes(data.order.fiscalStatus || '');
+      if (isFiscal && !confirmar) {
+        return res.status(409).json({
+          message: 'Confirmação necessária',
+          requiresConfirmation: true,
+          orderCode: data.order.orderCode || String(id),
+        });
+      }
+      await storage.createLog({
+        action: 'ORDER_DELETED',
+        description: `Pedido #${data.order.orderCode || id} excluído por ${user.name} (${user.role}). Motivo: ${motivo || 'Não informado'}`,
+        userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN',
+      });
+      await storage.deleteOrder(id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[DELETE /api/orders/:id]', err);
+      res.status(500).json({ message: 'Erro ao excluir pedido' });
     }
   });
 

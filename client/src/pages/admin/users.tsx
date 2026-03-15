@@ -4,9 +4,38 @@ import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code, Crown, BarChart3, KeyRound, AlertTriangle, Lock, Unlock, FlaskConical } from "lucide-react";
+import { UserCircle, Plus, Pencil, Trash2, Shield, ShieldCheck, DollarSign, Code, Crown, BarChart3, KeyRound, AlertTriangle, Lock, Unlock, FlaskConical, ChevronDown, ChevronRight } from "lucide-react";
 
-type AdminUser = { id: number; name: string; email: string; password: string; role: string; active: boolean; tabPermissions: string[] | null; };
+type AdminUser = {
+  id: number; name: string; email: string; password: string; role: string; active: boolean;
+  tabPermissions: string[] | null;
+  testMode: boolean;
+  permissions: Record<string, boolean> | null;
+};
+
+const PERMISSIONS_CONFIG: { key: string; label: string; group: string; defaultOn: boolean }[] = [
+  { key: 'verPedidos', label: 'Ver Pedidos', group: 'Pedidos', defaultOn: true },
+  { key: 'criarPedidos', label: 'Criar Pedidos', group: 'Pedidos', defaultOn: true },
+  { key: 'editarPedidos', label: 'Editar Pedidos', group: 'Pedidos', defaultOn: true },
+  { key: 'excluirPedidos', label: 'Excluir Pedidos', group: 'Pedidos', defaultOn: false },
+  { key: 'verCompras', label: 'Ver Compras', group: 'Compras', defaultOn: true },
+  { key: 'criarCompras', label: 'Criar Compras', group: 'Compras', defaultOn: false },
+  { key: 'acessarInventario', label: 'Acessar Inventário', group: 'Compras', defaultOn: true },
+  { key: 'editarInventario', label: 'Editar Inventário', group: 'Compras', defaultOn: false },
+  { key: 'verFinanceiro', label: 'Ver Financeiro', group: 'Financeiro', defaultOn: true },
+  { key: 'editarFinanceiro', label: 'Editar Financeiro', group: 'Financeiro', defaultOn: false },
+  { key: 'gerarNotaFiscal', label: 'Gerar Nota Fiscal', group: 'Financeiro', defaultOn: true },
+  { key: 'exportarBling', label: 'Exportar para Bling', group: 'Financeiro', defaultOn: true },
+  { key: 'editarClientes', label: 'Editar Clientes', group: 'Clientes', defaultOn: true },
+  { key: 'excluirClientes', label: 'Excluir Clientes', group: 'Clientes', defaultOn: false },
+  { key: 'verRelatorios', label: 'Ver Relatórios', group: 'Relatórios', defaultOn: true },
+];
+
+const PERMISSIONS_GROUPS = ['Pedidos', 'Compras', 'Financeiro', 'Clientes', 'Relatórios'];
+
+const DEFAULT_PERMS: Record<string, boolean> = Object.fromEntries(
+  PERMISSIONS_CONFIG.map(p => [p.key, p.defaultOn])
+);
 
 // All system tabs with labels and role access
 const ALL_TABS: { key: string; label: string; roles: string[] }[] = [
@@ -51,7 +80,92 @@ const ROLES = [
 const PRIVILEGED_ROLES = ['ADMIN', 'DIRECTOR', 'DEVELOPER'];
 const TEMP_PASSWORD = "Viva2026@";
 
-const blank = { name: "", email: "", password: "", role: "ADMIN", active: true, tabPermissions: null as string[] | null };
+const blank = {
+  name: "", email: "", password: "", role: "ADMIN", active: true,
+  tabPermissions: null as string[] | null,
+  testMode: false,
+  permissions: null as Record<string, boolean> | null,
+};
+
+function AdvancedPermissionsSection({
+  permissions,
+  onChange,
+}: {
+  permissions: Record<string, boolean> | null;
+  onChange: (perms: Record<string, boolean> | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const active = permissions !== null;
+
+  const toggle = (key: string) => {
+    const current = permissions ?? DEFAULT_PERMS;
+    onChange({ ...current, [key]: !current[key] });
+  };
+
+  const getVal = (key: string) => {
+    if (permissions === null) return DEFAULT_PERMS[key] ?? true;
+    return permissions[key] ?? true;
+  };
+
+  return (
+    <div className={`border rounded-xl overflow-hidden ${active ? 'border-violet-200' : 'border-border/60'}`}>
+      <button type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/20 transition-colors">
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-violet-500" />
+          <p className="font-semibold text-sm text-foreground">Permissões Avançadas</p>
+          {active && <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-bold">Personalizado</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          {!active && (
+            <button type="button"
+              onClick={e => { e.stopPropagation(); onChange(DEFAULT_PERMS); setOpen(true); }}
+              className="text-xs px-2 py-1 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 font-medium">
+              Personalizar
+            </button>
+          )}
+          {active && (
+            <button type="button"
+              onClick={e => { e.stopPropagation(); onChange(null); }}
+              className="text-xs px-2 py-1 rounded-lg bg-muted text-muted-foreground border border-border/50 hover:bg-muted/80 font-medium">
+              Usar padrão
+            </button>
+          )}
+          {open ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-border/40 pt-3">
+          {!active && (
+            <p className="text-xs text-muted-foreground">As permissões seguem os padrões do perfil do usuário. Clique em "Personalizar" para definir permissões específicas.</p>
+          )}
+          {active && PERMISSIONS_GROUPS.map(group => {
+            const groupPerms = PERMISSIONS_CONFIG.filter(p => p.group === group);
+            return (
+              <div key={group}>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{group}</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {groupPerms.map(p => (
+                    <label key={p.key}
+                      className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border transition-colors ${getVal(p.key) ? 'bg-violet-50 border-violet-200' : 'bg-muted/30 border-border/40'}`}>
+                      <input type="checkbox" checked={getVal(p.key)}
+                        onChange={() => toggle(p.key)}
+                        data-testid={`perm-${p.key}`}
+                        className="w-3.5 h-3.5 rounded accent-violet-600" />
+                      <span className={`text-xs font-medium ${getVal(p.key) ? 'text-foreground' : 'text-muted-foreground'}`}>{p.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function UsersAdminPage() {
   const { toast } = useToast();
@@ -130,7 +244,12 @@ export default function UsersAdminPage() {
 
   const openCreate = () => { setForm(blank); setModal({ open: true, editing: null }); };
   const openEdit = (u: AdminUser) => {
-    setForm({ name: u.name, email: u.email, password: '', role: u.role, active: u.active !== false, tabPermissions: u.tabPermissions ?? null });
+    setForm({
+      name: u.name, email: u.email, password: '', role: u.role, active: u.active !== false,
+      tabPermissions: u.tabPermissions ?? null,
+      testMode: u.testMode ?? false,
+      permissions: u.permissions ?? null,
+    });
     setModal({ open: true, editing: u });
   };
 
@@ -338,6 +457,26 @@ export default function UsersAdminPage() {
             </button>
           </div>
 
+          {/* Test Mode Toggle */}
+          <div className={`flex items-center justify-between p-4 rounded-xl border ${form.testMode ? 'bg-amber-50 border-amber-200' : 'bg-muted/30 border-border/50'}`}>
+            <div>
+              <div className="flex items-center gap-2">
+                <FlaskConical className={`w-4 h-4 ${form.testMode ? 'text-amber-600' : 'text-muted-foreground'}`} />
+                <p className="font-semibold text-sm text-foreground">Modo Teste</p>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {form.testMode
+                  ? "Ativo — pedidos deste usuário são marcados como TESTE e não geram fluxo real"
+                  : "Inativo — pedidos seguem o fluxo normal de produção"}
+              </p>
+            </div>
+            <button type="button" onClick={() => setForm({ ...form, testMode: !form.testMode })}
+              data-testid="toggle-test-mode"
+              className={`relative w-12 h-6 rounded-full transition-colors ${form.testMode ? 'bg-amber-500' : 'bg-muted-foreground/30'}`}>
+              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.testMode ? 'translate-x-7' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
           {/* Tab Permissions Section — only ADMIN/DIRECTOR/DEVELOPER can edit */}
           {canManageUsers && (
             <div className="border border-border/60 rounded-xl p-4 space-y-3">
@@ -393,7 +532,15 @@ export default function UsersAdminPage() {
             </div>
           )}
 
-          <button onClick={() => {
+          {/* Advanced Permissions Section */}
+          {canManageUsers && (
+            <AdvancedPermissionsSection
+              permissions={form.permissions}
+              onChange={(perms) => setForm(f => ({ ...f, permissions: perms }))}
+            />
+          )}
+
+          <button type="button" onClick={() => {
             if (!form.name || !form.email || (!modal.editing && !form.password)) {
               toast({ title: "Preencha todos os campos obrigatórios.", variant: "destructive" }); return;
             }

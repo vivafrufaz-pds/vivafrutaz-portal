@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { Redirect } from "wouter";
-import { Leaf, Building2, UserCircle, KeyRound, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Leaf, Building2, UserCircle, KeyRound, ArrowLeft, CheckCircle2, Wrench } from "lucide-react";
 
 const DOMAIN = "@vivafrutaz.com";
 
@@ -25,6 +25,13 @@ export default function Login() {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+
+  const { data: maintenanceData } = useQuery<{ enabled: boolean }>({
+    queryKey: ['/api/settings/maintenance'],
+    staleTime: 15000,
+    retry: false,
+  });
+  const maintenanceActive = maintenanceData?.enabled ?? false;
 
   // Both tabs use username only — @vivafrutaz.com is added automatically
   const [companyUsername, setCompanyUsername] = useState("");
@@ -105,8 +112,21 @@ export default function Login() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="bg-card py-8 px-4 shadow-2xl shadow-black/5 sm:rounded-3xl sm:px-10 border border-border/50">
 
-          {/* Forgot password view */}
-          {showForgot ? (
+          {/* Maintenance mode — block company (client) login */}
+          {maintenanceActive && type === 'company' ? (
+            <div data-testid="maintenance-banner" className="text-center py-4">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-orange-100 flex items-center justify-center mb-5">
+                <Wrench className="w-8 h-8 text-orange-600" />
+              </div>
+              <h3 className="text-lg font-bold text-foreground mb-2">Sistema temporariamente em manutenção</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Estamos realizando melhorias. Tente novamente em alguns minutos.
+              </p>
+              <div className="mt-4 p-3 bg-orange-50 border border-orange-100 rounded-xl">
+                <p className="text-xs text-orange-700 font-medium">Se você é da equipe VivaFrutaz, utilize a aba "Acesso da Equipe".</p>
+              </div>
+            </div>
+          ) : showForgot ? (
             <div>
               <button onClick={() => { setShowForgot(false); setForgotStatus('idle'); setForgotMessage(""); }}
                 className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 font-medium transition-colors">

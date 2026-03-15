@@ -62,7 +62,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     staleTime: 30000,
     enabled: isStaff,
   });
-  const testModeActive = testModeData?.enabled ?? false;
+  const testModeActive = (testModeData?.enabled ?? false) || ((user as any)?.testMode === true);
 
   const { data: logoData } = useQuery<{ logoBase64: string; logoType: string }>({
     queryKey: ['/api/company-config/logo'],

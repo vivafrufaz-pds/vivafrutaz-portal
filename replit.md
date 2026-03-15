@@ -67,6 +67,10 @@ Preferred communication style: Simple, everyday language.
 - **Institutional Page**: Customizable "Quem Somos Nós" page.
 - **SMTP Configuration**: Dynamic configuration of email settings.
 - **IA Operacional — Central de Inteligência**: Predictive analysis across inventory, clients, products, logistics, and system, generating actionable alerts.
+- **Maintenance Mode**: System-wide maintenance mode (`maintenance_mode` setting) blocks client logins with a full-screen message; staff/admin logins are always allowed. Toggled via developer area.
+- **Per-User Test Mode**: `testMode` boolean on users table. When active, all orders from that user are routed to test_orders (marked as TESTE) and never enter the real flow. Yellow "Ambiente de Teste" banner shown. Configured per user in Users admin page.
+- **Advanced Permissions System**: `permissions` JSONB column on users table with 15 granular flags (verPedidos, criarPedidos, editarPedidos, excluirPedidos, verCompras, criarCompras, acessarInventario, editarInventario, verFinanceiro, editarFinanceiro, gerarNotaFiscal, exportarBling, editarClientes, excluirClientes, verRelatorios). Configurable per user via "Permissões Avançadas" section in user modal.
+- **Order History Deletion**: Admin/Director/Developer can delete orders by specific code, by date range, or by company. Double confirmation required for fiscally processed orders. All deletions logged in system audit log with user name, date, and reason.
 
 ## External Dependencies
 

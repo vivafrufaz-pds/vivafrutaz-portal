@@ -10,6 +10,8 @@ export const users = pgTable("users", {
   role: text("role").notNull(),
   active: boolean("active").default(true).notNull(),
   tabPermissions: jsonb("tab_permissions"), // string[] | null — null means no restriction (use role defaults)
+  testMode: boolean("test_mode").default(false).notNull(),
+  permissions: jsonb("permissions"), // { verPedidos, criarPedidos, editarPedidos, excluirPedidos, verCompras, criarCompras, verFinanceiro, editarFinanceiro, gerarNotaFiscal, exportarBling, editarClientes, excluirClientes, acessarInventario, editarInventario, verRelatorios } | null
 });
 
 export const priceGroups = pgTable("price_groups", {
