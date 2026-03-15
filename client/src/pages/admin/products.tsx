@@ -1,11 +1,14 @@
 import { useState, useMemo } from "react";
 import { useProducts, useCreateProduct, useUpdateProduct } from "@/hooks/use-catalog";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Modal } from "@/components/Modal";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   Plus, Package, Edit2, DollarSign, CheckCircle, XCircle,
-  Factory, Snowflake, AlignLeft, CalendarDays, Search, X, AlertTriangle
+  Factory, Snowflake, AlignLeft, CalendarDays, Search, X, AlertTriangle,
+  Leaf, ArrowLeftRight, Loader2, ChevronDown, ChevronUp, Percent, StickyNote
 } from "lucide-react";
 import type { Product } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +45,7 @@ const emptyForm = {
   basePrice: "",
   isIndustrialized: false,
   isSeasonal: false,
+  outOfSeason: false,
   observation: "",
   curiosity: "",
   availableDays: [] as string[],
@@ -59,6 +63,7 @@ function productToForm(p: Product): typeof emptyForm {
     basePrice: p.basePrice ? String(p.basePrice) : "",
     isIndustrialized: p.isIndustrialized ?? false,
     isSeasonal: p.isSeasonal ?? false,
+    outOfSeason: (p as any).outOfSeason ?? false,
     observation: (p as any).observation || "",
     curiosity: (p as any).curiosity || "",
     availableDays: Array.isArray((p as any).availableDays) ? (p as any).availableDays as string[] : [],
@@ -66,6 +71,212 @@ function productToForm(p: Product): typeof emptyForm {
     cfop: (p as any).cfop || "",
     commercialUnit: (p as any).commercialUnit || "",
   };
+}
+
+// ─── Safra Substitution Modal ─────────────────────────────────
+function SafraSubstituteModal({ alert, products, onClose, onDone }: {
+  alert: { product: any; affectedOrders: any[] };
+  products: any[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const [action, setAction] = useState<'replace' | 'remove' | 'discount' | 'note'>('replace');
+  const [newProductId, setNewProductId] = useState('');
+  const [discountPct, setDiscountPct] = useState('');
+  const [nfNote, setNfNote] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const availableProducts = products.filter(p => p.id !== alert.product.id && p.active && !p.outOfSeason);
+
+  const handleApply = async () => {
+    if (action === 'replace' && !newProductId) { toast({ title: 'Selecione o produto substituto', variant: 'destructive' }); return; }
+    if (action === 'discount' && (!discountPct || Number(discountPct) <= 0 || Number(discountPct) > 100)) {
+      toast({ title: 'Informe um percentual válido (1-100)', variant: 'destructive' }); return;
+    }
+    if (action === 'note' && !nfNote.trim()) { toast({ title: 'Informe a observação', variant: 'destructive' }); return; }
+    setLoading(true);
+    let errors = 0;
+    for (const o of alert.affectedOrders) {
+      try {
+        const body: any = { action, itemId: o.itemId };
+        if (action === 'replace') body.newProductId = Number(newProductId);
+        if (action === 'discount') body.discountPct = Number(discountPct);
+        if (action === 'note') body.nfNote = nfNote;
+        const res = await fetch(`/api/orders/${o.orderId}/substitute-item`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) errors++;
+      } catch { errors++; }
+    }
+    setLoading(false);
+    if (errors > 0) {
+      toast({ title: `${errors} erro(s) ao processar`, variant: 'destructive' });
+    } else {
+      toast({ title: 'Alterações aplicadas!', description: `${alert.affectedOrders.length} pedido(s) atualizado(s)` });
+    }
+    onDone();
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title={`Gerenciar Substituição — ${alert.product.name}`} maxWidth="max-w-lg">
+      <div className="space-y-4">
+        <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-700 font-medium">
+          <strong>{alert.affectedOrders.length}</strong> pedido(s) ativo(s) contém este produto. Escolha como proceder:
+        </div>
+
+        {/* Affected orders list */}
+        <div className="max-h-32 overflow-y-auto rounded-xl border border-border/50 divide-y">
+          {alert.affectedOrders.map(o => (
+            <div key={o.orderId} className="flex justify-between items-center px-3 py-2 text-xs">
+              <span className="font-mono font-bold text-primary">{o.orderCode}</span>
+              <span className="text-muted-foreground">{o.companyName}</span>
+              <span className="font-bold">{o.quantity}x</span>
+              <span className="text-muted-foreground">{o.deliveryDate ? format(new Date(o.deliveryDate), 'd MMM', { locale: ptBR }) : '—'}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Action selector */}
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { key: 'replace', icon: ArrowLeftRight, label: 'Substituir produto', color: 'blue' },
+            { key: 'remove', icon: XCircle, label: 'Remover item', color: 'red' },
+            { key: 'discount', icon: Percent, label: 'Dar desconto', color: 'green' },
+            { key: 'note', icon: StickyNote, label: 'Obs. nota fiscal', color: 'purple' },
+          ] as const).map(a => (
+            <button key={a.key} type="button" onClick={() => setAction(a.key)}
+              className={`flex items-center gap-2 p-2.5 rounded-xl border-2 text-xs font-bold transition-all ${action === a.key ? `bg-${a.color}-100 border-${a.color}-400 text-${a.color}-700` : 'border-border text-muted-foreground hover:border-border/80'}`}>
+              <a.icon className="w-3.5 h-3.5" /> {a.label}
+            </button>
+          ))}
+        </div>
+
+        {action === 'replace' && (
+          <div>
+            <label className="block text-xs font-semibold mb-1.5">Produto substituto</label>
+            <select value={newProductId} onChange={e => setNewProductId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border-2 border-border text-sm focus:border-primary outline-none">
+              <option value="">Selecione...</option>
+              {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.category})</option>)}
+            </select>
+          </div>
+        )}
+        {action === 'discount' && (
+          <div>
+            <label className="block text-xs font-semibold mb-1.5">Percentual de desconto (%)</label>
+            <input type="number" min="1" max="100" value={discountPct} onChange={e => setDiscountPct(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border-2 border-border text-sm focus:border-primary outline-none"
+              placeholder="ex: 10" />
+          </div>
+        )}
+        {action === 'note' && (
+          <div>
+            <label className="block text-xs font-semibold mb-1.5">Observação para a nota fiscal</label>
+            <textarea value={nfNote} onChange={e => setNfNote(e.target.value)} rows={2}
+              className="w-full px-3 py-2.5 rounded-xl border-2 border-border text-sm focus:border-primary outline-none resize-none"
+              placeholder="ex: Produto substituído por indisponibilidade de safra..." />
+          </div>
+        )}
+        {action === 'remove' && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+            O item será removido dos pedidos listados e o valor total será recalculado automaticamente.
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-muted/50 transition-colors">Cancelar</button>
+          <button type="button" onClick={handleApply} disabled={loading}
+            className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+            Aplicar em {alert.affectedOrders.length} pedido(s)
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── Safra Alerts Section ─────────────────────────────────────
+function SafraAlertsSection({ allProducts }: { allProducts: any[] }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [expanded, setExpanded] = useState(true);
+  const [substituteAlert, setSubstituteAlert] = useState<any | null>(null);
+
+  const { data: alerts, isLoading } = useQuery({
+    queryKey: ['/api/products/safra-alerts'],
+    queryFn: async () => {
+      const res = await fetch('/api/products/safra-alerts', { credentials: 'include' });
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  if (isLoading || !alerts || alerts.length === 0) return null;
+
+  return (
+    <>
+      {substituteAlert && (
+        <SafraSubstituteModal
+          alert={substituteAlert}
+          products={allProducts}
+          onClose={() => setSubstituteAlert(null)}
+          onDone={() => {
+            setSubstituteAlert(null);
+            queryClient.invalidateQueries({ queryKey: ['/api/products/safra-alerts'] });
+          }}
+        />
+      )}
+      <div className="mb-6 bg-orange-50 border-2 border-orange-200 rounded-2xl overflow-hidden" data-testid="safra-alerts-panel">
+        <div className="p-4 flex items-center gap-3 cursor-pointer" onClick={() => setExpanded(e => !e)}>
+          <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Leaf className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1">
+            <h2 className="font-display font-bold text-orange-900 text-base">Alertas de Safra</h2>
+            <p className="text-xs text-orange-700 mt-0.5">
+              {alerts.length} produto(s) fora de safra com pedidos ativos — ação necessária
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded-full">{alerts.length}</span>
+            {expanded ? <ChevronUp className="w-4 h-4 text-orange-700" /> : <ChevronDown className="w-4 h-4 text-orange-700" />}
+          </div>
+        </div>
+        {expanded && (
+          <div className="border-t border-orange-200 divide-y divide-orange-100">
+            {alerts.map((a: any) => (
+              <div key={a.product.id} className="p-4 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-orange-900 text-sm">{a.product.name}</span>
+                    <span className="text-xs bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full font-bold">{a.product.category}</span>
+                    <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[11px] font-bold rounded-full border border-red-200">Fora de safra</span>
+                  </div>
+                  <p className="text-xs text-orange-700 mb-2">{a.affectedOrders.length} pedido(s) ativo(s) contém este produto:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {a.affectedOrders.map((o: any) => (
+                      <span key={o.orderId} className="inline-flex items-center gap-1 text-[11px] bg-white border border-orange-200 rounded-lg px-2 py-0.5 font-mono text-orange-800">
+                        {o.orderCode} · {o.companyName} · {o.quantity}x
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <button type="button" onClick={() => setSubstituteAlert(a)}
+                  data-testid={`button-safra-manage-${a.product.id}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition-colors flex-shrink-0 whitespace-nowrap">
+                  <ArrowLeftRight className="w-3.5 h-3.5" /> Gerenciar substituição
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
 }
 
 export default function ProductsPage() {
@@ -132,6 +343,7 @@ export default function ProductsPage() {
       basePrice: String(priceNum),
       isIndustrialized: formData.isIndustrialized,
       isSeasonal: formData.isSeasonal,
+      outOfSeason: formData.outOfSeason,
       observation: formData.observation || null,
       curiosity: formData.curiosity || null,
       availableDays: formData.availableDays.length > 0 ? formData.availableDays : null,
@@ -181,6 +393,9 @@ export default function ProductsPage() {
           <Plus className="w-5 h-5" /> Novo Produto
         </button>
       </div>
+
+      {/* Safra Alerts */}
+      {products && <SafraAlertsSection allProducts={products as any[]} />}
 
       {/* Search + Filter Bar */}
       <div className="bg-card rounded-2xl border border-border/50 premium-shadow p-4 mb-6 flex flex-wrap gap-3 items-center">
@@ -233,6 +448,11 @@ export default function ProductsPage() {
               {(product as any).isSeasonal && (
                 <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-md text-xs font-bold">
                   <Snowflake className="w-3 h-3" /> Saz.
+                </span>
+              )}
+              {(product as any).outOfSeason && (
+                <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-red-100 text-red-700 rounded-md text-xs font-bold">
+                  <Leaf className="w-3 h-3" /> Fora de safra
                 </span>
               )}
             </div>
@@ -368,6 +588,27 @@ export default function ProductsPage() {
                 </div>
               </label>
             </div>
+          </div>
+
+          {/* Out of Season toggle */}
+          <div className={`p-4 rounded-xl border-2 transition-colors ${formData.outOfSeason ? 'border-red-300 bg-red-50' : 'border-border bg-muted/20'}`}>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div className={`w-10 h-6 rounded-full transition-colors ${formData.outOfSeason ? 'bg-red-500' : 'bg-muted'} relative flex-shrink-0`}
+                onClick={() => set("outOfSeason", !formData.outOfSeason)}
+                data-testid="toggle-out-of-season">
+                <div className={`w-4 h-4 rounded-full bg-white shadow absolute top-1 transition-all ${formData.outOfSeason ? 'left-5' : 'left-1'}`} />
+              </div>
+              <div>
+                <p className={`font-bold text-sm flex items-center gap-1 ${formData.outOfSeason ? 'text-red-800' : 'text-foreground'}`}>
+                  <Leaf className="w-4 h-4" /> Safra Encerrada / Produto Indisponível
+                </p>
+                <p className={`text-xs ${formData.outOfSeason ? 'text-red-600' : 'text-muted-foreground'}`}>
+                  {formData.outOfSeason
+                    ? 'Alerta ativo — sistema verificará pedidos existentes com este produto'
+                    : 'Ativar quando o produto estiver temporariamente indisponível por safra'}
+                </p>
+              </div>
+            </label>
           </div>
 
           {/* Dados Fiscais */}

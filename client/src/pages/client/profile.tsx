@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
-import { Building2, Phone, Mail, MapPin, Tag, Calendar, CreditCard, AlertCircle, User, Clock } from "lucide-react";
+import { Building2, Phone, Mail, MapPin, Tag, Calendar, CreditCard, AlertCircle, User, Clock, RefreshCw, CheckCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 function CompanyMissing() {
   return (
@@ -36,10 +39,31 @@ const CLIENT_TYPE_LABEL: Record<string, string> = {
   semanal: "Semanal",
   quinzenal: "Quinzenal",
   pontual: "Pontual",
+  contratual: "Contratual",
+};
+
+const PREFERRED_ORDER_TYPE_INFO: Record<string, { label: string; description: string }> = {
+  semanal: {
+    label: "Pedido Semanal",
+    description: "Janela de pedidos aberta toda semana nos dias configurados.",
+  },
+  mensal: {
+    label: "Pedido Mensal",
+    description: "Um pedido por mês, válido para o período inteiro.",
+  },
+  pontual: {
+    label: "Pedido Pontual",
+    description: "Solicite pedidos apenas quando precisar, sem periodicidade fixa.",
+  },
 };
 
 export default function ClientProfile() {
   const { company } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const [selectedPref, setSelectedPref] = useState<string>('');
+  const [saved, setSaved] = useState(false);
 
   if (!company) {
     return (
@@ -48,6 +72,9 @@ export default function ClientProfile() {
       </Layout>
     );
   }
+
+  const currentPref = (company as any).preferredOrderType || '';
+  const displayPref = selectedPref || currentPref;
 
   const allowedDays: string[] = Array.isArray(company.allowedOrderDays)
     ? (company.allowedOrderDays as any[]).map(String)
@@ -59,6 +86,28 @@ export default function ClientProfile() {
     company.addressCity,
     company.addressZip,
   ].filter(Boolean).join(" — ");
+
+  const handleSavePref = async () => {
+    if (!selectedPref || selectedPref === currentPref) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/companies/my/preferred-order-type', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferredOrderType: selectedPref }),
+      });
+      if (!res.ok) throw new Error('Erro ao salvar');
+      toast({ title: 'Preferência salva!', description: `Tipo de pedido preferido: ${PREFERRED_ORDER_TYPE_INFO[selectedPref]?.label}` });
+      setSaved(true);
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      toast({ title: 'Erro ao salvar preferência', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Layout>
@@ -110,6 +159,52 @@ export default function ClientProfile() {
             </div>
           </div>
         )}
+
+        {/* Preferência de Frequência de Pedidos */}
+        <div className="bg-card rounded-2xl border border-border/50 premium-shadow p-6">
+          <h2 className="font-bold text-lg text-foreground mb-2 flex items-center gap-2">
+            <RefreshCw className="w-5 h-5 text-primary" /> Frequência de Pedidos
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Selecione como prefere realizar seus pedidos. Sua preferência será considerada pela equipe VivaFrutaz.
+          </p>
+
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {(['semanal', 'mensal', 'pontual'] as const).map(type => {
+              const info = PREFERRED_ORDER_TYPE_INFO[type];
+              const isSelected = displayPref === type;
+              return (
+                <button key={type} type="button" onClick={() => setSelectedPref(type)}
+                  data-testid={`pref-order-${type}`}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}>
+                  <p className={`font-bold text-sm mb-0.5 ${isSelected ? 'text-primary' : 'text-foreground'}`}>{info.label}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{info.description}</p>
+                  {isSelected && <div className="mt-2 flex items-center gap-1 text-primary text-xs font-bold"><CheckCircle className="w-3.5 h-3.5" /> Selecionado</div>}
+                </button>
+              );
+            })}
+          </div>
+
+          {currentPref && !selectedPref && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+              <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+              Preferência atual: <strong className="text-foreground">{PREFERRED_ORDER_TYPE_INFO[currentPref]?.label || currentPref}</strong>
+            </div>
+          )}
+
+          {selectedPref && selectedPref !== currentPref && (
+            <button type="button" onClick={handleSavePref} disabled={saving}
+              data-testid="button-save-order-pref"
+              className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-bold text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+              {saving ? <><RefreshCw className="w-4 h-4 animate-spin" /> Salvando...</> : saved ? <><CheckCircle className="w-4 h-4" /> Salvo!</> : 'Salvar preferência'}
+            </button>
+          )}
+          {(!selectedPref || selectedPref === currentPref) && (
+            <p className="text-xs text-center text-muted-foreground mt-1">
+              {currentPref ? 'Clique em uma opção para alterar sua preferência.' : 'Selecione sua preferência acima e clique em Salvar.'}
+            </p>
+          )}
+        </div>
 
         {/* Configuração de pedidos */}
         <div className="bg-card rounded-2xl border border-border/50 premium-shadow p-6">
@@ -164,7 +259,7 @@ export default function ClientProfile() {
 
         <div className="p-4 bg-muted/30 rounded-2xl text-center">
           <p className="text-xs text-muted-foreground">
-            Para atualizar seus dados, entre em contato com a equipe VivaFrutaz.
+            Para atualizar seus dados cadastrais, entre em contato com a equipe VivaFrutaz.
           </p>
         </div>
       </div>

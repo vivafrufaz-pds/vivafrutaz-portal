@@ -854,24 +854,184 @@ export async function registerRoutes(
     }
   });
 
-  // --- Orders export with date filter ---
+  // --- Orders export with full detail (company, items, products) ---
   app.get('/api/orders/export', async (req, res) => {
     try {
-      const { dateFrom, dateTo } = req.query;
-      const allOrders = await storage.getOrders();
+      const { dateFrom, dateTo, companyId, orderType } = req.query;
+      const [allOrders, allCompanies, allProducts] = await Promise.all([
+        storage.getOrders(),
+        storage.getCompanies(),
+        storage.getProducts(),
+      ]);
+
       let filtered = allOrders;
+
       if (dateFrom) {
         const from = new Date(dateFrom as string);
-        filtered = filtered.filter((o: any) => new Date(o.deliveryDate) >= from);
+        filtered = filtered.filter((o: any) => new Date(o.orderDate) >= from);
       }
       if (dateTo) {
         const to = new Date(dateTo as string);
         to.setHours(23, 59, 59, 999);
-        filtered = filtered.filter((o: any) => new Date(o.deliveryDate) <= to);
+        filtered = filtered.filter((o: any) => new Date(o.orderDate) <= to);
       }
-      res.json(filtered);
+      if (companyId && companyId !== 'all') {
+        filtered = filtered.filter((o: any) => o.companyId === Number(companyId));
+      }
+      if (orderType && orderType !== 'all') {
+        if (orderType === 'teste') {
+          filtered = filtered.filter((o: any) => o.orderCode?.includes('TESTE') || o.weekReference?.includes('TESTE'));
+        } else {
+          filtered = filtered.filter((o: any) => {
+            const company = allCompanies.find((c: any) => c.id === o.companyId);
+            return company?.clientType === orderType;
+          });
+        }
+      }
+
+      // Enrich with items and company data
+      const enriched = await Promise.all(filtered.map(async (order: any) => {
+        const company = allCompanies.find((c: any) => c.id === order.companyId);
+        let items: any[] = [];
+        try {
+          const detail = await storage.getOrderDetail(order.id);
+          items = detail?.items || [];
+        } catch { /* ignore */ }
+
+        return {
+          ...order,
+          companyName: company?.companyName || `Empresa #${order.companyId}`,
+          clientType: company?.clientType || '',
+          items: items.map((item: any) => {
+            const product = allProducts.find((p: any) => p.id === item.productId);
+            return {
+              ...item,
+              productName: product?.name || `Produto #${item.productId}`,
+              productCategory: product?.category || '',
+              productUnit: product?.unit || '',
+            };
+          }),
+        };
+      }));
+
+      res.json(enriched);
     } catch {
       res.status(500).json({ message: "Erro interno" });
+    }
+  });
+
+  // --- Safra Alerts: products out of season with active orders ---
+  app.get('/api/products/safra-alerts', async (req, res) => {
+    try {
+      const [allProducts, allOrders, allCompanies] = await Promise.all([
+        storage.getProducts(),
+        storage.getOrders(),
+        storage.getCompanies(),
+      ]);
+
+      const outOfSeasonProducts = allProducts.filter((p: any) => p.outOfSeason);
+      if (outOfSeasonProducts.length === 0) return res.json([]);
+
+      const activeOrders = allOrders.filter((o: any) => o.status !== 'CANCELLED');
+      const productIds = new Set(outOfSeasonProducts.map((p: any) => p.id));
+
+      const alerts = await Promise.all(outOfSeasonProducts.map(async (product: any) => {
+        const affectedOrders: any[] = [];
+        for (const order of activeOrders) {
+          try {
+            const detail = await storage.getOrderDetail(order.id);
+            const matchingItem = (detail?.items || []).find((item: any) => item.productId === product.id);
+            if (matchingItem) {
+              const company = allCompanies.find((c: any) => c.id === order.companyId);
+              affectedOrders.push({
+                orderId: order.id,
+                orderCode: order.orderCode,
+                companyId: order.companyId,
+                companyName: company?.companyName || `Empresa #${order.companyId}`,
+                deliveryDate: order.deliveryDate,
+                itemId: matchingItem.id,
+                quantity: matchingItem.quantity,
+                unitPrice: matchingItem.unitPrice,
+                totalPrice: matchingItem.totalPrice,
+              });
+            }
+          } catch { /* ignore */ }
+        }
+        return { product, affectedOrders };
+      }));
+
+      res.json(alerts.filter(a => a.affectedOrders.length > 0));
+    } catch {
+      res.status(500).json({ message: "Erro interno" });
+    }
+  });
+
+  // --- Substitute/manage item in order (safra management) ---
+  app.post('/api/orders/:orderId/substitute-item', async (req, res) => {
+    try {
+      const orderId = Number(req.params.orderId);
+      const { action, itemId, newProductId, discountPct, nfNote } = req.body;
+      if (!orderId || !itemId || !action) return res.status(400).json({ message: 'Dados inválidos' });
+
+      const detail = await storage.getOrderDetail(orderId);
+      if (!detail) return res.status(404).json({ message: 'Pedido não encontrado' });
+
+      const items = detail.items as any[];
+      const targetIdx = items.findIndex((i: any) => i.id === itemId);
+      if (targetIdx === -1) return res.status(404).json({ message: 'Item não encontrado' });
+      const target = items[targetIdx];
+
+      let newItems = [...items];
+      let description = '';
+
+      if (action === 'remove') {
+        newItems.splice(targetIdx, 1);
+        description = `Item removido do pedido ${detail.order.orderCode} (safra encerrada)`;
+      } else if (action === 'replace' && newProductId) {
+        const allProducts = await storage.getProducts();
+        const newProduct = allProducts.find((p: any) => p.id === newProductId);
+        if (!newProduct) return res.status(404).json({ message: 'Produto substituto não encontrado' });
+        newItems[targetIdx] = { ...target, productId: newProductId, unitPrice: newProduct.basePrice || target.unitPrice };
+        newItems[targetIdx].totalPrice = String(Number(newItems[targetIdx].unitPrice) * Number(target.quantity));
+        description = `Produto substituído no pedido ${detail.order.orderCode} (safra encerrada)`;
+      } else if (action === 'discount' && discountPct) {
+        const pct = Number(discountPct);
+        const newUnit = Number(target.unitPrice) * (1 - pct / 100);
+        newItems[targetIdx] = { ...target, unitPrice: String(newUnit.toFixed(2)), totalPrice: String((newUnit * Number(target.quantity)).toFixed(2)) };
+        description = `Desconto de ${pct}% aplicado no pedido ${detail.order.orderCode} (safra encerrada)`;
+      } else if (action === 'note') {
+        description = `Obs. NF adicionada no pedido ${detail.order.orderCode}: "${nfNote}"`;
+      } else {
+        return res.status(400).json({ message: 'Ação inválida' });
+      }
+
+      // Recalculate total
+      const newTotal = newItems.reduce((sum: number, i: any) => sum + Number(i.totalPrice), 0);
+      await storage.updateOrder(orderId, { totalValue: String(newTotal.toFixed(2)) });
+      if (action !== 'note') {
+        await storage.updateOrderItems(orderId, newItems.map((i: any) => ({
+          productId: i.productId,
+          quantity: Number(i.quantity),
+          unitPrice: String(i.unitPrice),
+          totalPrice: String(i.totalPrice),
+        })));
+      }
+
+      const actingUser = req.session?.userId ? await storage.getUser(req.session.userId) : null;
+      await storage.createLog({
+        action: 'SAFRA_SUBSTITUTION',
+        description: `${description}. Operador: ${actingUser?.name || 'Sistema'}`,
+        userEmail: actingUser?.email || 'sistema',
+        level: 'INFO',
+        ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || '',
+      });
+
+      if (action === 'note') {
+        return res.json({ ok: true, note: nfNote });
+      }
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || 'Erro interno' });
     }
   });
 
@@ -1207,6 +1367,21 @@ export async function registerRoutes(
     res.status(204).end();
   });
 
+  // Client updates own preferred order type
+  app.patch('/api/companies/my/preferred-order-type', async (req, res) => {
+    try {
+      const companyId = req.session?.companyId;
+      if (!companyId) return res.status(401).json({ message: 'Não autenticado' });
+      const { preferredOrderType } = req.body;
+      const valid = ['semanal', 'mensal', 'pontual'];
+      if (!valid.includes(preferredOrderType)) return res.status(400).json({ message: 'Tipo inválido' });
+      const updated = await storage.updateCompany(companyId, { preferredOrderType } as any);
+      res.json({ ok: true, preferredOrderType: (updated as any).preferredOrderType });
+    } catch {
+      res.status(500).json({ message: 'Erro interno' });
+    }
+  });
+
   // ─── Contract Scopes ─────────────────────────────────────────
   // ─── Delivery Window Suggestions ────────────────────────────
   app.get('/api/companies/delivery-suggestions', async (req, res) => {
@@ -1496,6 +1671,27 @@ export async function registerRoutes(
   app.delete(api.products.delete.path, async (req, res) => {
     await storage.deleteProduct(Number(req.params.id));
     res.status(204).end();
+  });
+
+  // Toggle out-of-season flag for a product
+  app.patch('/api/products/:id/out-of-season', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { outOfSeason } = req.body;
+      if (typeof outOfSeason !== 'boolean') return res.status(400).json({ message: 'outOfSeason deve ser boolean' });
+      const product = await storage.updateProduct(id, { outOfSeason } as any);
+      const actingUser = req.session?.userId ? await storage.getUser(req.session.userId) : null;
+      await storage.createLog({
+        action: outOfSeason ? 'PRODUCT_OUT_OF_SEASON' : 'PRODUCT_IN_SEASON',
+        description: `Produto #${id} marcado como ${outOfSeason ? 'FORA DE SAFRA' : 'EM SAFRA'} por ${actingUser?.name || 'Sistema'}`,
+        userEmail: actingUser?.email || 'sistema',
+        level: 'INFO',
+        ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || '',
+      });
+      res.json(product);
+    } catch {
+      res.status(500).json({ message: 'Erro interno' });
+    }
   });
 
   // Product Prices

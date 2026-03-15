@@ -65,6 +65,8 @@ export const companies = pgTable("companies", {
   autoCalcCost: boolean("auto_calc_cost").default(true).notNull(),
   autoPriceFromCatalog: boolean("auto_price_from_catalog").default(false).notNull(),
   manualAvgCost: numeric("manual_avg_cost", { precision: 10, scale: 2 }),
+  // Preferência de frequência de pedido do cliente: 'semanal' | 'mensal' | 'pontual'
+  preferredOrderType: text("preferred_order_type"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -111,6 +113,8 @@ export const products = pgTable("products", {
   commercialUnit: text("commercial_unit"), // Unidade comercial para NF, ex: "KG"
   // Curiosidade educativa do produto
   curiosity: text("curiosity"),
+  // Safra: indica se o produto está atualmente fora de safra/indisponível
+  outOfSeason: boolean("out_of_season").default(false).notNull(),
 });
 
 export const productPrices = pgTable("product_prices", {
