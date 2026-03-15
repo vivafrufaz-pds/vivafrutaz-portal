@@ -6,7 +6,8 @@ import {
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
-  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain, GraduationCap, DollarSign, Route, Menu, X, Bell, BookOpen
+  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain, GraduationCap, DollarSign, Route, Menu, X, Bell, BookOpen,
+  Search
 } from 'lucide-react';
 
 import { VirtualAssistant } from './VirtualAssistant';
@@ -17,6 +18,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { user, company, isStaff, isClient, logout } = useAuth();
   const [location, navigate] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarSearch, setSidebarSearch] = useState('');
   const push = usePushNotifications();
 
   // Auto-prompt for push permission for staff users (only once per browser)
@@ -69,42 +71,43 @@ export function Layout({ children }: { children: React.ReactNode }) {
   });
 
   const adminLinks = [
-    { href: '/admin', label: 'Painel', icon: LayoutDashboard, roles: ['ADMIN', 'DIRECTOR', 'LOGISTICS'], tabKey: 'dashboard' },
-    { href: '/admin/companies', label: 'Empresas', icon: Users, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'companies' },
-    { href: '/admin/products', label: 'Produtos', icon: Package, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'products' },
-    { href: '/admin/categories', label: 'Categorias', icon: FolderOpen, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'categories' },
-    { href: '/admin/price-groups', label: 'Grupos de Preço', icon: Tag, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'price-groups' },
-    { href: '/admin/order-windows', label: 'Janelas de Pedido', icon: CalendarDays, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR'], tabKey: 'order-windows' },
-    { href: '/admin/order-exceptions', label: 'Exceções de Pedido', icon: ShieldCheck, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'order-exceptions' },
-    { href: '/admin/orders', label: 'Pedidos', icon: ShoppingCart, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'DIRECTOR', 'LOGISTICS'], tabKey: 'orders' },
-    { href: '/admin/purchasing', label: 'Compras', icon: BarChart3, roles: ['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR'], tabKey: 'purchasing' },
-    { href: '/admin/industrialized', label: 'Industrializados', icon: Factory, roles: ['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR'], tabKey: 'industrialized' },
-    { href: '/admin/financial', label: 'Painel Financeiro', icon: PieChart, roles: ['ADMIN', 'FINANCEIRO', 'DIRECTOR'], tabKey: 'financial' },
-    { href: '/admin/password-reset-requests', label: 'Senhas de Clientes', icon: KeyRound, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'password-reset' },
-    { href: '/admin/special-orders', label: 'Pedidos Pontuais', icon: Star, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR', 'DEVELOPER', 'LOGISTICS'], tabKey: 'special-orders' },
-    { href: '/admin/users', label: 'Usuários do Sistema', icon: UserCog, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'users' },
-    { href: '/admin/backups', label: 'Backup & E-mails', icon: HardDrive, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'backups' },
-    { href: '/admin/developer', label: 'Área do Desenvolvedor', icon: ShieldCheck, roles: ['DEVELOPER', 'ADMIN', 'DIRECTOR'], tabKey: 'developer' },
-    { href: '/admin/tasks', label: 'Tarefas', icon: ClipboardList, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'], tabKey: 'tasks' },
-    { href: '/admin/client-incidents', label: 'Ocorrências de Clientes', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'], tabKey: 'incidents' },
-    { href: '/admin/internal-incidents', label: 'Ocorrências Internas', icon: AlertTriangle, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'], tabKey: 'internal-incidents' },
-    { href: '/admin/logistics', label: 'Logística', icon: Truck, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'], tabKey: 'logistics' },
-    { href: '/admin/quotations', label: 'Cotação de Empresas', icon: FileText, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'], tabKey: 'quotations' },
-    { href: '/admin/executive', label: 'Dashboard Executivo', icon: TrendingUp, roles: ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER'], tabKey: 'executive' },
-    { href: '/admin/support', label: 'Configuração de Suporte', icon: ShieldCheck, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'support' },
-    { href: '/admin/announcements', label: 'Painel de Avisos', icon: Megaphone, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'announcements' },
-    { href: '/admin/waste-control', label: 'Controle de Desperdício', icon: TrendingDown, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'], tabKey: 'waste-control' },
-    { href: '/admin/purchase-planning', label: 'Planejamento de Compras', icon: ShoppingBag, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'PURCHASE_MANAGER', 'OPERATIONS_MANAGER'], tabKey: 'purchase-planning' },
-    { href: '/admin/inventory', label: 'Estoque / Inventário', icon: Warehouse, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'PURCHASE_MANAGER'], tabKey: 'inventory' },
-    { href: '/admin/email-management', label: 'Central de E-mails', icon: Mail, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'], tabKey: 'email-management' },
-    { href: '/admin/smtp-config', label: 'Configuração SMTP', icon: Settings, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'smtp-config' },
-    { href: '/admin/about-us', label: 'Quem Somos Nós', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'], tabKey: 'about-us' },
-    { href: '/admin/intelligence', label: 'IA Operacional', icon: Brain, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'], tabKey: 'intelligence' },
-    { href: '/admin/commercial-intelligence', label: 'Inteligência Comercial', icon: Users, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'], tabKey: 'commercial-intelligence' },
-    { href: '/admin/financial-intelligence', label: 'Inteligência Financeira', icon: DollarSign, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'FINANCEIRO'], tabKey: 'financial-intelligence' },
-    { href: '/admin/logistics-intelligence', label: 'Inteligência Logística', icon: Route, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'], tabKey: 'logistics-intelligence' },
-    { href: '/admin/flora-training', label: 'Treinar Flora', icon: GraduationCap, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'flora-training' },
-    { href: '/admin/notification-settings', label: 'Notificações Push', icon: Bell, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'notification-settings' },
+    { href: '/admin', label: 'Painel', icon: LayoutDashboard, roles: ['ADMIN', 'DIRECTOR', 'LOGISTICS'], tabKey: 'dashboard', category: 'Painel' },
+    { href: '/admin/executive', label: 'Dashboard Executivo', icon: TrendingUp, roles: ['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER'], tabKey: 'executive', category: 'Painel' },
+    { href: '/admin/companies', label: 'Empresas', icon: Users, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'companies', category: 'Comercial' },
+    { href: '/admin/quotations', label: 'Cotação de Empresas', icon: FileText, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'], tabKey: 'quotations', category: 'Comercial' },
+    { href: '/admin/price-groups', label: 'Grupos de Preço', icon: Tag, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'price-groups', category: 'Comercial' },
+    { href: '/admin/products', label: 'Produtos', icon: Package, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'products', category: 'Comercial' },
+    { href: '/admin/categories', label: 'Categorias', icon: FolderOpen, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'categories', category: 'Comercial' },
+    { href: '/admin/orders', label: 'Pedidos', icon: ShoppingCart, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'FINANCEIRO', 'DIRECTOR', 'LOGISTICS'], tabKey: 'orders', category: 'Pedidos' },
+    { href: '/admin/special-orders', label: 'Pedidos Pontuais', icon: Star, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR', 'DEVELOPER', 'LOGISTICS'], tabKey: 'special-orders', category: 'Pedidos' },
+    { href: '/admin/order-windows', label: 'Janelas de Pedido', icon: CalendarDays, roles: ['ADMIN', 'OPERATIONS_MANAGER', 'DIRECTOR'], tabKey: 'order-windows', category: 'Pedidos' },
+    { href: '/admin/order-exceptions', label: 'Exceções de Pedido', icon: ShieldCheck, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'order-exceptions', category: 'Pedidos' },
+    { href: '/admin/purchasing', label: 'Compras', icon: BarChart3, roles: ['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR'], tabKey: 'purchasing', category: 'Compras' },
+    { href: '/admin/purchase-planning', label: 'Planejamento de Compras', icon: ShoppingBag, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'PURCHASE_MANAGER', 'OPERATIONS_MANAGER'], tabKey: 'purchase-planning', category: 'Compras' },
+    { href: '/admin/inventory', label: 'Estoque / Inventário', icon: Warehouse, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'PURCHASE_MANAGER'], tabKey: 'inventory', category: 'Compras' },
+    { href: '/admin/industrialized', label: 'Industrializados', icon: Factory, roles: ['ADMIN', 'PURCHASE_MANAGER', 'DIRECTOR'], tabKey: 'industrialized', category: 'Compras' },
+    { href: '/admin/waste-control', label: 'Controle de Desperdício', icon: TrendingDown, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'], tabKey: 'waste-control', category: 'Compras' },
+    { href: '/admin/logistics', label: 'Logística', icon: Truck, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'], tabKey: 'logistics', category: 'Logística' },
+    { href: '/admin/financial', label: 'Painel Financeiro', icon: PieChart, roles: ['ADMIN', 'FINANCEIRO', 'DIRECTOR'], tabKey: 'financial', category: 'Financeiro' },
+    { href: '/admin/fiscal', label: 'Gestão de Notas Fiscais', icon: Receipt, roles: ['ADMIN', 'FINANCEIRO', 'DIRECTOR', 'DEVELOPER'], tabKey: 'fiscal', category: 'Financeiro' },
+    { href: '/admin/tasks', label: 'Tarefas', icon: ClipboardList, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'], tabKey: 'tasks', category: 'Gestão' },
+    { href: '/admin/client-incidents', label: 'Ocorrências de Clientes', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'], tabKey: 'incidents', category: 'Gestão' },
+    { href: '/admin/internal-incidents', label: 'Ocorrências Internas', icon: AlertTriangle, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'], tabKey: 'internal-incidents', category: 'Gestão' },
+    { href: '/admin/announcements', label: 'Painel de Avisos', icon: Megaphone, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'announcements', category: 'Gestão' },
+    { href: '/admin/password-reset-requests', label: 'Senhas de Clientes', icon: KeyRound, roles: ['ADMIN', 'DIRECTOR'], tabKey: 'password-reset', category: 'Gestão' },
+    { href: '/admin/intelligence', label: 'IA Operacional', icon: Brain, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'], tabKey: 'intelligence', category: 'Inteligência' },
+    { href: '/admin/commercial-intelligence', label: 'Inteligência Comercial', icon: Users, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'], tabKey: 'commercial-intelligence', category: 'Inteligência' },
+    { href: '/admin/financial-intelligence', label: 'Inteligência Financeira', icon: DollarSign, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'FINANCEIRO'], tabKey: 'financial-intelligence', category: 'Inteligência' },
+    { href: '/admin/logistics-intelligence', label: 'Inteligência Logística', icon: Route, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'], tabKey: 'logistics-intelligence', category: 'Inteligência' },
+    { href: '/admin/flora-training', label: 'Treinar Flora', icon: GraduationCap, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'flora-training', category: 'Inteligência' },
+    { href: '/admin/users', label: 'Usuários do Sistema', icon: UserCog, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'users', category: 'Sistema' },
+    { href: '/admin/backups', label: 'Backup & E-mails', icon: HardDrive, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'backups', category: 'Sistema' },
+    { href: '/admin/email-management', label: 'Central de E-mails', icon: Mail, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'], tabKey: 'email-management', category: 'Sistema' },
+    { href: '/admin/smtp-config', label: 'Configuração SMTP', icon: Settings, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'smtp-config', category: 'Sistema' },
+    { href: '/admin/notification-settings', label: 'Notificações Push', icon: Bell, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'notification-settings', category: 'Sistema' },
+    { href: '/admin/about-us', label: 'Quem Somos Nós', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'], tabKey: 'about-us', category: 'Sistema' },
+    { href: '/admin/support', label: 'Configuração de Suporte', icon: ShieldCheck, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'support', category: 'Sistema' },
+    { href: '/admin/developer', label: 'Área do Desenvolvedor', icon: ShieldCheck, roles: ['DEVELOPER', 'ADMIN', 'DIRECTOR'], tabKey: 'developer', category: 'Sistema' },
   ];
 
   const isContratual = company?.clientType === 'contratual';
@@ -175,25 +178,96 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-        {links.map((link) => {
-          const Icon = link.icon;
-          const isActive = location === link.href;
+      {isStaff && (
+        <div className="px-3 pt-3 pb-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <input
+              data-testid="input-sidebar-search"
+              type="text"
+              placeholder="Buscar funcionalidade..."
+              value={sidebarSearch}
+              onChange={e => setSidebarSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm bg-muted/50 border border-border/50 rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 transition-all"
+            />
+          </div>
+        </div>
+      )}
+
+      <nav className="flex-1 overflow-y-auto py-2 px-3">
+        {(() => {
+          const searchTerm = sidebarSearch.trim().toLowerCase();
+          const visibleLinks = links.filter(l => {
+            if (!searchTerm) return true;
+            return l.label.toLowerCase().includes(searchTerm) || (l as any).category?.toLowerCase().includes(searchTerm);
+          });
+
+          if (!isStaff || searchTerm) {
+            return (
+              <div className="space-y-1">
+                {visibleLinks.map((link) => {
+                  const Icon = link.icon;
+                  const isActive = location === link.href;
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm min-h-[48px] ${
+                        isActive
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-primary' : ''}`} />
+                      <span className="truncate">{link.label}</span>
+                    </Link>
+                  );
+                })}
+                {visibleLinks.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-6">Nenhuma funcionalidade encontrada</p>
+                )}
+              </div>
+            );
+          }
+
+          const categoryOrder = ['Painel', 'Comercial', 'Pedidos', 'Compras', 'Logística', 'Financeiro', 'Gestão', 'Inteligência', 'Sistema'];
+          const grouped: Record<string, typeof links> = {};
+          visibleLinks.forEach(l => {
+            const cat = (l as any).category || 'Outros';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(l);
+          });
+
           return (
-            <Link 
-              key={link.href} 
-              href={link.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium text-sm min-h-[48px] ${
-                isActive 
-                  ? 'bg-primary/10 text-primary' 
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted'
-              }`}
-            >
-              <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-primary' : ''}`} />
-              <span className="truncate">{link.label}</span>
-            </Link>
+            <div className="space-y-4">
+              {categoryOrder.filter(cat => grouped[cat]?.length).map(cat => (
+                <div key={cat}>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 px-4 mb-1">{cat}</p>
+                  <div className="space-y-0.5">
+                    {grouped[cat].map((link) => {
+                      const Icon = link.icon;
+                      const isActive = location === link.href;
+                      return (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-medium text-sm min-h-[44px] ${
+                            isActive
+                              ? 'bg-primary/10 text-primary'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted'
+                          }`}
+                        >
+                          <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-primary' : ''}`} />
+                          <span className="truncate text-[13px]">{link.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           );
-        })}
+        })()}
       </nav>
 
       <div className="p-4 border-t border-border/50">
