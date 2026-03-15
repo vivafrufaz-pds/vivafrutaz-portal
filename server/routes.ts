@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
+import { fireNotification, ensureDefaultNotificationSettings, VAPID_PUBLIC_KEY } from "./pushService";
 import { z } from "zod";
 import expressSession from "express-session";
 import MemoryStore from "memorystore";
@@ -1605,6 +1606,21 @@ export async function registerRoutes(
         await storage.createLog({ action: 'ORDER_CREATED', description: `Pedido criado: ${no.vfCode || `#${no.id}`} (empresa ${order.companyId})`, companyId: order.companyId, userRole: 'CLIENT' });
       } catch {}
 
+      // Fire push notification for new order (non-blocking)
+      try {
+        const no = newOrder as any;
+        const company = await storage.getCompany(order.companyId);
+        const totalVal = typeof order.totalValue === 'number'
+          ? order.totalValue.toFixed(2)
+          : parseFloat(String(order.totalValue || '0')).toFixed(2);
+        fireNotification('order_created', {
+          company: company?.companyName || `Empresa #${order.companyId}`,
+          items: String(items.length),
+          value: totalVal,
+          code: no.vfCode || `#${no.id}`,
+        }, { url: `/admin/orders` });
+      } catch {}
+
       // Send emails (non-blocking)
       try {
         const company = await storage.getCompany(order.companyId);
@@ -1698,7 +1714,7 @@ export async function registerRoutes(
       const order = await storage.updateOrder(id, updates);
       res.json(order);
 
-      // Send status change email (non-blocking)
+      // Send status change email + push notification (non-blocking)
       if (status && ['CONFIRMED', 'DELIVERED', 'CANCELLED'].includes(status)) {
         try {
           const orderData = await storage.getOrder(id);
@@ -1713,6 +1729,24 @@ export async function registerRoutes(
                 status,
                 adminNote,
               });
+            }
+            // Fire push notification for cancellation
+            if (status === 'CANCELLED') {
+              const companyName = (await storage.getCompany(oa.companyId))?.companyName || `Empresa #${oa.companyId}`;
+              fireNotification('order_cancelled', {
+                code: oa.vfCode || `#${id}`,
+                company: companyName,
+              }, { url: `/admin/orders` });
+            } else {
+              const statusLabel: Record<string, string> = {
+                CONFIRMED: 'Confirmado', DELIVERED: 'Entregue', CANCELLED: 'Cancelado'
+              };
+              const companyName = (await storage.getCompany(oa.companyId))?.companyName || `Empresa #${oa.companyId}`;
+              fireNotification('order_updated', {
+                code: oa.vfCode || `#${id}`,
+                company: companyName,
+                status: statusLabel[status] || status,
+              }, { url: `/admin/orders` });
             }
           }
         } catch (emailErr) {
@@ -4118,6 +4152,8 @@ export async function registerRoutes(
           intent = 'create_task_done';
           response = `✅ **Tarefa criada com sucesso!**\n\n• Título: ${data.title}\n• Prioridade: ${data.priority}\n\nAcesse **Menu → Tarefas** para visualizar e gerenciar.`;
           newContext = null;
+          // Fire push for task created by Flora
+          fireNotification('flora_task', { task: data.title }, { url: '/admin/tasks' });
         } catch (e: any) {
           response = `❌ Erro ao criar tarefa: ${e.message}`;
           newContext = null;
@@ -4940,8 +4976,94 @@ export async function registerRoutes(
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ─── Push Notification Routes ──────────────────────────────────────────────
+
+  // Get VAPID public key (public endpoint)
+  app.get('/api/push/vapid-public-key', (_req, res) => {
+    res.json({ publicKey: VAPID_PUBLIC_KEY });
+  });
+
+  // Subscribe device
+  app.post('/api/push/subscribe', async (req: any, res) => {
+    try {
+      const { endpoint, keys } = req.body;
+      if (!endpoint || !keys?.p256dh || !keys?.auth) {
+        return res.status(400).json({ message: 'Dados de subscrição inválidos' });
+      }
+      const sub = await storage.upsertPushSubscription({
+        endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+        userAgent: req.headers['user-agent'] || null,
+        userId: req.session?.userId || null,
+        companyId: req.session?.companyId || null,
+        active: true,
+      });
+      res.json({ success: true, id: sub.id });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Unsubscribe device
+  app.post('/api/push/unsubscribe', async (req: any, res) => {
+    try {
+      const { endpoint } = req.body;
+      if (!endpoint) return res.status(400).json({ message: 'Endpoint obrigatório' });
+      await storage.deactivatePushSubscription(endpoint);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get notification settings (admin)
+  app.get('/api/push/settings', async (req: any, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const settings = await storage.getNotificationSettings();
+      const count = await storage.getPushSubscriptionCount();
+      res.json({ settings, subscriberCount: count });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Update notification setting (admin)
+  app.patch('/api/push/settings/:event', async (req: any, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+        return res.status(403).json({ message: 'Sem permissão' });
+      }
+      const setting = await storage.upsertNotificationSetting(req.params.event, req.body);
+      res.json(setting);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Send test push notification (admin)
+  app.post('/api/push/test', async (req: any, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+        return res.status(403).json({ message: 'Sem permissão' });
+      }
+      await fireNotification('flora_alert', {
+        message: '✅ Notificações push funcionando corretamente no VivaFrutaz!',
+      }, { url: '/admin' });
+      res.json({ success: true, message: 'Notificação de teste enviada!' });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Seed DB Function
   await seedDatabase();
+  await ensureDefaultNotificationSettings();
 
   return httpServer;
 }

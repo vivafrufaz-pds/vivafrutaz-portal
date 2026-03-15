@@ -6,16 +6,30 @@ import {
   Leaf, LayoutDashboard, Users, Package, Tag, 
   CalendarDays, ShoppingCart, BarChart3, PieChart, LogOut, Receipt,
   ShieldCheck, Factory, FolderOpen, KeyRound, Star, UserCog, HardDrive, FlaskConical,
-  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain, GraduationCap, DollarSign, Route, Menu, X
+  ClipboardList, AlertTriangle, Building2, Truck, FileText, TrendingUp, UserCircle, Megaphone, TrendingDown, ShoppingBag, Warehouse, Mail, Settings, Brain, GraduationCap, DollarSign, Route, Menu, X, Bell
 } from 'lucide-react';
 
 import { VirtualAssistant } from './VirtualAssistant';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, company, isStaff, isClient, logout } = useAuth();
   const [location, navigate] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const push = usePushNotifications();
+
+  // Auto-prompt for push permission for staff users (only once per browser)
+  useEffect(() => {
+    if (!isStaff || !push.isSupported || push.isSubscribed || push.permission === 'denied') return;
+    const alreadyAsked = localStorage.getItem('push-permission-asked');
+    if (alreadyAsked) return;
+    const t = setTimeout(async () => {
+      localStorage.setItem('push-permission-asked', '1');
+      await push.subscribe();
+    }, 8000); // Wait 8s before prompting
+    return () => clearTimeout(t);
+  }, [isStaff, push.isSupported, push.isSubscribed, push.permission]);
 
   // Close sidebar on navigation (mobile)
   useEffect(() => {
@@ -78,6 +92,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/financial-intelligence', label: 'Inteligência Financeira', icon: DollarSign, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'FINANCEIRO'], tabKey: 'financial-intelligence' },
     { href: '/admin/logistics-intelligence', label: 'Inteligência Logística', icon: Route, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'], tabKey: 'logistics-intelligence' },
     { href: '/admin/flora-training', label: 'Treinar Flora', icon: GraduationCap, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'flora-training' },
+    { href: '/admin/notification-settings', label: 'Notificações Push', icon: Bell, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'notification-settings' },
   ];
 
   const clientLinks = [

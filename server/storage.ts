@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs, aboutUs, smtpConfig, floraTraining,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs, aboutUs, smtpConfig, floraTraining, pushSubscriptions, notificationSettings,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -26,7 +26,9 @@ import {
   type EmailLog, type InsertEmailLog,
   type AboutUs, type InsertAboutUs,
   type SmtpConfig, type InsertSmtpConfig,
-  type FloraTraining, type InsertFloraTraining
+  type FloraTraining, type InsertFloraTraining,
+  type PushSubscription, type InsertPushSubscription,
+  type NotificationSetting, type InsertNotificationSetting
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -1211,6 +1213,63 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteFloraTraining(id: number): Promise<void> {
     await db.delete(floraTraining).where(eq(floraTraining.id, id));
+  }
+
+  // ─── Push Subscriptions ──────────────────────────────────────────────────
+  async upsertPushSubscription(data: InsertPushSubscription): Promise<PushSubscription> {
+    const existing = await db
+      .select()
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.endpoint, data.endpoint))
+      .limit(1);
+    if (existing.length > 0) {
+      const [r] = await db
+        .update(pushSubscriptions)
+        .set({ ...data, active: true })
+        .where(eq(pushSubscriptions.endpoint, data.endpoint))
+        .returning();
+      return r;
+    }
+    const [r] = await db.insert(pushSubscriptions).values(data).returning();
+    return r;
+  }
+  async deactivatePushSubscription(endpoint: string): Promise<void> {
+    await db
+      .update(pushSubscriptions)
+      .set({ active: false })
+      .where(eq(pushSubscriptions.endpoint, endpoint));
+  }
+  async getActivePushSubscriptions(): Promise<PushSubscription[]> {
+    return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.active, true));
+  }
+  async getPushSubscriptionCount(): Promise<number> {
+    const rows = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.active, true));
+    return rows.length;
+  }
+
+  // ─── Notification Settings ────────────────────────────────────────────────
+  async getNotificationSettings(): Promise<NotificationSetting[]> {
+    return db.select().from(notificationSettings).orderBy(notificationSettings.event);
+  }
+  async upsertNotificationSetting(event: string, data: Partial<InsertNotificationSetting>): Promise<NotificationSetting> {
+    const existing = await db
+      .select()
+      .from(notificationSettings)
+      .where(eq(notificationSettings.event, event))
+      .limit(1);
+    if (existing.length > 0) {
+      const [r] = await db
+        .update(notificationSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(notificationSettings.event, event))
+        .returning();
+      return r;
+    }
+    const [r] = await db
+      .insert(notificationSettings)
+      .values({ event, ...data } as InsertNotificationSetting)
+      .returning();
+    return r;
   }
 }
 

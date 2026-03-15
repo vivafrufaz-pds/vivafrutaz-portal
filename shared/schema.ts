@@ -733,6 +733,36 @@ export type FloraTraining = typeof floraTraining.$inferSelect;
 export const insertFloraTrainingSchema = createInsertSchema(floraTraining).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertFloraTraining = z.infer<typeof insertFloraTrainingSchema>;
 
+// ─── Push Subscriptions ─────────────────────────────────────────────────────
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id"),
+  companyId: integer("company_id"),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: text("user_agent"),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions).omit({ id: true, createdAt: true });
+export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
+
+// ─── Notification Settings ──────────────────────────────────────────────────
+export const notificationSettings = pgTable("notification_settings", {
+  id: serial("id").primaryKey(),
+  event: text("event").notNull().unique(),
+  enabled: boolean("enabled").default(true).notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  targetAudience: text("target_audience").default("staff").notNull(), // 'staff' | 'all'
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type NotificationSetting = typeof notificationSettings.$inferSelect;
+export const insertNotificationSettingSchema = createInsertSchema(notificationSettings).omit({ id: true });
+export type InsertNotificationSetting = z.infer<typeof insertNotificationSettingSchema>;
+
 // ─── IA Interações ─────────────────────────────────────────────────────────
 export const aiInteractions = pgTable("ai_interactions", {
   id: serial("id").primaryKey(),

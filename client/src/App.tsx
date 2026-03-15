@@ -58,6 +58,7 @@ import AdminFloraTraining from "@/pages/admin/flora-training";
 import AdminCommercialIntelligence from "@/pages/admin/commercial-intelligence";
 import AdminFinancialIntelligence from "@/pages/admin/financial-intelligence";
 import AdminLogisticsIntelligence from "@/pages/admin/logistics-intelligence";
+import AdminNotificationSettings from "@/pages/admin/notification-settings";
 
 import ClientDashboard from "@/pages/client/dashboard";
 import ClientCreateOrder from "@/pages/client/create-order";
@@ -298,6 +299,9 @@ function Router() {
       </Route>
       <Route path="/admin/intelligence">
         {() => <ProtectedRoute component={AdminIntelligence} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS']} tabKey="intelligence" />}
+      </Route>
+      <Route path="/admin/notification-settings">
+        {() => <ProtectedRoute component={AdminNotificationSettings} role="admin" allowedRoles={['ADMIN', 'DIRECTOR', 'DEVELOPER']} tabKey="notification-settings" />}
       </Route>
 
       {/* Client Routes */}

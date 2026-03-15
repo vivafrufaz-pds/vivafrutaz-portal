@@ -4,6 +4,17 @@
 
 VivaFrutaz is a B2B corporate fruit ordering platform designed for companies to place weekly fruit orders. It features a dual-portal system for admin staff and client companies, supporting role-based access, time-windowed ordering, and comprehensive reporting. The platform includes a built-in logistics module, executive dashboard, Flora IA (intelligent chat assistant with smart export and intelligence modules), and incident management for both internal and client-related issues. The system is entirely in Brazilian Portuguese (PT-BR).
 
+### Push Notification System
+- **VAPID Keys**: Hardcoded in `server/pushService.ts` (public: `BL_IPIPX...`, private: `p9zFMm...`)
+- **Database tables**: `push_subscriptions` (endpoint, p256dh, auth, userId/companyId) and `notification_settings` (7 default events, seeded on startup)
+- **Events**: `order_created`, `order_cancelled`, `order_updated`, `client_inactive`, `low_stock`, `flora_task`, `flora_alert`
+- **Backend routes**: `GET /api/push/vapid-public-key` (public), `POST /api/push/subscribe`, `POST /api/push/unsubscribe`, `GET/PATCH /api/push/settings` (admin), `POST /api/push/test` (admin)
+- **Hooks**: Order creation fires `order_created`; status changes fire `order_cancelled` or `order_updated`; Flora task creation fires `flora_task`
+- **Frontend**: `usePushNotifications` hook in `client/src/hooks/use-push-notifications.ts`; auto-subscribes staff on first login (8s delay, once per browser); `Layout.tsx` calls the hook
+- **Admin Page**: `/admin/notification-settings` — toggle events on/off, see subscriber count, send test notification; Bell icon in sidebar for ADMIN/DIRECTOR/DEVELOPER
+- **Service Worker**: `sw.js` handles `push` events (show notification) and `notificationclick` (open URL or focus window)
+- **iOS**: Requires iOS 16.4+ and standalone PWA mode; shown in compatibility notice on settings page
+
 ### PWA Support
 - **Manifest**: `client/public/manifest.json` with 8 icon sizes (72–512px), standalone display, PT-BR locale
 - **Icons**: Generated via `pngjs` in `client/public/icon-{size}.png` + `apple-touch-icon.png`
