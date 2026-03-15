@@ -220,3 +220,115 @@ export async function sendTestEmail(toEmail: string) {
   `);
   return sendMail(toEmail, "Teste de envio de e-mail do sistema VivaFrutaz.", html);
 }
+
+// ─── New automated email functions ──────────────────────────────────────────
+
+export async function sendWindowOpenReminder(opts: {
+  toEmail: string;
+  companyName: string;
+  weekReference: string;
+  orderCloseDate: string;
+  deliveryDate: string;
+}) {
+  const subject = `🍎 Janela de pedidos aberta — ${opts.weekReference}`;
+  const html = wrapTemplate("Sua janela de pedidos está aberta!", `
+    <p>Olá, <strong>${opts.companyName}</strong>!</p>
+    <p>A janela de pedidos para <strong>${opts.weekReference}</strong> está aberta agora.</p>
+    <p><strong>Prazo para finalizar:</strong> ${opts.orderCloseDate}</p>
+    <p><strong>Data de entrega prevista:</strong> ${opts.deliveryDate}</p>
+    <p>Acesse o portal VivaFrutaz e faça seu pedido semanal antes que a janela feche.</p>
+    <p style="margin-top:16px"><a href="${process.env.APP_URL || 'https://vivafrutaz.com'}/pedido" style="background:#16a34a;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Fazer Pedido Agora →</a></p>
+  `);
+  return sendMail(opts.toEmail, subject, html);
+}
+
+export async function sendUnfinalisedReminder(opts: {
+  toEmail: string;
+  companyName: string;
+  weekReference: string;
+  orderCloseDate: string;
+}) {
+  const subject = `⏰ Lembrete: finalize seu pedido semanal — ${opts.weekReference}`;
+  const html = wrapTemplate("Seu pedido ainda não foi finalizado", `
+    <p>Olá, <strong>${opts.companyName}</strong>!</p>
+    <p>Identificamos que seu pedido de <strong>${opts.weekReference}</strong> ainda não foi confirmado.</p>
+    <p><strong>A janela de pedidos encerra em:</strong> ${opts.orderCloseDate}</p>
+    <p>Não perca o prazo! Acesse o portal agora e finalize seu pedido para garantir sua entrega.</p>
+    <p style="margin-top:16px"><a href="${process.env.APP_URL || 'https://vivafrutaz.com'}/pedido" style="background:#ea580c;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Finalizar Pedido →</a></p>
+  `);
+  return sendMail(opts.toEmail, subject, html);
+}
+
+export async function sendOrderConfirmedEmail(opts: {
+  toEmail: string;
+  companyName: string;
+  vfCode: string;
+  deliveryDate: string;
+  totalItems: number;
+  adminNote?: string;
+  itemsSummary?: string;
+}) {
+  const subject = `✅ Pedido ${opts.vfCode} confirmado — VivaFrutaz`;
+  const html = wrapTemplate(`Pedido ${opts.vfCode} confirmado!`, `
+    <p>Olá, <strong>${opts.companyName}</strong>!</p>
+    <p>Seu pedido foi <span class="badge green">CONFIRMADO</span> pela equipe VivaFrutaz.</p>
+    <p><strong>Código:</strong> ${opts.vfCode}</p>
+    <p><strong>Data de entrega:</strong> ${opts.deliveryDate}</p>
+    <p><strong>Total de itens:</strong> ${opts.totalItems} produto(s)</p>
+    ${opts.itemsSummary ? `<div style="background:#f9fafb;border-radius:8px;padding:12px 16px;margin:12px 0;font-size:13px;">${opts.itemsSummary}</div>` : ''}
+    ${opts.adminNote ? `<p><strong>Observação:</strong> ${opts.adminNote}</p>` : ''}
+    <p>Em caso de dúvidas entre em contato com nossa equipe.</p>
+  `);
+  return sendMail(opts.toEmail, subject, html);
+}
+
+export async function sendOrderRejectedEmail(opts: {
+  toEmail: string;
+  companyName: string;
+  vfCode: string;
+  reason: string;
+}) {
+  const subject = `❌ Pedido ${opts.vfCode} cancelado — VivaFrutaz`;
+  const html = wrapTemplate(`Pedido ${opts.vfCode} cancelado`, `
+    <p>Olá, <strong>${opts.companyName}</strong>!</p>
+    <p>Infelizmente, seu pedido <strong>${opts.vfCode}</strong> foi <span class="badge orange">CANCELADO</span>.</p>
+    <p><strong>Motivo:</strong> ${opts.reason}</p>
+    <p>Se tiver dúvidas ou quiser fazer um novo pedido, entre em contato com nossa equipe.</p>
+  `);
+  return sendMail(opts.toEmail, subject, html);
+}
+
+export async function sendAdminBroadcast(opts: {
+  toEmails: string[];
+  subject: string;
+  message: string;
+  senderName?: string;
+}) {
+  if (!isConfigured()) {
+    console.log(`[MAILER] Broadcast não enviado (SMTP não configurado).`);
+    return { sent: false, reason: "SMTP não configurado" };
+  }
+  if (opts.toEmails.length === 0) return { sent: false, reason: "Sem destinatários" };
+
+  const html = wrapTemplate(opts.subject, `
+    <p>${opts.message.replace(/\n/g, '<br>')}</p>
+    ${opts.senderName ? `<p style="margin-top:16px;font-size:13px;color:#6b7280;">Enviado pela equipe: <strong>${opts.senderName}</strong></p>` : ''}
+  `);
+
+  try {
+    const transporter = createTransporter()!;
+    // Send with BCC to all recipients to protect privacy
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: SMTP_FROM, // send to self
+      bcc: opts.toEmails.join(', '),
+      subject: opts.subject,
+      html,
+    });
+    console.log(`[MAILER] Broadcast enviado para ${opts.toEmails.length} destinatário(s).`);
+    return { sent: true, count: opts.toEmails.length };
+  } catch (err: any) {
+    console.error('[MAILER] Falha no broadcast:', err.message);
+    return { sent: false, reason: err.message };
+  }
+}

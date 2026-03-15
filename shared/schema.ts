@@ -640,3 +640,40 @@ export const fiscalInvoices = pgTable("fiscal_invoices", {
 export const insertFiscalInvoiceSchema = createInsertSchema(fiscalInvoices).omit({ id: true, importedAt: true });
 export type FiscalInvoice = typeof fiscalInvoices.$inferSelect;
 export type InsertFiscalInvoice = z.infer<typeof insertFiscalInvoiceSchema>;
+
+// ─── Email Schedules ─────────────────────────────────────────────────────────
+// Configurable schedules for automated email dispatch
+export const emailSchedules = pgTable("email_schedules", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(),
+  // "window_open_reminder" | "unfinalised_reminder" | "confirmed_notification" | "cancelled_notification"
+  label: text("label").notNull(),
+  dayOfWeek: integer("day_of_week"), // 0=Sun..6=Sat; null = every day
+  timeOfDay: text("time_of_day").notNull(), // "15:00" 24h format
+  enabled: boolean("enabled").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export const insertEmailScheduleSchema = createInsertSchema(emailSchedules).omit({ id: true, createdAt: true, updatedAt: true });
+export type EmailSchedule = typeof emailSchedules.$inferSelect;
+export type InsertEmailSchedule = z.infer<typeof insertEmailScheduleSchema>;
+
+// ─── Email Logs ──────────────────────────────────────────────────────────────
+// Historical record of all emails sent / attempted
+export const emailLogs = pgTable("email_logs", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(),
+  // "window_open_reminder" | "unfinalised_reminder" | "order_confirmed" | "order_rejected" | "admin_broadcast" | "test"
+  toEmail: text("to_email").notNull(),
+  toName: text("to_name"),
+  companyId: integer("company_id").references(() => companies.id),
+  orderId: integer("order_id"),
+  subject: text("subject").notNull(),
+  status: text("status").notNull(), // "sent" | "failed" | "skipped"
+  errorMessage: text("error_message"),
+  sentAt: timestamp("sent_at").defaultNow().notNull(),
+  metadata: jsonb("metadata"), // extra context
+});
+export const insertEmailLogSchema = createInsertSchema(emailLogs).omit({ id: true, sentAt: true });
+export type EmailLog = typeof emailLogs.$inferSelect;
+export type InsertEmailLog = z.infer<typeof insertEmailLogSchema>;

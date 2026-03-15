@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices,
+  users, priceGroups, companies, categories, products, productPrices, orderWindows, orderExceptions, orders, orderItems, systemSettings, passwordResetRequests, specialOrderRequests, systemLogs, testOrders, tasks, clientIncidents, incidentMessages, internalIncidents, logisticsDrivers, logisticsVehicles, logisticsRoutes, logisticsMaintenance, companyQuotations, contractScopes, danfeRecords, companyConfig, announcements, wasteControl, purchasePlanStatus, inventorySettings, inventoryEntries, inventoryMovements, inventoryPhysicalCounts, fiscalInvoices, emailSchedules, emailLogs,
   type User, type InsertUser, type PriceGroup, type InsertPriceGroup,
   type Company, type InsertCompany, type Category, type InsertCategory,
   type Product, type InsertProduct,
@@ -21,7 +21,9 @@ import {
   type InventoryEntry, type InsertInventoryEntry,
   type InventoryMovement, type InsertInventoryMovement,
   type InventoryPhysicalCount, type InsertInventoryPhysicalCount,
-  type FiscalInvoice, type InsertFiscalInvoice
+  type FiscalInvoice, type InsertFiscalInvoice,
+  type EmailSchedule, type InsertEmailSchedule,
+  type EmailLog, type InsertEmailLog
 } from "@shared/schema";
 import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
 
@@ -197,6 +199,18 @@ export interface IStorage {
   createFiscalInvoice(data: InsertFiscalInvoice): Promise<FiscalInvoice>;
   deleteFiscalInvoice(id: number): Promise<void>;
   checkFiscalInvoiceDuplicate(invoiceNumber: string, cnpj?: string): Promise<boolean>;
+
+  // Email Schedules
+  getEmailSchedules(): Promise<EmailSchedule[]>;
+  getEmailScheduleById(id: number): Promise<EmailSchedule | undefined>;
+  createEmailSchedule(data: InsertEmailSchedule): Promise<EmailSchedule>;
+  updateEmailSchedule(id: number, data: Partial<InsertEmailSchedule>): Promise<EmailSchedule>;
+  deleteEmailSchedule(id: number): Promise<void>;
+
+  // Email Logs
+  getEmailLogs(opts?: { limit?: number; type?: string; companyId?: number }): Promise<EmailLog[]>;
+  createEmailLog(data: InsertEmailLog): Promise<EmailLog>;
+  wasEmailSentToday(type: string, toEmail: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1085,6 +1099,55 @@ export class DatabaseStorage implements IStorage {
   async checkFiscalInvoiceDuplicate(invoiceNumber: string, cnpj?: string): Promise<boolean> {
     const key = `${invoiceNumber}_${cnpj || ''}`;
     const [r] = await db.select().from(fiscalInvoices).where(eq(fiscalInvoices.duplicateKey, key));
+    return !!r;
+  }
+
+  // ─── Email Schedules ─────────────────────────────────────────────────────
+  async getEmailSchedules(): Promise<EmailSchedule[]> {
+    return db.select().from(emailSchedules).orderBy(emailSchedules.dayOfWeek, emailSchedules.timeOfDay);
+  }
+  async getEmailScheduleById(id: number): Promise<EmailSchedule | undefined> {
+    const [r] = await db.select().from(emailSchedules).where(eq(emailSchedules.id, id));
+    return r;
+  }
+  async createEmailSchedule(data: InsertEmailSchedule): Promise<EmailSchedule> {
+    const [r] = await db.insert(emailSchedules).values(data).returning();
+    return r;
+  }
+  async updateEmailSchedule(id: number, data: Partial<InsertEmailSchedule>): Promise<EmailSchedule> {
+    const [r] = await db.update(emailSchedules).set({ ...data, updatedAt: new Date() }).where(eq(emailSchedules.id, id)).returning();
+    return r;
+  }
+  async deleteEmailSchedule(id: number): Promise<void> {
+    await db.delete(emailSchedules).where(eq(emailSchedules.id, id));
+  }
+
+  // ─── Email Logs ───────────────────────────────────────────────────────────
+  async getEmailLogs(opts?: { limit?: number; type?: string; companyId?: number }): Promise<EmailLog[]> {
+    let query = db.select().from(emailLogs) as any;
+    const conditions: any[] = [];
+    if (opts?.type) conditions.push(eq(emailLogs.type, opts.type));
+    if (opts?.companyId) conditions.push(eq(emailLogs.companyId, opts.companyId));
+    if (conditions.length) query = query.where(and(...conditions));
+    query = query.orderBy(desc(emailLogs.sentAt));
+    if (opts?.limit) query = query.limit(opts.limit);
+    return query;
+  }
+  async createEmailLog(data: InsertEmailLog): Promise<EmailLog> {
+    const [r] = await db.insert(emailLogs).values(data as any).returning();
+    return r;
+  }
+  async wasEmailSentToday(type: string, toEmail: string): Promise<boolean> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const [r] = await db.select()
+      .from(emailLogs)
+      .where(and(
+        eq(emailLogs.type, type),
+        eq(emailLogs.toEmail, toEmail),
+        eq(emailLogs.status, 'sent'),
+        gte(emailLogs.sentAt, startOfDay)
+      ));
     return !!r;
   }
 }
