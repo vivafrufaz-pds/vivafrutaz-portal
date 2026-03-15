@@ -578,7 +578,7 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete,
         </div>
 
         <div className="flex justify-end">
-          <button type="button" data-testid="button-add-scope" onClick={addScope}
+          <button data-testid="button-add-scope" onClick={addScope}
             disabled={saving || !newItem.dayOfWeek || !newItem.productId}
             className="px-5 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2 text-sm">
             <Save className="w-3.5 h-3.5" /> {saving ? 'Adicionando...' : 'Adicionar item'}
@@ -682,12 +682,12 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete,
                         </span>
                         {/* Actions */}
                         <div className="flex gap-1">
-                          <button type="button" data-testid={`scope-item-save-${s.id}`} onClick={() => saveEdit(s.id)} disabled={editSaving}
+                          <button data-testid={`scope-item-save-${s.id}`} onClick={() => saveEdit(s.id)} disabled={editSaving}
                             title="Salvar item"
                             className="p-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50">
                             {editSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                           </button>
-                          <button type="button" data-testid={`scope-item-cancel-${s.id}`} onClick={() => setEditingId(null)}
+                          <button data-testid={`scope-item-cancel-${s.id}`} onClick={() => setEditingId(null)}
                             title="Cancelar edição"
                             className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors">
                             <X className="w-3 h-3" />
