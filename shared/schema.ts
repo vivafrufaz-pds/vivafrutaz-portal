@@ -59,6 +59,10 @@ export const companies = pgTable("companies", {
   // Dados fiscais do cliente
   stateRegistration: text("state_registration"), // Inscrição Estadual
   addressState: text("address_state"), // UF, ex: "SP"
+  // Flags do escopo contratual
+  autoCalcCost: boolean("auto_calc_cost").default(true).notNull(),
+  autoPriceFromCatalog: boolean("auto_price_from_catalog").default(false).notNull(),
+  manualAvgCost: numeric("manual_avg_cost", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

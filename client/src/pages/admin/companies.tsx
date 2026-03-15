@@ -72,6 +72,9 @@ const emptyForm = {
   paymentDates: "",
   financialNotes: "",
   deliveryConfigJson: null as DeliveryConfig | null,
+  autoCalcCost: true,
+  autoPriceFromCatalog: false,
+  manualAvgCost: "",
 };
 
 function companyToForm(c: Company): typeof emptyForm {
@@ -105,6 +108,9 @@ function companyToForm(c: Company): typeof emptyForm {
     paymentDates: c.paymentDates || "",
     financialNotes: c.financialNotes || "",
     deliveryConfigJson: parseDeliveryConfig((c as any).deliveryConfigJson),
+    autoCalcCost: ca.autoCalcCost !== false,
+    autoPriceFromCatalog: !!ca.autoPriceFromCatalog,
+    manualAvgCost: ca.manualAvgCost ? String(ca.manualAvgCost) : "",
   };
 }
 
@@ -142,11 +148,17 @@ function fmt(v: string | null | undefined) {
 }
 
 // ─── Contract Scope Manager ──────────────────────────────────────
-function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
+function ContractScopeManager({ company, contractModel, hiddenIds, onDelete,
+  autoCalcCost, autoPriceFromCatalog, manualAvgCost, priceGroupId, onFlagChange }: {
   company: any | null;
   contractModel: string;
   hiddenIds: number[];
   onDelete: (id: number) => void;
+  autoCalcCost: boolean;
+  autoPriceFromCatalog: boolean;
+  manualAvgCost: string;
+  priceGroupId: number | null;
+  onFlagChange: (flag: string, val: any) => void;
 }) {
   const { data: products } = useProducts();
   const queryClient = useQueryClient();
@@ -157,6 +169,20 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
     staleTime: 60000,
   });
   const catNames = (dbCategories || []).filter((c: any) => c.active).map((c: any) => c.name as string);
+
+  // Load product prices for auto-fill
+  const { data: allPrices } = useQuery<any[]>({
+    queryKey: ['/api/product-prices'],
+    staleTime: 120000,
+    enabled: autoPriceFromCatalog,
+  });
+
+  // Helper: get price for product from company's price group
+  const getPriceForProduct = (productId: number): string => {
+    if (!autoPriceFromCatalog || !priceGroupId || !allPrices) return "";
+    const entry = allPrices.find((p: any) => p.productId === productId && p.priceGroupId === priceGroupId);
+    return entry ? String(Number(entry.price).toFixed(2)) : "";
+  };
 
   // New item form state
   const [newItem, setNewItem] = useState({
@@ -194,7 +220,15 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
   const handleNewCategoryChange = (cat: string) => {
     const filtered = getProductsForCategory(cat);
     const currentOk = filtered.some((p: any) => String(p.id) === newItem.productId);
-    setNewItem(p => ({ ...p, scopeCategory: cat, productId: currentOk ? p.productId : "" }));
+    const newProductId = currentOk ? newItem.productId : "";
+    const autoPrice = newProductId && autoPriceFromCatalog ? getPriceForProduct(Number(newProductId)) : (currentOk ? newItem.unitPrice : "");
+    setNewItem(p => ({ ...p, scopeCategory: cat, productId: newProductId, unitPrice: autoPrice }));
+  };
+
+  // When product changes, auto-fill price if flag is ON
+  const handleNewProductChange = (productId: string) => {
+    const price = productId && autoPriceFromCatalog ? getPriceForProduct(Number(productId)) : newItem.unitPrice;
+    setNewItem(p => ({ ...p, productId, unitPrice: price }));
   };
 
   const addScope = async () => {
@@ -280,17 +314,12 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
 
   const visibleScopes = (scopes || []).filter((s: any) => !hiddenIds.includes(s.id));
 
-  // ── Financial summary ─────────────────────────────────────
-  const totalSemana = visibleScopes.reduce((sum: number, s: any) => {
-    const price = s.unitPrice != null ? Number(s.unitPrice) : 0;
-    return sum + (Number(s.quantity) * price);
+  // ── Summary calculations ──────────────────────────────────
+  const totalQtd = visibleScopes.reduce((sum: number, s: any) => sum + Number(s.quantity), 0);
+  const totalValor = visibleScopes.reduce((sum: number, s: any) => {
+    return sum + (Number(s.quantity) * (s.unitPrice != null ? Number(s.unitPrice) : 0));
   }, 0);
-  const totalMensal = totalSemana * 4;
-  const totalCusto = visibleScopes.reduce((sum: number, s: any) => {
-    const cost = s.averageCost != null ? Number(s.averageCost) : null;
-    return cost != null ? sum + (Number(s.quantity) * cost) : sum;
-  }, 0);
-  const margem = totalSemana > 0 ? ((totalSemana - totalCusto) / totalSemana * 100) : null;
+  const custoMedioAuto = totalQtd > 0 ? totalValor / totalQtd : 0;
   const hasPrices = visibleScopes.some((s: any) => s.unitPrice != null);
 
   // ── Group by day → week ───────────────────────────────────
@@ -329,20 +358,67 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
         </p>
       </div>
 
-      {/* ── Financial summary ── */}
+      {/* ── Configuration flags ── */}
+      <div className="p-3 rounded-xl border border-border bg-muted/10 flex flex-wrap gap-4">
+        {/* Flag 1: auto calc cost */}
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <button type="button" data-testid="toggle-auto-calc-cost"
+            onClick={() => onFlagChange('autoCalcCost', !autoCalcCost)}
+            className={`w-10 h-5 rounded-full transition-colors relative ${autoCalcCost ? 'bg-primary' : 'bg-muted-foreground/30'}`}>
+            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoCalcCost ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+          <span className="text-xs font-medium text-foreground">Calcular custo médio automaticamente</span>
+        </label>
+
+        {/* Flag 2: auto price from catalog */}
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <button type="button" data-testid="toggle-auto-price"
+            onClick={() => onFlagChange('autoPriceFromCatalog', !autoPriceFromCatalog)}
+            className={`w-10 h-5 rounded-full transition-colors relative ${autoPriceFromCatalog ? 'bg-secondary' : 'bg-muted-foreground/30'}`}>
+            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoPriceFromCatalog ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+          <span className="text-xs font-medium text-foreground">Preço automático dos produtos</span>
+          {autoPriceFromCatalog && !priceGroupId && (
+            <span className="text-xs text-orange-500">(configure um Grupo de Preço para habilitar)</span>
+          )}
+        </label>
+      </div>
+
+      {/* ── Summary panel ── */}
       {visibleScopes.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: "Valor semanal", value: fmt(String(totalSemana)), icon: "💰", color: "border-green-200 bg-green-50" },
-            { label: "Valor mensal", value: fmt(String(totalMensal)), icon: "📅", color: "border-blue-200 bg-blue-50" },
-            { label: "Custo estimado", value: hasPrices && totalCusto > 0 ? fmt(String(totalCusto)) : "—", icon: "📦", color: "border-orange-200 bg-orange-50" },
-            { label: "Margem estimada", value: margem != null && totalCusto > 0 ? `${margem.toFixed(1)}%` : "—", icon: "📈", color: "border-purple-200 bg-purple-50" },
-          ].map(card => (
-            <div key={card.label} className={`rounded-xl border p-3 ${card.color}`}>
-              <p className="text-xs text-muted-foreground font-medium">{card.icon} {card.label}</p>
-              <p className="text-base font-bold text-foreground mt-0.5">{card.value}</p>
-            </div>
-          ))}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl border border-green-200 bg-green-50 p-3">
+            <p className="text-xs text-muted-foreground font-medium">📦 Quantidade total</p>
+            <p className="text-xl font-bold text-foreground mt-0.5">{totalQtd}</p>
+            <p className="text-xs text-muted-foreground">unidades no escopo</p>
+          </div>
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+            <p className="text-xs text-muted-foreground font-medium">💰 Valor total</p>
+            <p className="text-xl font-bold text-foreground mt-0.5">{hasPrices ? fmt(String(totalValor)) : '—'}</p>
+            <p className="text-xs text-muted-foreground">soma dos itens</p>
+          </div>
+          <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+            <p className="text-xs text-muted-foreground font-medium">📊 Custo médio unitário</p>
+            {autoCalcCost ? (
+              <>
+                <p className="text-xl font-bold text-foreground mt-0.5">
+                  {hasPrices && totalQtd > 0 ? fmt(String(custoMedioAuto)) : '—'}
+                </p>
+                <p className="text-xs text-muted-foreground">valor total ÷ qtd total</p>
+              </>
+            ) : (
+              <div className="mt-1 flex items-center gap-1.5">
+                <input
+                  type="number" min="0" step="0.01"
+                  data-testid="input-manual-avg-cost"
+                  value={manualAvgCost}
+                  onChange={e => onFlagChange('manualAvgCost', e.target.value)}
+                  placeholder="R$ 0,00"
+                  className="w-full px-2 py-1 rounded-lg border border-orange-300 text-sm font-bold bg-white outline-none focus:border-orange-500"
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -380,9 +456,9 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
 
           {/* Produto */}
           <select data-testid="select-scope-product" value={newItem.productId}
-            onChange={e => setNewItem(p => ({ ...p, productId: e.target.value }))}
+            onChange={e => handleNewProductChange(e.target.value)}
             className={selectCls}>
-            <option value="">Produto...</option>
+            <option value="">Produto{autoPriceFromCatalog && priceGroupId ? ' (preço auto)' : ''}...</option>
             {(newItem.scopeCategory ? newItemProducts : allActiveProducts).map((p: any) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -724,6 +800,9 @@ export default function CompaniesPage() {
       financialNotes: formData.financialNotes || null,
       notificationEmail: formData.notificationEmail || null,
       deliveryConfigJson: formData.deliveryConfigJson ? JSON.stringify(formData.deliveryConfigJson) : null,
+      autoCalcCost: formData.autoCalcCost,
+      autoPriceFromCatalog: formData.autoPriceFromCatalog,
+      manualAvgCost: formData.manualAvgCost ? String(formData.manualAvgCost) : null,
     };
 
     if (editingCompany) {
@@ -1444,6 +1523,11 @@ export default function CompaniesPage() {
               contractModel={formData.contractModel}
               hiddenIds={pendingDeletes}
               onDelete={(id) => setPendingDeletes(prev => [...prev, id])}
+              autoCalcCost={formData.autoCalcCost}
+              autoPriceFromCatalog={formData.autoPriceFromCatalog}
+              manualAvgCost={formData.manualAvgCost}
+              priceGroupId={formData.priceGroupId ? Number(formData.priceGroupId) : null}
+              onFlagChange={(flag, val) => set(flag as any, val)}
             />
           )}
 
