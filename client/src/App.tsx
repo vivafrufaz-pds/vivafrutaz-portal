@@ -38,6 +38,7 @@ import AdminSpecialOrders from "@/pages/admin/special-orders";
 import AdminUsers from "@/pages/admin/users";
 import AdminBackups from "@/pages/admin/backups";
 import AdminDeveloper from "@/pages/admin/developer";
+import AdminMasterControl from "@/pages/admin/master-control";
 import AdminSupportConfig from "@/pages/admin/support-config";
 import AdminAnnouncements from "@/pages/admin/announcements";
 import AdminSystemHealth from "@/pages/admin/system-health";
@@ -150,8 +151,8 @@ function ProtectedRoute({
   if (role === 'admin' && !isStaff) return <Redirect to="/client" />;
   if (role === 'client' && !isClient) return <Redirect to="/admin" />;
 
-  // Role-based protection for admin routes
-  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+  // Role-based protection for admin routes — MASTER bypasses all
+  if (allowedRoles && user && user.role !== 'MASTER' && !allowedRoles.includes(user.role)) {
     // Log unauthorized access attempt (fire and forget)
     fetch('/api/auth/log-unauthorized', {
       method: 'POST',
@@ -162,8 +163,8 @@ function ProtectedRoute({
     return <Redirect to="/admin" />;
   }
 
-  // Tab-level permission check (only when tabPermissions is explicitly set)
-  if (tabKey && user) {
+  // Tab-level permission check (MASTER bypasses all tab restrictions)
+  if (tabKey && user && user.role !== 'MASTER') {
     const tabPerms = (user as any).tabPermissions as string[] | null | undefined;
     if (tabPerms && tabPerms.length > 0 && !tabPerms.includes(tabKey)) {
       return <UnauthorizedModule />;
@@ -254,7 +255,10 @@ function Router() {
         {() => <ProtectedRoute component={AdminSystemHealth} role="admin" allowedRoles={['ADMIN', 'DEVELOPER', 'DIRECTOR']} tabKey="system-health" />}
       </Route>
       <Route path="/admin/developer">
-        {() => <ProtectedRoute component={AdminDeveloper} role="admin" allowedRoles={['DEVELOPER', 'ADMIN', 'DIRECTOR']} tabKey="developer" />}
+        {() => <ProtectedRoute component={AdminDeveloper} role="admin" allowedRoles={['DEVELOPER', 'ADMIN', 'DIRECTOR', 'MASTER']} tabKey="developer" />}
+      </Route>
+      <Route path="/admin/master-control">
+        {() => <ProtectedRoute component={AdminMasterControl} role="admin" allowedRoles={['MASTER']} tabKey="master-control" />}
       </Route>
       <Route path="/admin/support">
         {() => <ProtectedRoute component={AdminSupportConfig} role="admin" allowedRoles={['ADMIN', 'DEVELOPER', 'DIRECTOR']} tabKey="support" />}

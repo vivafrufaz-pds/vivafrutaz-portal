@@ -14,6 +14,7 @@ import { VirtualAssistant } from './VirtualAssistant';
 import { PWAInstallPrompt } from './PWAInstallPrompt';
 import { WhatsNewModal } from './WhatsNewModal';
 import { TrainingModeProvider, TrainingModeButton } from './TrainingMode';
+import { GlobalSearch } from './GlobalSearch';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -113,7 +114,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: '/admin/notification-settings', label: 'Notificações Push', icon: Bell, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'], tabKey: 'notification-settings', category: 'Sistema' },
     { href: '/admin/about-us', label: 'Quem Somos Nós', icon: Building2, roles: ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'], tabKey: 'about-us', category: 'Sistema' },
     { href: '/admin/support', label: 'Configuração de Suporte', icon: ShieldCheck, roles: ['ADMIN', 'DEVELOPER', 'DIRECTOR'], tabKey: 'support', category: 'Sistema' },
-    { href: '/admin/developer', label: 'Área do Desenvolvedor', icon: ShieldCheck, roles: ['DEVELOPER', 'ADMIN', 'DIRECTOR'], tabKey: 'developer', category: 'Sistema' },
+    { href: '/admin/developer', label: 'Área do Desenvolvedor', icon: ShieldCheck, roles: ['DEVELOPER', 'ADMIN', 'DIRECTOR', 'MASTER'], tabKey: 'developer', category: 'Sistema' },
+    { href: '/admin/master-control', label: 'Controle Master', icon: ShieldCheck, roles: ['MASTER'], tabKey: 'master-control', category: 'Sistema' },
   ];
 
   const isContratual = company?.clientType === 'contratual';
@@ -131,8 +133,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   const userTabPerms = user?.tabPermissions as string[] | null | undefined;
+  const isMaster = user?.role === 'MASTER';
   const links = isStaff 
     ? adminLinks.filter(l => {
+        if (isMaster) return true; // MASTER sees everything
         if (!l.roles.includes(user?.role || '')) return false;
         if (!userTabPerms || userTabPerms.length === 0) return true;
         return userTabPerms.includes(l.tabKey);
@@ -141,6 +145,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const roleLabel = (role?: string) => {
     switch (role) {
+      case 'MASTER': return 'Master';
       case 'ADMIN': return 'Administrador';
       case 'OPERATIONS_MANAGER': return 'Gerente de Operações';
       case 'PURCHASE_MANAGER': return 'Gerente de Compras';
@@ -326,7 +331,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
-        <SidebarContent />
+        {SidebarContent()}
       </aside>
 
       {/* Main area */}
@@ -345,7 +350,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Top bar with hamburger on mobile */}
-        <header className="h-16 border-b border-border/50 bg-card/50 backdrop-blur-sm flex items-center gap-3 px-4 md:px-8 shrink-0 sticky top-0 z-10">
+        <header className="h-16 border-b border-border/50 bg-card/50 backdrop-blur-sm flex items-center gap-3 px-4 md:px-6 shrink-0 sticky top-0 z-10">
           <button
             onClick={() => setSidebarOpen(true)}
             className="md:hidden w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors flex-shrink-0"
@@ -354,9 +359,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <h2 className="text-base md:text-lg font-bold text-foreground truncate">
+          <h2 className="text-base md:text-lg font-bold text-foreground truncate hidden md:block shrink-0">
             {currentPageLabel}
           </h2>
+          <div className="flex-1 flex justify-center md:justify-end">
+            <GlobalSearch />
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">

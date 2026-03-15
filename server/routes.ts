@@ -70,7 +70,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const backups = listBackups();
       res.json(backups);
     } catch (err) {
@@ -82,7 +82,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const filename = await runBackup();
       await storage.createLog({ action: 'BACKUP_CREATED', description: `Backup JSON criado manualmente: ${filename}`, userId: user.id, userEmail: user.email, userRole: user.role });
       res.status(201).json({ filename, message: "Backup JSON criado com sucesso." });
@@ -95,7 +95,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const filename = await runBackupSQL();
       await storage.createLog({ action: 'BACKUP_CREATED', description: `Backup SQL criado manualmente: ${filename}`, userId: user.id, userEmail: user.email, userRole: user.role });
       res.status(201).json({ filename, message: "Backup SQL criado com sucesso." });
@@ -108,7 +108,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const filename = req.params.filename;
       const filepath = getBackupPath(filename);
       if (!filepath) return res.status(404).json({ message: "Backup não encontrado" });
@@ -128,7 +128,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const ok = deleteBackup(req.params.filename);
       if (!ok) return res.status(404).json({ message: 'Backup não encontrado' });
       await storage.createLog({ action: 'BACKUP_DELETED', description: `Backup excluído: ${req.params.filename}`, userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN' });
@@ -141,7 +141,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const removed = cleanOldBackups(30);
       await storage.createLog({ action: 'BACKUPS_CLEANED', description: `${removed} backup(s) antigos removidos (>30 dias)`, userId: user.id, userEmail: user.email, userRole: user.role, level: 'WARN' });
       res.json({ ok: true, removed, message: `${removed} backup(s) antigos removidos.` });
@@ -153,7 +153,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const status = mailerStatus();
       if (!status.configured) return res.status(400).json({ message: 'SMTP não configurado. Configure SMTP_HOST, SMTP_USER e SMTP_PASS primeiro.' });
       const toEmail = req.body.toEmail || process.env.SMTP_USER || '';
@@ -291,7 +291,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão' });
       }
 
@@ -636,7 +636,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
 
       const checks: Array<{ id: string; label: string; status: 'OK' | 'WARN' | 'ERROR' | 'FIXED'; detail: string }> = [];
       let autoFixed = 0;
@@ -644,7 +644,7 @@ export async function registerRoutes(
       // 1. Users check
       try {
         const users = await storage.getUsers();
-        const validRoles = ['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'];
+        const validRoles = ['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'FINANCEIRO', 'LOGISTICS'];
         const invalidRole = users.filter((u: any) => !validRoles.includes(u.role));
         const noPassword = users.filter((u: any) => !u.password);
         if (invalidRole.length > 0) {
@@ -1241,7 +1241,7 @@ export async function registerRoutes(
   app.post('/api/admin/users/:id/unlock', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const actor = await storage.getUser(req.session.userId);
-    if (!actor || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão para desbloquear contas.' });
+    if (!actor || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão para desbloquear contas.' });
     try {
       const id = Number(req.params.id);
       const target = await storage.getUser(id);
@@ -1259,7 +1259,7 @@ export async function registerRoutes(
   app.post('/api/admin/companies/:id/unlock', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const actor = await storage.getUser(req.session.userId);
-    if (!actor || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão para desbloquear contas.' });
+    if (!actor || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão para desbloquear contas.' });
     try {
       const id = Number(req.params.id);
       const target = await storage.getCompany(id);
@@ -1277,7 +1277,7 @@ export async function registerRoutes(
   app.get('/api/security-logs', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const actor = await storage.getUser(req.session.userId);
-    if (!actor || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão.' });
+    if (!actor || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão.' });
     try {
       const limit = Math.min(Number(req.query.limit) || 200, 500);
       const logs = await storage.getSecurityLogs(limit);
@@ -1291,7 +1291,7 @@ export async function registerRoutes(
   app.get('/api/security/locked-accounts', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const actor = await storage.getUser(req.session.userId);
-    if (!actor || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão.' });
+    if (!actor || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(actor.role)) return res.status(403).json({ message: 'Sem permissão.' });
     try {
       const allUsers = await storage.getUsers();
       const allCompanies = await storage.getCompanies();
@@ -1369,7 +1369,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const actingUser = await storage.getUser(req.session.userId);
-      if (!actingUser || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(actingUser.role)) {
+      if (!actingUser || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(actingUser.role)) {
         return res.status(403).json({ message: 'Apenas Administrador, Diretor ou Desenvolvedor podem aprovar/recusar pedidos pontuais.' });
       }
       const id = Number(req.params.id);
@@ -1895,7 +1895,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
 
       const companies = await storage.getCompanies();
       const issues: { id: number; companyName: string; problems: string[] }[] = [];
@@ -2326,7 +2326,7 @@ export async function registerRoutes(
   app.patch('/api/company-config', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
       return res.status(403).json({ message: 'Sem permissão' });
     }
     try {
@@ -2439,7 +2439,7 @@ export async function registerRoutes(
       const userId = (req.session as any)?.userId;
       if (!userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão para excluir pedidos' });
       }
       const { orderIds, motivo, confirmar } = req.body;
@@ -2476,7 +2476,7 @@ export async function registerRoutes(
       const userId = (req.session as any)?.userId;
       if (!userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(userId);
-      if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão para excluir pedidos' });
       }
       const id = Number(req.params.id);
@@ -2744,7 +2744,7 @@ export async function registerRoutes(
       const actor = actorId ? await storage.getUser(actorId) : null;
 
       // Only ADMIN, DIRECTOR, DEVELOPER may change passwords
-      if (!actor || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(actor.role)) {
+      if (!actor || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(actor.role)) {
         await storage.createLog({ action: 'PASSWORD_CHANGE_BLOCKED', description: `Tentativa de alteração de senha bloqueada (sem permissão)`, userEmail: actor?.email || '', userRole: actor?.role || '', ip: req.ip || '', level: 'WARN' });
         return res.status(403).json({ message: 'Acesso restrito. Apenas diretoria ou administração podem alterar esta senha.' });
       }
@@ -2791,7 +2791,7 @@ export async function registerRoutes(
       const sess = req.session as any;
       const userId = sess?.userId;
       const user = userId ? await storage.getUser(userId) : null;
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão' });
       }
       const { enabled } = req.body;
@@ -2836,7 +2836,7 @@ export async function registerRoutes(
       const sess = req.session as any;
       const userId = sess?.userId;
       const user = userId ? await storage.getUser(userId) : null;
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão' });
       }
       const { enabled } = req.body;
@@ -2898,7 +2898,7 @@ export async function registerRoutes(
   app.post('/api/tasks', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
       return res.status(403).json({ message: 'Sem permissão' });
     }
     try {
@@ -2937,7 +2937,7 @@ export async function registerRoutes(
   app.delete('/api/tasks/:id', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
       return res.status(403).json({ message: 'Sem permissão' });
     }
     try {
@@ -2967,7 +2967,7 @@ export async function registerRoutes(
         return res.json(incidents);
       }
       const user = await storage.getUser(req.session.userId!);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão' });
       }
       const incidents = await storage.getClientIncidents();
@@ -2978,7 +2978,7 @@ export async function registerRoutes(
   app.patch('/api/client-incidents/:id', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
       return res.status(403).json({ message: 'Sem permissão' });
     }
     try {
@@ -2994,7 +2994,7 @@ export async function registerRoutes(
   app.delete('/api/client-incidents/:id', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
       return res.status(403).json({ message: 'Sem permissão - apenas administradores podem excluir ocorrências' });
     }
     try {
@@ -3010,7 +3010,7 @@ export async function registerRoutes(
   app.post('/api/client-incidents/:id/respond', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
       return res.status(403).json({ message: 'Sem permissão' });
     }
     try {
@@ -3054,7 +3054,7 @@ export async function registerRoutes(
         senderName = inc?.companyName || 'Cliente';
       } else {
         const user = await storage.getUser(req.session.userId!);
-        if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
+        if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
           return res.status(403).json({ message: 'Sem permissão' });
         }
         senderName = user.name;
@@ -3076,7 +3076,7 @@ export async function registerRoutes(
   app.get('/api/internal-incidents', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
       return res.status(403).json({ message: 'Sem permissão' });
     }
     try {
@@ -3115,7 +3115,7 @@ export async function registerRoutes(
   app.delete('/api/internal-incidents/:id', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
       return res.status(403).json({ message: 'Sem permissão' });
     }
     try {
@@ -3129,7 +3129,7 @@ export async function registerRoutes(
   const logAuth = async (req: any, res: any) => {
     if (!req.session?.userId) { res.status(401).json({ message: 'Not authenticated' }); return null; }
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) {
       res.status(403).json({ message: 'Sem permissão' }); return null;
     }
     return user;
@@ -3235,13 +3235,13 @@ export async function registerRoutes(
   app.get('/api/quotations', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try { res.json(await storage.getQuotations()); } catch (e) { res.status(500).json({ message: 'Erro' }); }
   });
   app.post('/api/quotations', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
       const { companyName, contactName, contactPhone, email, cnpj, address, city, state, estimatedVolume, productInterest, logisticsNote, priceGroupId, priceGroupName, status, deliveryWindowsJson, deliveryWindowsRespondedBy, deliveryWindowsRespondedAt } = req.body;
       if (!companyName || !contactName) return res.status(400).json({ message: 'Empresa e contato obrigatórios' });
@@ -3254,7 +3254,7 @@ export async function registerRoutes(
   app.patch('/api/quotations/:id', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'LOGISTICS'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
       const data = { ...req.body };
       if (data.deliveryWindowsRespondedAt && typeof data.deliveryWindowsRespondedAt === 'string') {
@@ -3272,7 +3272,7 @@ export async function registerRoutes(
   app.delete('/api/quotations/:id', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try { await storage.deleteQuotation(parseInt(req.params.id)); res.json({ ok: true }); } catch (e) { res.status(500).json({ message: 'Erro' }); }
   });
 
@@ -3293,7 +3293,7 @@ export async function registerRoutes(
   app.delete('/api/logs', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
       const allLogs = await storage.getLogs(10000);
       const count = allLogs.length;
@@ -3307,7 +3307,7 @@ export async function registerRoutes(
   app.delete('/api/logs/selected', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
       const { ids } = req.body;
       if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ message: 'IDs inválidos.' });
@@ -3321,7 +3321,7 @@ export async function registerRoutes(
   app.delete('/api/logs/by-date', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
       const { startDate, endDate } = req.body;
       if (!startDate || !endDate) return res.status(400).json({ message: 'Datas inválidas.' });
@@ -3337,7 +3337,7 @@ export async function registerRoutes(
   app.get('/api/logs/export', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['MASTER', 'ADMIN', 'DEVELOPER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
       const logs = await storage.getLogs(10000);
       const headers = ['ID', 'Nível', 'Ação', 'Descrição', 'Usuário', 'E-mail', 'Papel', 'IP', 'Data/Hora'];
@@ -3404,7 +3404,7 @@ export async function registerRoutes(
   app.get('/api/audit', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
       const allUsers = await storage.getUsers();
       const allCompanies = await storage.getCompanies();
@@ -3626,7 +3626,7 @@ export async function registerRoutes(
   app.get('/api/executive-dashboard', async (req, res) => {
     if (!req.session?.userId) return res.status(401).json({ message: 'Not authenticated' });
     const user = await storage.getUser(req.session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'FINANCEIRO', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
     try {
       const { period = 'month' } = req.query;
       const now = new Date();
@@ -3856,7 +3856,7 @@ export async function registerRoutes(
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     const user = await storage.getUser(session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
       return res.status(403).json({ message: 'Acesso negado' });
     }
     const { title, message, type, priority, startDate, endDate, active, targetAll, targetClientTypes, targetCompanyIds } = req.body;
@@ -3880,7 +3880,7 @@ export async function registerRoutes(
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     const user = await storage.getUser(session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
       return res.status(403).json({ message: 'Acesso negado' });
     }
     const row = await storage.updateAnnouncement(Number(req.params.id), req.body);
@@ -3892,7 +3892,7 @@ export async function registerRoutes(
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     const user = await storage.getUser(session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
       return res.status(403).json({ message: 'Acesso negado' });
     }
     const { active } = req.body;
@@ -3905,7 +3905,7 @@ export async function registerRoutes(
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     const user = await storage.getUser(session.userId);
-    if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+    if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
       return res.status(403).json({ message: 'Acesso negado' });
     }
     await storage.deleteAnnouncement(Number(req.params.id));
@@ -4380,7 +4380,7 @@ export async function registerRoutes(
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     const user = await storage.getUser(session.userId);
-    if (!user || !['ADMIN', 'MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Acesso negado' });
+    if (!user || !['MASTER', 'ADMIN', 'MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Acesso negado' });
     const { type, label, dayOfWeek, timeOfDay, enabled } = req.body;
     if (!type || !label || !timeOfDay) return res.status(400).json({ message: 'type, label e timeOfDay são obrigatórios' });
     const schedule = await storage.createEmailSchedule({ type, label, dayOfWeek: dayOfWeek ?? null, timeOfDay, enabled: enabled ?? true });
@@ -4391,7 +4391,7 @@ export async function registerRoutes(
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     const user = await storage.getUser(session.userId);
-    if (!user || !['ADMIN', 'MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Acesso negado' });
+    if (!user || !['MASTER', 'ADMIN', 'MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Acesso negado' });
     const { type, label, dayOfWeek, timeOfDay, enabled } = req.body;
     const updated = await storage.updateEmailSchedule(Number(req.params.id), { type, label, dayOfWeek, timeOfDay, enabled });
     res.json(updated);
@@ -4401,7 +4401,7 @@ export async function registerRoutes(
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     const user = await storage.getUser(session.userId);
-    if (!user || !['ADMIN', 'MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Acesso negado' });
+    if (!user || !['MASTER', 'ADMIN', 'MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Acesso negado' });
     await storage.deleteEmailSchedule(Number(req.params.id));
     res.status(204).send();
   });
@@ -4424,7 +4424,7 @@ export async function registerRoutes(
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     const user = await storage.getUser(session.userId);
-    if (!user || !['ADMIN', 'MANAGER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Acesso negado' });
+    if (!user || !['MASTER', 'ADMIN', 'MANAGER', 'DIRECTOR'].includes(user.role)) return res.status(403).json({ message: 'Acesso negado' });
 
     const { subject, message, targetType, companyIds } = req.body;
     if (!subject || !message) return res.status(400).json({ message: 'subject e message são obrigatórios' });
@@ -4480,7 +4480,7 @@ export async function registerRoutes(
     const session = req.session as any;
     if (!session.userId) return res.status(401).json({ message: 'Não autorizado' });
     const user = await storage.getUser(session.userId);
-    if (!user || !['ADMIN', 'MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Acesso negado' });
+    if (!user || !['MASTER', 'ADMIN', 'MANAGER'].includes(user.role)) return res.status(403).json({ message: 'Acesso negado' });
 
     const { orderId, type } = req.body;
     if (!orderId || !type) return res.status(400).json({ message: 'orderId e type são obrigatórios' });
@@ -4683,7 +4683,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const { title, content, foundingYear, mission, vision, values, imageBase64, imageType } = req.body;
       const result = await storage.upsertAboutUs({ title, content, foundingYear, mission, vision, values, imageBase64, imageType });
       res.json(result);
@@ -4697,7 +4697,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const cfg = await storage.getSmtpConfig();
       if (!cfg) return res.json({ host: '', port: 587, user: '', password: '', senderEmail: '', senderName: 'VivaFrutaz', hasPassword: false });
       res.json({ ...cfg, password: cfg.password ? '••••••••' : '', hasPassword: !!cfg.password });
@@ -4710,7 +4710,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const { host, port, user: smtpUser, password, senderEmail, senderName } = req.body;
       const existing = await storage.getSmtpConfig();
       const newPassword = (password && password !== '••••••••') ? password : (existing?.password || '');
@@ -4733,7 +4733,7 @@ export async function registerRoutes(
     try {
       if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const cfg = await storage.getSmtpConfig();
       if (!cfg || !cfg.host || !cfg.user || !cfg.password) {
         return res.status(400).json({ message: 'Configure e salve o SMTP antes de testar.' });
@@ -5612,7 +5612,7 @@ export async function registerRoutes(
     if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
     try {
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão' });
       }
       const now = Date.now();
@@ -5736,7 +5736,7 @@ export async function registerRoutes(
     if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
     try {
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'FINANCEIRO'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'FINANCEIRO'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão' });
       }
       const now = new Date();
@@ -5821,7 +5821,7 @@ export async function registerRoutes(
     if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
     try {
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER', 'OPERATIONS_MANAGER', 'PURCHASE_MANAGER', 'LOGISTICS'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão' });
       }
       const now = new Date();
@@ -5944,7 +5944,7 @@ export async function registerRoutes(
     if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
     try {
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const { question, answer } = req.body;
       if (!question?.trim() || !answer?.trim()) return res.status(400).json({ message: 'Pergunta e resposta são obrigatórios' });
       const result = await storage.createFloraTraining({ question: question.trim(), answer: answer.trim(), userId: user.id, userName: user.name, active: true });
@@ -5956,7 +5956,7 @@ export async function registerRoutes(
     if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
     try {
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const { question, answer, active } = req.body;
       const result = await storage.updateFloraTraining(Number(req.params.id), { question: question?.trim(), answer: answer?.trim(), active });
       res.json(result);
@@ -5967,7 +5967,7 @@ export async function registerRoutes(
     if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
     try {
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       await storage.deleteFloraTraining(Number(req.params.id));
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -6059,7 +6059,7 @@ export async function registerRoutes(
     if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
     try {
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) return res.status(403).json({ message: 'Sem permissão' });
       const sim = await storage.getScopeSimulation(Number(req.params.id));
       if (!sim) return res.status(404).json({ message: 'Simulação não encontrada' });
       if (sim.status === 'converted') return res.status(400).json({ message: 'Simulação já foi convertida' });
@@ -6175,7 +6175,7 @@ export async function registerRoutes(
     if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
     try {
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão' });
       }
       const setting = await storage.upsertNotificationSetting(req.params.event, req.body);
@@ -6190,13 +6190,151 @@ export async function registerRoutes(
     if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
     try {
       const user = await storage.getUser(req.session.userId);
-      if (!user || !['ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
+      if (!user || !['MASTER', 'ADMIN', 'DIRECTOR', 'DEVELOPER'].includes(user.role)) {
         return res.status(403).json({ message: 'Sem permissão' });
       }
       await fireNotification('flora_alert', {
         message: '✅ Notificações push funcionando corretamente no VivaFrutaz!',
       }, { url: '/admin' });
       res.json({ success: true, message: 'Notificação de teste enviada!' });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ─── Global Search ──────────────────────────────────────────────────────────
+  app.get('/api/search', async (req: any, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const q = ((req.query.q as string) || '').trim();
+      if (!q || q.length < 2) return res.json({ results: [], total: 0 });
+      const term = `%${q.toLowerCase()}%`;
+      const results: any[] = [];
+
+      // Clientes/Empresas
+      const comps = await db.execute(sql`SELECT id, company_name, contact_name FROM companies WHERE LOWER(company_name) LIKE ${term} OR LOWER(contact_name) LIKE ${term} LIMIT 5`);
+      for (const c of comps.rows) {
+        results.push({ id: c.id, label: c.company_name, sublabel: c.contact_name as string, href: '/admin/companies', category: 'Clientes' });
+      }
+
+      // Produtos
+      const prods = await db.execute(sql`SELECT id, name, product_code FROM products WHERE LOWER(name) LIKE ${term} OR LOWER(COALESCE(product_code,'')) LIKE ${term} LIMIT 5`);
+      for (const p of prods.rows) {
+        results.push({ id: p.id, label: p.name as string, sublabel: p.product_code ? `#${p.product_code}` : undefined, href: '/admin/products', category: 'Produtos' });
+      }
+
+      // Pedidos
+      const ords = await db.execute(sql`SELECT o.id, c.company_name, o.status FROM orders o LEFT JOIN companies c ON o.company_id = c.id WHERE LOWER(COALESCE(c.company_name,'')) LIKE ${term} OR CAST(o.id AS TEXT) LIKE ${term} LIMIT 5`);
+      for (const o of ords.rows) {
+        results.push({ id: o.id, label: `Pedido #${o.id}`, sublabel: o.company_name as string, href: '/admin/orders', category: 'Pedidos' });
+      }
+
+      // Contratos
+      const conts = await db.execute(sql`SELECT cc.id, c.company_name FROM company_contracts cc LEFT JOIN companies c ON cc.company_id = c.id WHERE LOWER(COALESCE(c.company_name,'')) LIKE ${term} LIMIT 5`);
+      for (const c of conts.rows) {
+        results.push({ id: c.id, label: `Contrato: ${c.company_name}`, href: '/admin/contracts', category: 'Contratos' });
+      }
+
+      // Notas Fiscais
+      const nfs = await db.execute(sql`SELECT id, invoice_number, supplier_name FROM fiscal_invoices WHERE LOWER(COALESCE(invoice_number,'')) LIKE ${term} OR LOWER(COALESCE(supplier_name,'')) LIKE ${term} LIMIT 5`);
+      for (const n of nfs.rows) {
+        results.push({ id: n.id, label: `NF ${n.invoice_number || n.id}`, sublabel: n.supplier_name as string, href: '/admin/fiscal', category: 'Notas Fiscais' });
+      }
+
+      // Categorias
+      const cats = await db.execute(sql`SELECT id, name FROM categories WHERE LOWER(name) LIKE ${term} LIMIT 5`);
+      for (const c of cats.rows) {
+        results.push({ id: c.id, label: c.name as string, href: '/admin/categories', category: 'Categorias' });
+      }
+
+      // Usuários (staff only and non-sensitive)
+      const usrs = await db.execute(sql`SELECT id, name, email, role FROM users WHERE LOWER(name) LIKE ${term} OR LOWER(email) LIKE ${term} LIMIT 5`);
+      for (const u of usrs.rows) {
+        results.push({ id: u.id, label: u.name as string, sublabel: u.email as string, href: '/admin/users', category: 'Usuários' });
+      }
+
+      res.json({ results, total: results.length });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ─── MASTER control routes ─────────────────────────────────────────────────
+  app.get('/api/master/users', async (req: any, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== 'MASTER') return res.status(403).json({ message: 'Acesso exclusivo para usuário MASTER' });
+      const allUsers = await storage.getUsers();
+      res.json(allUsers);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/master/reset-password', async (req: any, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const masterUser = await storage.getUser(req.session.userId);
+      if (!masterUser || masterUser.role !== 'MASTER') return res.status(403).json({ message: 'Acesso exclusivo para usuário MASTER' });
+      const { userId, newPassword } = req.body;
+      if (!userId || !newPassword) return res.status(400).json({ message: 'userId e newPassword são obrigatórios' });
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser) return res.status(404).json({ message: 'Usuário não encontrado' });
+      await storage.updateUser(userId, { password: newPassword });
+      await storage.createLog({ action: 'MASTER_RESET_PASSWORD', description: `[MASTER] Senha resetada para: ${targetUser.email} (ID ${userId})`, userId: masterUser.id, userEmail: masterUser.email, userRole: 'MASTER', level: 'WARN' });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch('/api/master/users/:id', async (req: any, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const masterUser = await storage.getUser(req.session.userId);
+      if (!masterUser || masterUser.role !== 'MASTER') return res.status(403).json({ message: 'Acesso exclusivo para usuário MASTER' });
+      const targetId = parseInt(req.params.id);
+      const targetUser = await storage.getUser(targetId);
+      if (!targetUser) return res.status(404).json({ message: 'Usuário não encontrado' });
+      // Protect MASTER from downgrade by other users
+      if (targetUser.role === 'MASTER' && targetId !== masterUser.id && req.body.role && req.body.role !== 'MASTER') {
+        return res.status(403).json({ message: 'Não é possível rebaixar outro usuário MASTER' });
+      }
+      const allowed = ['role', 'active', 'isLocked', 'tabPermissions', 'permissions'];
+      const updates: any = {};
+      for (const key of allowed) { if (req.body[key] !== undefined) updates[key] = req.body[key]; }
+      await storage.updateUser(targetId, updates);
+      await storage.createLog({ action: 'MASTER_UPDATE_USER', description: `[MASTER] Usuário atualizado: ${targetUser.email} — ${JSON.stringify(updates)}`, userId: masterUser.id, userEmail: masterUser.email, userRole: 'MASTER', level: 'WARN' });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/master/unlock-user', async (req: any, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const masterUser = await storage.getUser(req.session.userId);
+      if (!masterUser || masterUser.role !== 'MASTER') return res.status(403).json({ message: 'Acesso exclusivo para usuário MASTER' });
+      const { userId } = req.body;
+      const targetUser = await storage.getUser(userId);
+      if (!targetUser) return res.status(404).json({ message: 'Usuário não encontrado' });
+      await storage.updateUser(userId, { isLocked: false, loginAttempts: 0 });
+      await storage.createLog({ action: 'MASTER_UNLOCK_USER', description: `[MASTER] Conta desbloqueada: ${targetUser.email}`, userId: masterUser.id, userEmail: masterUser.email, userRole: 'MASTER', level: 'WARN' });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get('/api/master/logs', async (req: any, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const masterUser = await storage.getUser(req.session.userId);
+      if (!masterUser || masterUser.role !== 'MASTER') return res.status(403).json({ message: 'Acesso exclusivo para usuário MASTER' });
+      const logs = await storage.getLogs({ limit: 200 });
+      res.json(logs);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
