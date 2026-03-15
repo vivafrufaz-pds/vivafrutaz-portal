@@ -3907,7 +3907,9 @@ export async function registerRoutes(
               });
             }
             const entry = productMap.get(key)!;
-            const qty = Number(si.approvedQuantity || si.quantity || 0);
+            // Parse quantity safely — special order qty may be a string like "2kg"
+            const rawQty = si.approvedQuantity ?? si.quantity ?? 0;
+            const qty = parseFloat(String(rawQty).replace(/[^0-9.]/g, '')) || 0;
             entry.totalQty += qty;
             entry.companies.push({
               companyId: sr.companyId, companyName, quantity: qty,

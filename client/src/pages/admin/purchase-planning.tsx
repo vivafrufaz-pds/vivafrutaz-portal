@@ -179,10 +179,38 @@ export default function PurchasePlanningPage() {
     staleTime: 10 * 60 * 1000,
   });
 
+  const { data: inventorySettings = [] } = useQuery<any[]>({
+    queryKey: ['/api/inventory/settings'],
+    queryFn: async () => {
+      const res = await fetch('/api/inventory/settings', { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Stock deficit alerts — compare demand vs current inventory
+  const stockAlerts = useMemo(() => {
+    if (!data?.items.length || !inventorySettings.length) return [];
+    const alerts: { productName: string; demand: number; currentStock: number; unit: string }[] = [];
+    for (const item of data.items) {
+      const inv = inventorySettings.find((s: any) =>
+        s.productName?.toLowerCase() === item.productName.toLowerCase() ||
+        s.productId === item.productId
+      );
+      if (!inv) continue;
+      const stock = parseFloat(inv.currentStock ?? inv.current_stock ?? '0');
+      if (stock < item.totalQty) {
+        alerts.push({ productName: item.productName, demand: item.totalQty, currentStock: stock, unit: item.unit });
+      }
+    }
+    return alerts;
+  }, [data, inventorySettings]);
+
   const variationAlerts = useMemo(() => {
-    if (!planData || !forecastData?.forecast.length) return [];
+    if (!data || !forecastData?.forecast.length) return [];
     const alerts: { productName: string; currentTotal: number; avgWeekly: number; pct: number }[] = [];
-    for (const item of planData.items) {
+    for (const item of data.items) {
       const fc = forecastData.forecast.find(f => f.productName === item.productName);
       if (!fc || fc.avgWeekly <= 0) continue;
       const pct = ((item.totalQty - fc.avgWeekly) / fc.avgWeekly) * 100;
@@ -191,7 +219,7 @@ export default function PurchasePlanningPage() {
       }
     }
     return alerts.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 10);
-  }, [planData, forecastData]);
+  }, [data, forecastData]);
 
   const upsertMutation = useMutation({
     mutationFn: (payload: any) => apiRequest('POST', '/api/purchase-planning/status', payload),
@@ -319,6 +347,30 @@ export default function PurchasePlanningPage() {
           );
         })}
       </div>
+
+      {/* Stock Deficit Alerts */}
+      {stockAlerts.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-2" data-testid="stock-alerts-banner">
+          <div className="flex items-center gap-2 font-bold text-red-800 text-sm">
+            <AlertCircle className="w-4 h-4" /> Estoque Insuficiente para Atender Pedidos da Semana
+          </div>
+          <p className="text-xs text-red-700">Os produtos abaixo têm demanda superior ao estoque atual cadastrado.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {stockAlerts.map((a, i) => (
+              <div key={i} className="flex items-center justify-between bg-white/70 rounded-lg px-3 py-2 text-sm border border-red-100">
+                <span className="font-semibold text-red-900">{a.productName}</span>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-muted-foreground">Estoque: <strong className="text-red-700">{a.currentStock} {a.unit}</strong></span>
+                  <span className="text-muted-foreground">Demanda: <strong>{a.demand} {a.unit}</strong></span>
+                  <span className="px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">
+                    Falta {(a.demand - a.currentStock).toFixed(a.demand % 1 !== 0 ? 2 : 0)} {a.unit}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-card rounded-2xl border border-border/50 p-4 flex flex-wrap gap-3 items-end">
