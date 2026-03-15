@@ -43,6 +43,7 @@ const emptyForm = {
   isIndustrialized: false,
   isSeasonal: false,
   observation: "",
+  curiosity: "",
   availableDays: [] as string[],
   ncm: "",
   cfop: "",
@@ -59,6 +60,7 @@ function productToForm(p: Product): typeof emptyForm {
     isIndustrialized: p.isIndustrialized ?? false,
     isSeasonal: p.isSeasonal ?? false,
     observation: (p as any).observation || "",
+    curiosity: (p as any).curiosity || "",
     availableDays: Array.isArray((p as any).availableDays) ? (p as any).availableDays as string[] : [],
     ncm: (p as any).ncm || "",
     cfop: (p as any).cfop || "",
@@ -131,6 +133,7 @@ export default function ProductsPage() {
       isIndustrialized: formData.isIndustrialized,
       isSeasonal: formData.isSeasonal,
       observation: formData.observation || null,
+      curiosity: formData.curiosity || null,
       availableDays: formData.availableDays.length > 0 ? formData.availableDays : null,
       ncm: formData.ncm || null,
       cfop: formData.cfop || null,
@@ -325,6 +328,18 @@ export default function ProductsPage() {
               className="w-full px-4 py-2.5 rounded-xl border-2 border-border focus:border-primary outline-none"
               placeholder="ex: Display com 12 unidades, Bandeja com 6 potes..." />
             <p className="text-xs text-muted-foreground mt-1">Aparece no catálogo do cliente e nos relatórios.</p>
+          </div>
+
+          {/* Curiosidade */}
+          <div className="p-4 rounded-xl border-2 border-amber-200 bg-amber-50">
+            <label className="flex items-center gap-1 text-sm font-bold text-amber-800 mb-2">
+              🍊 Curiosidade do Produto
+            </label>
+            <textarea value={formData.curiosity} onChange={e => set("curiosity", e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2.5 rounded-xl border-2 border-amber-200 focus:border-amber-400 outline-none text-sm bg-white resize-none"
+              placeholder="ex: A maçã contém antioxidantes naturais que ajudam a proteger o coração..." />
+            <p className="text-xs text-amber-700 mt-1">Conteúdo educativo exibido no assistente virtual e no quadro de curiosidades.</p>
           </div>
 
           {/* Flags row */}

@@ -6,9 +6,11 @@ import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   Star, Building2, CheckCircle, XCircle, Clock, Eye, Calendar, AlertTriangle,
-  Package, Tag, Edit2, Plus, Trash2, Filter, X
+  Package, Tag, Edit2, Plus, Trash2, Filter, X, FileDown, Printer
 } from "lucide-react";
 
 type SpecialItem = {
@@ -43,6 +45,115 @@ const REJECTION_PRESETS = [
   "Produto indisponível", "Fora da janela de entrega", "Estoque insuficiente",
   "Pedido fora do contrato", "Data solicitada inválida", "Quantidade acima do limite",
 ];
+
+function generateSpecialOrderPDF(req: SpecialOrderRequest, companyName: string) {
+  const doc = new jsPDF();
+  const items: SpecialItem[] = Array.isArray(req.items) ? req.items : [];
+  const today = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+  const orderCode = `PP-${String(req.id).padStart(6, '0')}`;
+  const statusLabel = req.status === 'APPROVED' ? 'Aprovado' : req.status === 'REJECTED' ? 'Recusado' : 'Pendente';
+  const GREEN = [34, 197, 94] as [number, number, number];
+  const ORANGE = [249, 115, 22] as [number, number, number];
+  const DARK = [30, 30, 30] as [number, number, number];
+
+  doc.setFillColor(...GREEN);
+  doc.rect(0, 0, 210, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text("VivaFrutaz — Pedido Pontual", 14, 14);
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(orderCode, 196, 14, { align: "right" });
+
+  doc.setTextColor(...DARK);
+  let y = 30;
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("Dados do Pedido", 14, y);
+  y += 6;
+
+  const infoData = [
+    ["Cliente", companyName],
+    ["Nº do Pedido Pontual", orderCode],
+    ["Data da Solicitação", format(new Date(req.createdAt), "dd/MM/yyyy", { locale: ptBR })],
+    ["Dia Solicitado", req.requestedDay],
+    ["Data Solicitada", req.requestedDate ? new Date(req.requestedDate + 'T12:00:00').toLocaleDateString('pt-BR') : "—"],
+    ["Data Prevista de Entrega", req.estimatedDeliveryDate ? new Date(req.estimatedDeliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : "—"],
+    ["Status", statusLabel],
+    ...(req.resolvedAt ? [["Data de Aprovação/Recusa", format(new Date(req.resolvedAt), "dd/MM/yyyy", { locale: ptBR })]] : []),
+    ...(req.adminNote ? [["Nota do Responsável", req.adminNote]] : []),
+  ];
+
+  autoTable(doc, {
+    startY: y,
+    head: [],
+    body: infoData,
+    theme: "grid",
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { fontStyle: "bold", fillColor: [245, 245, 245], cellWidth: 60 },
+      1: { cellWidth: 120 },
+    },
+    margin: { left: 14, right: 14 },
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 10;
+
+  if (items.length > 0) {
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...DARK);
+    doc.text("Produtos Solicitados", 14, y);
+    y += 4;
+
+    autoTable(doc, {
+      startY: y,
+      head: [["Produto", "Categoria", "Qtd. Solicitada", "Qtd. Aprovada", "Observações"]],
+      body: items.map(it => [
+        it.productName,
+        it.category || "—",
+        it.quantity,
+        it.approvedQuantity || "—",
+        (it as any).observations || "—",
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: GREEN, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 9 },
+      styles: { fontSize: 9, cellPadding: 3 },
+      margin: { left: 14, right: 14 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 8;
+  } else if (req.description) {
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("Descrição do Pedido", 14, y);
+    y += 5;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(req.description, 14, y);
+    y += 10;
+  }
+
+  if (req.observations) {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Observações do cliente: ${req.observations}`, 14, y);
+    y += 8;
+  }
+
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setFillColor(...ORANGE);
+  doc.rect(0, pageH - 14, 210, 14, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Documento gerado pelo sistema VivaFrutaz  |  ${today}  |  Pedido: ${orderCode}`, 14, pageH - 5);
+
+  doc.save(`pedido-pontual-${orderCode}.pdf`);
+}
 
 export default function SpecialOrdersAdminPage() {
   const { data: companies } = useCompanies();
@@ -285,13 +396,22 @@ export default function SpecialOrdersAdminPage() {
                         ) : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="px-6 py-4">
-                        <button data-testid={`button-review-special-order-${req.id}`}
-                          onClick={() => openReview(req)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 font-bold text-xs rounded-xl transition-colors ${
-                            req.status === 'PENDING' ? 'bg-primary text-white hover:bg-primary/90' : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                          }`}>
-                          <Eye className="w-3.5 h-3.5" /> {req.status === 'PENDING' ? 'Revisar' : 'Ver'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button data-testid={`button-review-special-order-${req.id}`}
+                            onClick={() => openReview(req)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 font-bold text-xs rounded-xl transition-colors ${
+                              req.status === 'PENDING' ? 'bg-primary text-white hover:bg-primary/90' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                            }`}>
+                            <Eye className="w-3.5 h-3.5" /> {req.status === 'PENDING' ? 'Revisar' : 'Ver'}
+                          </button>
+                          <button
+                            data-testid={`button-pdf-special-order-${req.id}`}
+                            onClick={() => generateSpecialOrderPDF(req, company?.companyName || `Empresa #${req.companyId}`)}
+                            title="Gerar PDF"
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-xl border border-secondary/40 text-secondary hover:bg-secondary/10 transition-colors">
+                            <FileDown className="w-3.5 h-3.5" /> PDF
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -306,6 +426,22 @@ export default function SpecialOrdersAdminPage() {
       {reviewing && (
         <Modal isOpen onClose={closeModal} title="Revisar Pedido Pontual" maxWidth="max-w-2xl">
           <div className="space-y-4">
+            {/* PDF Button */}
+            {(() => {
+              const modalCompany = companies?.find(c => c.id === reviewing.companyId);
+              return (
+                <div className="flex justify-end">
+                  <button
+                    data-testid="button-modal-pdf-special-order"
+                    onClick={() => generateSpecialOrderPDF(reviewing, modalCompany?.companyName || `Empresa #${reviewing.companyId}`)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl bg-secondary/10 text-secondary border border-secondary/30 hover:bg-secondary/20 transition-colors"
+                  >
+                    <FileDown className="w-4 h-4" /> Gerar PDF
+                  </button>
+                </div>
+              );
+            })()}
+
             {/* Company + date header */}
             {(() => {
               const company = companies?.find(c => c.id === reviewing.companyId);

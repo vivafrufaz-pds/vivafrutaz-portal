@@ -10,50 +10,228 @@ interface Message {
 }
 
 const CLIENT_MENU_OPTIONS = [
-  { key: '1', label: '1 — Como fazer meu pedido' },
-  { key: '2', label: '2 — Como cancelar pedido' },
-  { key: '3', label: '3 — Como realizar pedido pontual' },
-  { key: '4', label: '4 — Como acessar histórico de pedidos' },
-  { key: '5', label: '5 — Falar com suporte' },
+  { key: '1', label: '1 — Como fazer meu pedido semanal' },
+  { key: '2', label: '2 — Previsão de entrega / janela de pedidos' },
+  { key: '3', label: '3 — Catálogo e produtos disponíveis' },
+  { key: '4', label: '4 — Pedidos pontuais' },
+  { key: '5', label: '5 — Histórico de pedidos' },
+  { key: '6', label: '6 — Atualizar dados da empresa' },
+  { key: '7', label: '7 — Suporte e contato' },
 ];
 
 const ADMIN_MENU_OPTIONS = [
-  { key: '1', label: '1 — Como fazer pedido para cliente' },
-  { key: '2', label: '2 — Como cadastrar empresa' },
-  { key: '3', label: '3 — Como gerenciar tarefas' },
-  { key: '4', label: '4 — Como exportar relatórios' },
-  { key: '5', label: '5 — Suporte técnico' },
+  { key: '1', label: '1 — Empresas (clientes)' },
+  { key: '2', label: '2 — Produtos e categorias' },
+  { key: '3', label: '3 — Pedidos e confirmações' },
+  { key: '4', label: '4 — Logística e rotas de entrega' },
+  { key: '5', label: '5 — Janelas de pedido e exceções' },
+  { key: '6', label: '6 — Painel financeiro e exportações' },
+  { key: '7', label: '7 — Pedidos pontuais' },
+  { key: '8', label: '8 — Compras e estoque' },
+  { key: '9', label: '9 — Configurações e outros módulos' },
 ];
 
 const CLIENT_ANSWERS: Record<string, string> = {
-  '1': 'Para fazer seu pedido: acesse "Novo Pedido" no menu lateral, escolha o dia de entrega disponível, selecione os produtos e quantidades, e clique em "Finalizar Pedido". Você receberá uma confirmação após o envio.',
-  '2': 'Para cancelar um pedido, entre em contato com a equipe de operações. Pedidos só podem ser cancelados até 2 dias úteis antes da entrega. Acesse "Histórico de Pedidos" para verificar o status.',
-  '3': 'Para realizar um pedido pontual: acesse "Pedidos Pontuais" no menu lateral, clique em "Nova Solicitação", informe o dia desejado, a data, a quantidade aproximada e a descrição. A equipe VivaFrutaz analisará e entrará em contato.',
-  '4': 'Para acessar seu histórico: clique em "Histórico de Pedidos" no menu lateral. Você pode filtrar por mês, ano ou período para encontrar pedidos anteriores.',
-  '5': 'Para suporte imediato fale conosco pelo WhatsApp:\n📱 11 99411-3911\n\nOu registre uma ocorrência em "Ocorrências" no menu lateral.',
+  '1': `Para fazer seu pedido semanal:
+1. Acesse "Novo Pedido" no menu lateral
+2. Escolha o dia de entrega disponível dentro da janela de pedidos ativa
+3. Selecione os produtos e as quantidades desejadas
+4. Clique em "Finalizar Pedido" para confirmar
+
+Você receberá uma confirmação na tela. Pedidos podem ser editados enquanto a janela estiver aberta.`,
+
+  '2': `A previsão de entrega funciona assim:
+
+📅 A equipe VivaFrutaz define janelas de pedido com datas de abertura e fechamento. Após o fechamento, os pedidos são processados e a entrega ocorre nas datas previstas.
+
+Cada janela mostra:
+• Data de abertura para fazer pedidos
+• Data de fechamento (após essa data não é possível alterar)
+• Data prevista de início das entregas
+
+Você pode ver a janela ativa na tela inicial do portal.`,
+
+  '3': `O catálogo mostra todos os produtos disponíveis para sua empresa:
+
+🍊 Frutas frescas — produtos sazonais e permanentes
+🥦 Hortifruti / Verduras — itens frescos da semana
+🏭 Industrializados — produtos processados e embalados
+
+Cada produto exibe:
+• Nome e categoria
+• Unidade de venda (kg, caixa, unidade)
+• Preço da sua tabela
+• Disponibilidade por dia da semana
+
+Produtos sazonais aparecem apenas quando disponíveis. Pergunte sobre um produto específico para mais informações!`,
+
+  '4': `Pedidos pontuais são solicitações especiais fora da janela regular.
+
+Para fazer um pedido pontual:
+1. Acesse "Pedidos Pontuais" no menu lateral
+2. Clique em "Nova Solicitação"
+3. Informe: dia desejado, data, quantidade aproximada e descrição
+4. Envie — a equipe VivaFrutaz analisará e entrará em contato
+
+Status possíveis: Pendente → Aprovado ou Recusado
+
+A equipe pode ajustar quantidades ao aprovar.`,
+
+  '5': `Para acessar seu histórico de pedidos:
+1. Clique em "Histórico de Pedidos" no menu lateral
+2. Filtre por mês, ano ou período
+3. Clique em qualquer pedido para ver os detalhes
+
+Você pode ver o status de cada pedido: Confirmado, Em Entrega, Entregue ou Cancelado.`,
+
+  '6': `Para atualizar os dados da sua empresa:
+1. Acesse "Perfil da Empresa" no menu lateral
+2. Edite os campos disponíveis (endereço, contato, etc.)
+3. Salve as alterações
+
+Para dados sensíveis como CNPJ ou razão social, entre em contato com a equipe VivaFrutaz pelo WhatsApp: 11 99411-3911`,
+
+  '7': `Suporte VivaFrutaz:
+
+📱 WhatsApp: 11 99411-3911
+⏰ Atendimento: Segunda a Sexta, 7h às 18h
+
+Para registrar uma ocorrência formal:
+1. Acesse "Ocorrências" no menu lateral
+2. Clique em "Registrar Ocorrência"
+3. Descreva o problema e envie
+
+Nossa equipe será notificada e retornará em breve.`,
 };
 
 const ADMIN_ANSWERS: Record<string, string> = {
-  '1': 'Para gerenciar pedidos de clientes: acesse "Pedidos" no menu lateral. É possível confirmar, cancelar e adicionar observações a qualquer pedido.',
-  '2': 'Para cadastrar uma empresa: acesse "Empresas" no menu lateral, clique em "Nova Empresa", preencha os dados e salve. A empresa terá acesso ao portal após o cadastro.',
-  '3': 'Para gerenciar tarefas: acesse "Tarefas" no menu lateral. Admins podem criar, atribuir e excluir tarefas para a equipe.',
-  '4': 'Para exportar relatórios: acesse "Painel Financeiro" ou "Logística" e use os filtros de data. Clique em "Exportar" para gerar CSV.',
-  '5': 'Para suporte técnico do sistema, entre em contato com o desenvolvedor pelo WhatsApp:\n📱 11 99411-3911',
+  '1': `Módulo de Empresas:
+• Cadastre clientes do sistema com CNPJ, razão social, endereço e contato
+• Associe cada empresa a um grupo de preço (tabela de preços)
+• Defina o dia de entrega preferencial
+• Ative ou desative o acesso ao portal do cliente
+• Gerencie senhas de acesso das empresas
+
+Acesse em: Menu → Empresas`,
+
+  '2': `Módulo de Produtos e Categorias:
+• Cadastre produtos com nome, categoria, unidade de venda e preço base
+• Defina preços por grupo (tabela de preços por empresa)
+• Marque produtos como industrializados ou sazonais
+• Defina dias disponíveis para pedido por produto
+• Adicione dados fiscais: NCM, CFOP e unidade comercial
+• Adicione curiosidades educativas sobre o produto
+
+Categorias disponíveis: Frutas, Hortifruti/Verduras, Industrializados`,
+
+  '3': `Módulo de Pedidos:
+• Visualize todos os pedidos de todas as empresas
+• Confirme pedidos (CONFIRMED) ou cancele (CANCELLED)
+• Reabra pedidos para edição (OPEN_FOR_EDITING)
+• Adicione observações e notas internas
+• Gere DANFE (nota fiscal em PDF)
+• Exporte dados fiscais para ERP (Excel ou XML)
+• Filtre por empresa, status, data e status fiscal
+
+Status: ACTIVE → CONFIRMED → DELIVERED | CANCELLED`,
+
+  '4': `Módulo de Logística e Rotas:
+• Cadastre motoristas e veículos
+• Crie rotas de entrega associando empresa + motorista + veículo
+• Gerencie o assistente de rota para cada dia
+• Acompanhe o status das entregas
+
+O módulo de Logística é acessível para Administradores e Gerentes de Operações.`,
+
+  '5': `Janelas de Pedido e Exceções:
+• Crie janelas semanais com data de abertura, fechamento e entrega
+• Defina exceções por empresa (janelas específicas)
+• Controle de data-lock: impede edição após fechamento
+• Reabra pedidos individualmente quando necessário
+
+Exceções permitem que uma empresa tenha janela diferente das demais.`,
+
+  '6': `Painel Financeiro e Exportações:
+• Visualize pedidos com filtros por empresa, data e produto
+• Veja resumo de valores e quantidades
+• Exporte no formato Nimbi (ERP) — CSV ou Excel
+• Exporte nota fiscal DANFE em PDF
+• Controle de status fiscal: Pendente → Exportada → Emitida → Cancelada
+• Gere número de pré-nota automático (VF-NF-XXXXXX)`,
+
+  '7': `Pedidos Pontuais (Admin):
+• Visualize todas as solicitações de clientes
+• Filtre por status (Pendente, Aprovado, Recusado) e categoria
+• Aprove ou recuse com justificativa
+• Ajuste quantidades ao aprovar
+• Informe data prevista de entrega
+• Gere PDF do pedido pontual aprovado
+
+Clientes são notificados automaticamente.`,
+
+  '8': `Compras e Estoque:
+• Planejamento de compras: veja o que precisa ser comprado por dia
+• Controle de estoque: entrada e saída de produtos
+• Controle de desperdício (Waste Control)
+• Estoque é reduzido automaticamente ao confirmar pedidos
+• Inventário: 4 abas — Estoque, Movimentações, Alertas e Histórico`,
+
+  '9': `Outros módulos do sistema:
+
+🔧 Configurações: suporte, IE, CEP, natureza fiscal, padrões de nota
+📢 Avisos/Comunicados: crie anúncios para aparecer no portal dos clientes
+👤 Usuários internos: gerencie logins de administradores e operadores
+🔑 Senhas de clientes: aprove resets e controle acessos
+💾 Backup: execução e download de backups do banco de dados
+👨‍💻 Área do Desenvolvedor: ferramentas técnicas, logs e modo de teste
+📊 Painel Executivo (Diretoria): visão consolidada de pedidos e finanças`,
 };
 
 const CLIENT_FAQ: Array<{ patterns: string[]; answer: string }> = [
-  { patterns: ['ocorrencia', 'ocorrência', 'problema', 'reclamação', 'reclamacao'], answer: 'Para registrar uma ocorrência: acesse "Ocorrências" no menu, clique em "Registrar Ocorrência", descreva o problema e envie. A equipe será notificada.' },
-  { patterns: ['senha', 'esqueci senha', 'trocar senha'], answer: 'Para recuperar sua senha, na tela de login clique em "Esqueci minha senha" e siga as instruções. Ou entre em contato com a VivaFrutaz pelo WhatsApp: 11 99411-3911.' },
-  { patterns: ['perfil', 'dados da empresa', 'dados empresa'], answer: 'Para ver os dados da sua empresa: acesse "Perfil da Empresa" no menu lateral.' },
-  { patterns: ['whatsapp', 'suporte', 'contato', 'telefone', 'fone'], answer: 'Para suporte imediato fale conosco pelo WhatsApp:\n📱 11 99411-3911\n\nHorário de atendimento: segunda a sexta, das 7h às 18h.' },
+  { patterns: ['ocorrencia', 'ocorrência', 'problema', 'reclamação', 'reclamacao'], answer: 'Para registrar uma ocorrência: acesse "Ocorrências" no menu, clique em "Registrar Ocorrência", descreva o problema e envie. A equipe VivaFrutaz será notificada e retornará em breve.' },
+  { patterns: ['senha', 'esqueci senha', 'trocar senha', 'redefinir senha'], answer: 'Para recuperar sua senha: na tela de login, clique em "Esqueci minha senha" e siga as instruções. Ou entre em contato pelo WhatsApp: 📱 11 99411-3911.' },
+  { patterns: ['perfil', 'dados da empresa', 'dados empresa', 'atualizar empresa'], answer: 'Para atualizar os dados da empresa: acesse "Perfil da Empresa" no menu lateral e edite os campos disponíveis.' },
+  { patterns: ['whatsapp', 'suporte', 'contato', 'telefone', 'fone', 'falar'], answer: 'Para suporte fale conosco:\n📱 WhatsApp: 11 99411-3911\nSegunda a Sexta, das 7h às 18h.\n\nOu registre em "Ocorrências" no menu.' },
+  { patterns: ['entrega', 'quando chega', 'data entrega', 'previsão', 'previsao'], answer: 'A previsão de entrega depende da janela de pedidos ativa para sua empresa. Após o fechamento da janela, os pedidos são processados e entregues na data prevista. Veja a janela ativa na tela inicial.' },
+  { patterns: ['cancelar', 'cancelamento', 'cancelar pedido'], answer: 'Para cancelar um pedido, entre em contato com a equipe de operações pelo WhatsApp: 📱 11 99411-3911. Pedidos só podem ser cancelados antes do fechamento da janela.' },
+  { patterns: ['catálogo', 'catalogo', 'produtos disponíveis', 'quais produtos'], answer: 'O catálogo exibe todos os produtos disponíveis para sua empresa: frutas, hortifruti e industrializados. Preços, unidades e disponibilidade por dia da semana. Acesse em "Novo Pedido" → veja os produtos disponíveis.' },
+  { patterns: ['maçã', 'maca', 'banana', 'laranja', 'morango', 'manga', 'uva', 'abacaxi', 'melancia', 'mamão', 'kiwi', 'pera', 'cereja', 'limão', 'abacate', 'coco', 'goiaba', 'fruta'], answer: 'Para informações sobre produtos específicos, acesse o catálogo em "Novo Pedido". Lá você encontra preços, unidades de venda e disponibilidade. Para dúvidas sobre um produto específico, contate nossa equipe pelo WhatsApp: 📱 11 99411-3911.' },
+  { patterns: ['industrializado', 'industrializados', 'embalado', 'processado'], answer: 'Produtos industrializados são itens processados e embalados disponíveis no catálogo. Eles aparecem identificados com a tag "Industrializado" na listagem de produtos.' },
+  { patterns: ['sazonal', 'sazonais', 'temporada'], answer: 'Produtos sazonais estão disponíveis apenas em determinadas épocas do ano. Quando disponíveis, aparecem marcados como "Sazonal" no catálogo. Consulte a equipe para saber a disponibilidade atual.' },
+  { patterns: ['histórico', 'historico', 'pedidos anteriores', 'pedidos passados'], answer: 'Para ver seus pedidos anteriores: acesse "Histórico de Pedidos" no menu. Filtre por mês, ano ou período. Clique em qualquer pedido para ver os detalhes.' },
+  { patterns: ['pontual', 'pedido especial', 'fora da janela', 'especial'], answer: 'Pedidos pontuais são solicitações especiais fora da janela regular. Acesse "Pedidos Pontuais" no menu, clique em "Nova Solicitação", preencha os dados e envie. Nossa equipe analisará e retornará em até 24h.' },
 ];
 
 const ADMIN_FAQ: Array<{ patterns: string[]; answer: string }> = [
-  { patterns: ['logistica', 'logística', 'rota', 'motorista', 'entrega', 'veículo'], answer: 'O módulo de Logística permite cadastrar motoristas, veículos e rotas de entrega. Disponível para Administradores e Gerentes de Operações.' },
-  { patterns: ['senha', 'reset', 'redefinir'], answer: 'Senhas de clientes são gerenciadas em "Senhas de Clientes" no menu lateral. Administradores podem aprovar solicitações de reset.' },
-  { patterns: ['financeiro', 'faturamento', 'nota fiscal', 'nimbi'], answer: 'O Painel Financeiro mostra pedidos com filtros por data, empresa e produto. Exporte no formato Nimbi (para ERPs) ou CSV padrão.' },
-  { patterns: ['backup', 'banco de dados'], answer: 'Backups automáticos são feitos diariamente às 17h. Para baixar: acesse "Backup & E-mails" e clique em "Executar Backup".' },
+  { patterns: ['logistica', 'logística', 'rota', 'motorista', 'entrega', 'veículo'], answer: 'O módulo de Logística permite cadastrar motoristas, veículos e rotas de entrega. Disponível para Administradores e Gerentes de Operações. Acesse em Menu → Logística.' },
+  { patterns: ['senha', 'reset', 'redefinir', 'senha cliente'], answer: 'Senhas de clientes são gerenciadas em "Senhas de Clientes" no menu. Administradores podem aprovar ou recusar solicitações de reset de senha.' },
+  { patterns: ['financeiro', 'faturamento', 'nota fiscal', 'nimbi', 'exportar'], answer: 'O Painel Financeiro mostra pedidos com filtros por data, empresa e produto. Exporte no formato Nimbi (ERP), Excel ou XML NF-e. Controle o status fiscal de cada pedido (Pendente → Exportada → Emitida).' },
+  { patterns: ['backup', 'banco de dados', 'segurança'], answer: 'Backups são gerenciados em "Backup & E-mails". Administradores podem executar backups manuais e baixar os arquivos. Acesse em Menu → Backup.' },
+  { patterns: ['desenvolvedor', 'developer', 'dev', 'técnico', 'tecnico', 'logs'], answer: 'A Área do Desenvolvedor contém ferramentas técnicas: logs do sistema, modo de manutenção, modo de teste, e configurações avançadas. Acessível apenas para perfil Desenvolvedor.' },
+  { patterns: ['usuario', 'usuário', 'interno', 'perfil', 'papel', 'role'], answer: 'Usuários internos são gerenciados em "Usuários do Sistema". Perfis disponíveis: Administrador, Gerente de Operações, Gerente de Compras, Financeiro, Diretoria, Desenvolvedor, Logística.' },
+  { patterns: ['danfe', 'nfe', 'nf-e', 'nota fiscal', 'pdf nota', 'fiscal'], answer: 'O DANFE é gerado em PDF direto no módulo de Pedidos. Cada pedido tem um painel fiscal com: status, número de pré-nota, exportação ERP (Excel/XML) e geração do DANFE.' },
+  { patterns: ['estoque', 'inventário', 'inventario', 'compras', 'purchase'], answer: 'O módulo de Estoque (Inventário) controla entrada/saída de produtos. O planejamento de compras mostra o que precisará ser comprado por dia. Acesse em Menu → Inventário.' },
+  { patterns: ['aviso', 'comunicado', 'announcement', 'anuncio', 'anúncio'], answer: 'Comunicados são criados em "Comunicados" no menu. Eles aparecem no portal dos clientes na área inicial. Configure título, mensagem, tipo, prioridade e período de exibição.' },
+  { patterns: ['pedido pontual', 'especial', 'pontual'], answer: 'Pedidos pontuais dos clientes são gerenciados em "Pedidos Pontuais" no menu. Você pode aprovar (ajustando quantidades e data de entrega) ou recusar com justificativa. Gere um PDF do pedido aprovado.' },
+  { patterns: ['janela', 'window', 'período', 'periodo', 'abertura', 'fechamento'], answer: 'As janelas de pedido definem quando clientes podem fazer pedidos. Configure em "Janelas de Pedido": data de abertura, fechamento e entrega. Exceções permitem janelas específicas por empresa.' },
+  { patterns: ['empresa', 'cliente', 'cadastro', 'cnpj', 'razão social'], answer: 'Empresas são os clientes do sistema. Cadastre em Menu → Empresas: nome, CNPJ, endereço, contato e grupo de preço. Cada empresa tem acesso próprio ao portal.' },
+  { patterns: ['maçã', 'maca', 'banana', 'laranja', 'fruta', 'produto', 'categoria'], answer: 'Produtos são gerenciados em Menu → Produtos. Você pode cadastrar com: nome, categoria, unidade, preço base, flags (industrializado/sazonal), dias disponíveis, dados fiscais (NCM/CFOP) e curiosidades educativas.' },
+  { patterns: ['diretoria', 'executivo', 'dashboard executivo', 'painel executivo'], answer: 'O Painel Executivo (Diretoria) oferece visão consolidada de pedidos, faturamento e métricas. Acessível apenas para perfil Diretoria e Administrador.' },
 ];
+
+function getRoleLabel(role?: string): string {
+  const map: Record<string, string> = {
+    ADMIN: 'Administrador',
+    DIRECTOR: 'Diretoria',
+    PURCHASE_MANAGER: 'Gerente de Compras',
+    FINANCEIRO: 'Financeiro',
+    DEVELOPER: 'Desenvolvedor',
+    LOGISTICS: 'Logística',
+    OPERATIONS_MANAGER: 'Gerente de Operações',
+    SISTEMA_TESTE: 'Sistema Teste',
+  };
+  return map[role || ''] || 'Interno';
+}
 
 function findFaqAnswer(input: string, isClient: boolean): string | null {
   const lower = input.toLowerCase().trim();
@@ -72,9 +250,11 @@ export function VirtualAssistant() {
   const MENU_OPTIONS = isClient ? CLIENT_MENU_OPTIONS : ADMIN_MENU_OPTIONS;
   const ANSWERS = isClient ? CLIENT_ANSWERS : ADMIN_ANSWERS;
 
-  const MENU_TEXT = isClient
-    ? 'Olá! Sou o Assistente VivaFrutaz 🍊. Como posso ajudar?\n\n' + MENU_OPTIONS.map(o => o.label).join('\n') + '\n\n📱 WhatsApp: 11 99411-3911'
-    : 'Olá! Sou o Assistente VivaFrutaz 🍊. O que você precisa?\n\n' + MENU_OPTIONS.map(o => o.label).join('\n');
+  const greeting = isClient
+    ? `Olá${company ? `, ${(company as any).companyName?.split(' ')[0] || ''}` : ''}! Sou o Assistente VivaFrutaz 🍊. Como posso ajudar?`
+    : `Olá${user ? `, ${(user as any).name?.split(' ')[0] || ''}` : ''}! Sou o Assistente VivaFrutaz 🍊.\nPerfil: ${getRoleLabel((user as any)?.role)}. O que você precisa?`;
+
+  const MENU_TEXT = greeting + '\n\n' + MENU_OPTIONS.map(o => o.label).join('\n') + (isClient ? '\n\n📱 WhatsApp: 11 99411-3911' : '');
 
   const INITIAL_MESSAGES: Message[] = [
     { id: 0, from: 'bot', text: MENU_TEXT, isMenu: true },
@@ -108,9 +288,7 @@ export function VirtualAssistant() {
     addUserMessage(MENU_OPTIONS.find(o => o.key === key)?.label || key);
     setDisabled(true);
     setTimeout(() => {
-      if (ANSWERS[key]) {
-        addBotMessage(ANSWERS[key]);
-      }
+      if (ANSWERS[key]) addBotMessage(ANSWERS[key]);
       setDisabled(false);
     }, 350);
   };
@@ -121,7 +299,10 @@ export function VirtualAssistant() {
     setInput('');
 
     const trimmed = msg.trim();
-    const menuNum = ['1','2','3','4','5'].find(n => trimmed === n || trimmed.startsWith(n + ' ') || trimmed.startsWith(n + '.') || trimmed.startsWith(n + '-'));
+    const validKeys = MENU_OPTIONS.map(o => o.key);
+    const menuNum = validKeys.find(n =>
+      trimmed === n || trimmed.startsWith(n + ' ') || trimmed.startsWith(n + '.') || trimmed.startsWith(n + '-')
+    );
     if (menuNum) {
       addUserMessage(msg);
       setDisabled(true);
@@ -140,8 +321,8 @@ export function VirtualAssistant() {
         addBotMessage(faqAnswer);
       } else {
         const fallback = isClient
-          ? 'Não encontrei uma resposta. Escolha uma das opções abaixo ou fale pelo WhatsApp: 11 99411-3911'
-          : 'Não encontrei uma resposta específica. Escolha uma das opções do menu abaixo.';
+          ? 'Não encontrei uma resposta para sua pergunta. Escolha uma opção abaixo ou fale pelo WhatsApp:\n📱 11 99411-3911'
+          : 'Não encontrei uma resposta específica. Escolha uma das opções do menu ou descreva melhor sua dúvida.';
         addBotMessage(fallback, true);
       }
       setDisabled(false);
@@ -168,7 +349,7 @@ export function VirtualAssistant() {
         <div
           data-testid="assistant-window"
           className="fixed bottom-24 right-5 z-50 w-80 md:w-96 bg-card rounded-2xl shadow-2xl border border-border/50 flex flex-col"
-          style={{ maxHeight: '72vh' }}
+          style={{ maxHeight: '78vh' }}
         >
           <div className="flex items-center gap-3 p-4 bg-primary rounded-t-2xl text-white">
             <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
@@ -177,7 +358,7 @@ export function VirtualAssistant() {
             <div className="flex-1">
               <p className="font-bold text-sm">Assistente VivaFrutaz</p>
               <p className="text-xs text-white/70">
-                {isClient ? 'Suporte ao cliente' : 'Suporte interno'}
+                {isClient ? 'Suporte ao cliente' : `Suporte interno — ${getRoleLabel((user as any)?.role)}`}
               </p>
             </div>
             <button
@@ -193,7 +374,7 @@ export function VirtualAssistant() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: '42vh' }}>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: '48vh' }}>
             {messages.map(m => (
               <div key={m.id} className={`flex ${m.from === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {m.from === 'bot' && (
@@ -269,7 +450,7 @@ export function VirtualAssistant() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !disabled && sendMessage()}
-              placeholder={isClient ? 'Digite 1-5 ou sua pergunta...' : 'Digite 1-5 ou sua pergunta...'}
+              placeholder="Digite um número ou sua pergunta..."
               disabled={disabled}
               className="flex-1 text-sm px-3 py-2 bg-muted rounded-xl border-0 outline-none focus:ring-2 focus:ring-primary/20"
             />

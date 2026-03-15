@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useActiveOrderWindow, useCreateOrder, useCompanyOrders, useOrderDetail } from "@/hooks/use-ordering";
 import { useProducts } from "@/hooks/use-catalog";
 import { Layout } from "@/components/Layout";
+import { FruitCuriosities } from "@/components/FruitCuriosities";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -603,6 +604,11 @@ export default function CreateOrderPage() {
               <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
               <h2 className="text-base font-bold text-foreground">Catálogo de Produtos</h2>
               <span className="ml-auto text-xs font-bold text-muted-foreground">{visibleProducts.length}/{availableProducts.length} produto(s)</span>
+            </div>
+
+            {/* Fruit Curiosity compact */}
+            <div className="px-5 pt-4">
+              <FruitCuriosities compact />
             </div>
 
             {/* Filters */}

@@ -4,6 +4,7 @@ import { useActiveOrderWindow, useCompanyOrders } from "@/hooks/use-ordering";
 import { Layout } from "@/components/Layout";
 import { Link, useLocation } from "wouter";
 import { ShoppingCart, History, AlertCircle, CheckCircle2, Info, Clock, AlertTriangle, Wrench, FlaskConical, Megaphone, X, Truck } from "lucide-react";
+import { FruitCuriosities } from "@/components/FruitCuriosities";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
@@ -221,6 +222,9 @@ export default function ClientDashboard() {
             </p>
           </div>
         </div>
+
+        {/* Fruit Curiosities */}
+        <FruitCuriosities />
 
         {/* Operational notices */}
         <div className="bg-card rounded-2xl border border-border/50 premium-shadow p-5">

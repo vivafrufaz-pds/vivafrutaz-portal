@@ -95,7 +95,7 @@ Preferred communication style: Simple, everyday language.
 - `date-fns`: Date utility library.
 - `lucide-react`: Icon library.
 - `nanoid`: ID generation.
-- `jspdf`, `jspdf-autotable`: Client-side PDF generation for DANFE documents.
+- `jspdf`, `jspdf-autotable`: Client-side PDF generation for DANFE and Special Order PDFs.
 - `qrcode`: QR code generation embedded in DANFE PDFs.
 - `xlsx`: Excel (.xlsx) spreadsheet generation for ERP fiscal export.
 

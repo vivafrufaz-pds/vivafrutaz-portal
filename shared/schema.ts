@@ -100,6 +100,8 @@ export const products = pgTable("products", {
   ncm: text("ncm"), // Nomenclatura Comum do Mercosul, ex: "08039000"
   cfop: text("cfop"), // Código Fiscal de Operações, ex: "5102"
   commercialUnit: text("commercial_unit"), // Unidade comercial para NF, ex: "KG"
+  // Curiosidade educativa do produto
+  curiosity: text("curiosity"),
 });
 
 export const productPrices = pgTable("product_prices", {
