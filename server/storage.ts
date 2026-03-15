@@ -49,6 +49,7 @@ export interface IStorage {
   // Contract Scopes
   getContractScopes(companyId: number): Promise<ContractScope[]>;
   createContractScope(scope: InsertContractScope): Promise<ContractScope>;
+  updateContractScope(id: number, data: Partial<InsertContractScope>): Promise<ContractScope>;
   deleteContractScope(id: number): Promise<void>;
 
   // DANFE Records
@@ -276,6 +277,11 @@ export class DatabaseStorage implements IStorage {
   async createContractScope(scope: InsertContractScope): Promise<ContractScope> {
     const [newScope] = await db.insert(contractScopes).values(scope).returning();
     return newScope;
+  }
+
+  async updateContractScope(id: number, data: Partial<InsertContractScope>): Promise<ContractScope> {
+    const [updated] = await db.update(contractScopes).set(data as any).where(eq(contractScopes.id, id)).returning();
+    return updated;
   }
 
   async deleteContractScope(id: number): Promise<void> {

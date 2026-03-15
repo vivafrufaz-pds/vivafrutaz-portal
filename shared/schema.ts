@@ -68,9 +68,11 @@ export const contractScopes = pgTable("contract_scopes", {
   companyId: integer("company_id").references(() => companies.id).notNull(),
   dayOfWeek: text("day_of_week").notNull(), // "Segunda-feira", "Terça-feira", etc.
   weekNumber: integer("week_number"), // null = all weeks; 1 or 2 for "alternado" contracts
-  scopeCategory: text("scope_category"), // "Pote 100g", "Pote Mix", "Frutas da Estação", "Fruta Individual", "Editável", or custom
+  scopeCategory: text("scope_category"), // category label (from categories table name)
   productId: integer("product_id").notNull(),
   quantity: integer("quantity").notNull().default(1),
+  unitPrice: numeric("unit_price", { precision: 10, scale: 2 }), // per-company price override
+  averageCost: numeric("average_cost", { precision: 10, scale: 2 }), // optional, for margin analysis
   observation: text("observation"),
 });
 

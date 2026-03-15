@@ -119,27 +119,26 @@ const getBillingFormatLabel = (f: string | null) => {
 
 const WEEK_DAYS = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
 
-// ─── Scope Category Constants ─────────────────────────────────────
-const SCOPE_CATEGORIES = [
-  "Pote 100g",
-  "Pote Mix",
-  "Frutas da Estação",
-  "Fruta Individual",
-  "Editável",
+// ─── Category color palette (cycling) ────────────────────────────
+const CAT_PALETTE = [
+  "bg-blue-100 text-blue-700",
+  "bg-purple-100 text-purple-700",
+  "bg-green-100 text-green-700",
+  "bg-orange-100 text-orange-700",
+  "bg-pink-100 text-pink-700",
+  "bg-yellow-100 text-yellow-700",
+  "bg-teal-100 text-teal-700",
+  "bg-indigo-100 text-indigo-700",
 ];
+function catColor(name: string | null | undefined, allCats: string[]) {
+  if (!name) return "bg-muted text-muted-foreground";
+  const idx = allCats.indexOf(name);
+  return CAT_PALETTE[(idx >= 0 ? idx : 0) % CAT_PALETTE.length];
+}
 
-// Color coding per category
-const CATEGORY_COLORS: Record<string, string> = {
-  "Pote 100g":         "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  "Pote Mix":          "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-  "Frutas da Estação": "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-  "Fruta Individual":  "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
-  "Editável":          "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
-};
-
-function getCategoryColor(cat: string | null | undefined) {
-  if (!cat) return "bg-muted text-muted-foreground";
-  return CATEGORY_COLORS[cat] || "bg-muted text-muted-foreground";
+function fmt(v: string | null | undefined) {
+  const n = Number(v);
+  return isNaN(n) ? "—" : `R$ ${n.toFixed(2).replace('.', ',')}`;
 }
 
 // ─── Contract Scope Manager ──────────────────────────────────────
@@ -151,15 +150,25 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
 }) {
   const { data: products } = useProducts();
   const queryClient = useQueryClient();
+
+  // Load DB categories
+  const { data: dbCategories } = useQuery<any[]>({
+    queryKey: ['/api/categories'],
+    staleTime: 60000,
+  });
+  const catNames = (dbCategories || []).filter((c: any) => c.active).map((c: any) => c.name as string);
+
+  // New item form state
   const [newItem, setNewItem] = useState({
-    dayOfWeek: "",
-    weekNumber: "",
-    scopeCategory: "",
-    customCategory: "",
-    productId: "",
-    quantity: "1",
+    dayOfWeek: "", weekNumber: "", scopeCategory: "",
+    productId: "", quantity: "1", unitPrice: "", averageCost: "",
   });
   const [saving, setSaving] = useState(false);
+
+  // Inline editing state
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editRow, setEditRow] = useState<any>({});
+  const [editSaving, setEditSaving] = useState(false);
 
   const { data: scopes, isLoading } = useQuery<any[]>({
     queryKey: ['/api/companies', company?.id, 'contract-scopes'],
@@ -171,27 +180,35 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
     enabled: !!company?.id,
   });
 
-  // Effective category value (custom if "Editável" is chosen and custom is filled)
-  const effectiveCategory = newItem.scopeCategory === "Editável" && newItem.customCategory.trim()
-    ? newItem.customCategory.trim()
-    : newItem.scopeCategory || null;
+  // Products filtered by selected category (category name matches product.category field)
+  const getProductsForCategory = (cat: string) => {
+    const all = (products || []).filter((p: any) => p.active);
+    if (!cat) return all;
+    return all.filter((p: any) => p.category === cat);
+  };
 
-  // Filter active products; optionally filter by category (matches product's own category field)
-  const filteredProducts = (products || []).filter((p: any) => {
-    if (!p.active) return false;
-    return true; // Products are always shown; category is a scope-level label, not a product filter
-  });
+  const newItemProducts = getProductsForCategory(newItem.scopeCategory);
+  const allActiveProducts = (products || []).filter((p: any) => p.active);
+
+  // When category changes in new item form, reset product if it doesn't match
+  const handleNewCategoryChange = (cat: string) => {
+    const filtered = getProductsForCategory(cat);
+    const currentOk = filtered.some((p: any) => String(p.id) === newItem.productId);
+    setNewItem(p => ({ ...p, scopeCategory: cat, productId: currentOk ? p.productId : "" }));
+  };
 
   const addScope = async () => {
-    if (!company?.id || !newItem.dayOfWeek || !newItem.productId || !newItem.quantity) return;
+    if (!company?.id || !newItem.dayOfWeek || !newItem.productId) return;
     setSaving(true);
     try {
       const body: any = {
         companyId: company.id,
         dayOfWeek: newItem.dayOfWeek,
-        scopeCategory: effectiveCategory,
+        scopeCategory: newItem.scopeCategory || null,
         productId: Number(newItem.productId),
-        quantity: Number(newItem.quantity),
+        quantity: Number(newItem.quantity) || 1,
+        unitPrice: newItem.unitPrice ? Number(newItem.unitPrice) : null,
+        averageCost: newItem.averageCost ? Number(newItem.averageCost) : null,
       };
       if ((contractModel === 'alternado' || contractModel === 'rotacao4') && newItem.weekNumber) {
         body.weekNumber = Number(newItem.weekNumber);
@@ -203,10 +220,44 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
       });
       if (!res.ok) throw new Error('Erro ao adicionar item');
       queryClient.invalidateQueries({ queryKey: ['/api/companies', company.id, 'contract-scopes'] });
-      setNewItem({ dayOfWeek: newItem.dayOfWeek, weekNumber: newItem.weekNumber, scopeCategory: newItem.scopeCategory, customCategory: newItem.customCategory, productId: "", quantity: "1" });
-    } finally {
-      setSaving(false);
-    }
+      setNewItem(p => ({ ...p, productId: "", quantity: "1", unitPrice: "", averageCost: "" }));
+    } finally { setSaving(false); }
+  };
+
+  const startEdit = (s: any) => {
+    setEditingId(s.id);
+    setEditRow({
+      dayOfWeek: s.dayOfWeek,
+      weekNumber: s.weekNumber ? String(s.weekNumber) : "",
+      scopeCategory: s.scopeCategory || "",
+      productId: String(s.productId),
+      quantity: String(s.quantity),
+      unitPrice: s.unitPrice != null ? String(s.unitPrice) : "",
+      averageCost: s.averageCost != null ? String(s.averageCost) : "",
+    });
+  };
+
+  const saveEdit = async (id: number) => {
+    setEditSaving(true);
+    try {
+      const body: any = {
+        dayOfWeek: editRow.dayOfWeek,
+        weekNumber: editRow.weekNumber ? Number(editRow.weekNumber) : null,
+        scopeCategory: editRow.scopeCategory || null,
+        productId: Number(editRow.productId),
+        quantity: Number(editRow.quantity) || 1,
+        unitPrice: editRow.unitPrice ? Number(editRow.unitPrice) : null,
+        averageCost: editRow.averageCost ? Number(editRow.averageCost) : null,
+      };
+      const res = await fetch(`/api/companies/${company.id}/contract-scopes/${id}`, {
+        method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Erro ao salvar item');
+      queryClient.invalidateQueries({ queryKey: ['/api/companies', company.id, 'contract-scopes'] });
+      setEditingId(null);
+    } finally { setEditSaving(false); }
   };
 
   if (!company) {
@@ -218,233 +269,305 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete }: {
     );
   }
 
-  // Group scopes by dayOfWeek + week + category — filtering out locally staged deletes
-  const visibleScopes = (scopes || []).filter((s: any) => !hiddenIds.includes(s.id));
-
   const isAlternado = contractModel === 'alternado';
   const isRotacao4 = contractModel === 'rotacao4';
   const hasWeekRotation = isAlternado || isRotacao4;
 
   const WEEK_LABELS: Record<string, string> = {
-    week0: 'Todas as semanas',
-    week1: 'Semana 1 (Lista A)',
-    week2: 'Semana 2 (Lista B)',
-    week3: 'Semana 3 (Lista C)',
-    week4: 'Semana 4 (Lista D)',
+    "": 'Todas', "0": 'Todas',
+    "1": 'Sem. 1 (A)', "2": 'Sem. 2 (B)', "3": 'Sem. 3 (C)', "4": 'Sem. 4 (D)',
   };
 
-  // Build hierarchy: { dayKey: { weekKey: { category: [items] } } }
-  type ScopeGroup = { day: string; weekKey: string; weekLabel: string; byCategory: Record<string, any[]> };
-  const groups: ScopeGroup[] = [];
-  const groupMap: Record<string, ScopeGroup> = {};
+  const visibleScopes = (scopes || []).filter((s: any) => !hiddenIds.includes(s.id));
 
+  // ── Financial summary ─────────────────────────────────────
+  const totalSemana = visibleScopes.reduce((sum: number, s: any) => {
+    const price = s.unitPrice != null ? Number(s.unitPrice) : 0;
+    return sum + (Number(s.quantity) * price);
+  }, 0);
+  const totalMensal = totalSemana * 4;
+  const totalCusto = visibleScopes.reduce((sum: number, s: any) => {
+    const cost = s.averageCost != null ? Number(s.averageCost) : null;
+    return cost != null ? sum + (Number(s.quantity) * cost) : sum;
+  }, 0);
+  const margem = totalSemana > 0 ? ((totalSemana - totalCusto) / totalSemana * 100) : null;
+  const hasPrices = visibleScopes.some((s: any) => s.unitPrice != null);
+
+  // ── Group by day → week ───────────────────────────────────
+  const DAY_ORDER = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
+  type DayGroup = { day: string; weekKey: string; weekNum: number; items: any[] };
+  const groups: DayGroup[] = [];
+  const groupMap: Record<string, DayGroup> = {};
   visibleScopes.forEach((s: any) => {
-    const day = s.dayOfWeek;
-    const weekKey = hasWeekRotation ? `week${s.weekNumber || 0}` : 'week0';
-    const mapKey = `${day}__${weekKey}`;
+    const weekNum = s.weekNumber || 0;
+    const mapKey = `${s.dayOfWeek}__${weekNum}`;
     if (!groupMap[mapKey]) {
-      groupMap[mapKey] = { day, weekKey, weekLabel: WEEK_LABELS[weekKey] || weekKey, byCategory: {} };
+      groupMap[mapKey] = { day: s.dayOfWeek, weekKey: String(weekNum), weekNum, items: [] };
       groups.push(groupMap[mapKey]);
     }
-    const cat = s.scopeCategory || '(Sem categoria)';
-    if (!groupMap[mapKey].byCategory[cat]) groupMap[mapKey].byCategory[cat] = [];
-    groupMap[mapKey].byCategory[cat].push(s);
+    groupMap[mapKey].items.push(s);
   });
-
-  // Sort days in order
-  const DAY_ORDER = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
   groups.sort((a, b) => {
     const di = DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day);
-    if (di !== 0) return di;
-    return a.weekKey.localeCompare(b.weekKey);
+    return di !== 0 ? di : a.weekNum - b.weekNum;
   });
+
+  const selectCls = "px-2.5 py-1.5 rounded-lg border border-border text-xs focus:border-primary outline-none bg-background";
+  const inputCls  = "px-2.5 py-1.5 rounded-lg border border-border text-xs focus:border-primary outline-none w-full bg-background";
 
   return (
     <div className="space-y-4">
-      {/* Model badge */}
+      {/* ── Model badge ── */}
       <div className="flex items-center gap-2 p-3 bg-secondary/5 rounded-xl border border-secondary/20">
         <Package className="w-4 h-4 text-secondary" />
         <p className="text-sm font-bold text-secondary">
           {contractModel === 'fixo' ? 'Contrato Fixo — Escopo imutável por semana'
            : contractModel === 'variavel' ? 'Contrato Variável — Escopo base com ajustes permitidos'
-           : contractModel === 'alternado' ? 'Contrato Alternado — Rotação quinzenal (Semana 1 / Semana 2)'
-           : contractModel === 'rotacao4' ? 'Rotação 4 Semanas — Ciclo mensal (Semanas 1–4)'
+           : contractModel === 'alternado' ? 'Contrato Alternado — Rotação quinzenal (Lista A / B)'
+           : contractModel === 'rotacao4' ? 'Rotação 4 Semanas — Ciclo mensal (Listas A–D)'
            : 'Defina o modelo de contrato na aba Configurações'}
         </p>
       </div>
 
-      {/* Add item form */}
+      {/* ── Financial summary ── */}
+      {visibleScopes.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: "Valor semanal", value: fmt(String(totalSemana)), icon: "💰", color: "border-green-200 bg-green-50" },
+            { label: "Valor mensal", value: fmt(String(totalMensal)), icon: "📅", color: "border-blue-200 bg-blue-50" },
+            { label: "Custo estimado", value: hasPrices && totalCusto > 0 ? fmt(String(totalCusto)) : "—", icon: "📦", color: "border-orange-200 bg-orange-50" },
+            { label: "Margem estimada", value: margem != null && totalCusto > 0 ? `${margem.toFixed(1)}%` : "—", icon: "📈", color: "border-purple-200 bg-purple-50" },
+          ].map(card => (
+            <div key={card.label} className={`rounded-xl border p-3 ${card.color}`}>
+              <p className="text-xs text-muted-foreground font-medium">{card.icon} {card.label}</p>
+              <p className="text-base font-bold text-foreground mt-0.5">{card.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Add item form ── */}
       <div className="p-4 bg-muted/20 rounded-xl border border-border space-y-3">
         <p className="text-sm font-bold text-foreground">Adicionar item ao escopo</p>
-        <div className="flex flex-wrap gap-3">
-
-          {/* 1. Dia da semana */}
-          <select
-            data-testid="select-scope-day"
-            value={newItem.dayOfWeek}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {/* Dia */}
+          <select data-testid="select-scope-day" value={newItem.dayOfWeek}
             onChange={e => setNewItem(p => ({ ...p, dayOfWeek: e.target.value }))}
-            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none min-w-[160px]"
-          >
+            className={selectCls}>
             <option value="">Dia da semana...</option>
             {WEEK_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
 
-          {/* 2. Semana do ciclo (if applicable) */}
-          {hasWeekRotation && (
-            <select
-              data-testid="select-scope-week"
-              value={newItem.weekNumber}
+          {/* Semana do ciclo */}
+          {hasWeekRotation ? (
+            <select data-testid="select-scope-week" value={newItem.weekNumber}
               onChange={e => setNewItem(p => ({ ...p, weekNumber: e.target.value }))}
-              className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none"
-            >
-              <option value="">Semana do ciclo...</option>
+              className={selectCls}>
+              <option value="">Semana...</option>
               <option value="1">Semana 1 (Lista A)</option>
               <option value="2">Semana 2 (Lista B)</option>
-              {isRotacao4 && <>
-                <option value="3">Semana 3 (Lista C)</option>
-                <option value="4">Semana 4 (Lista D)</option>
-              </>}
+              {isRotacao4 && <><option value="3">Semana 3 (Lista C)</option><option value="4">Semana 4 (Lista D)</option></>}
             </select>
-          )}
+          ) : <div />}
 
-          {/* 3. Categoria */}
-          <select
-            data-testid="select-scope-category"
-            value={newItem.scopeCategory}
-            onChange={e => setNewItem(p => ({ ...p, scopeCategory: e.target.value, customCategory: "" }))}
-            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none min-w-[160px]"
-          >
-            <option value="">Categoria (opcional)...</option>
-            {SCOPE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          {/* Categoria */}
+          <select data-testid="select-scope-category" value={newItem.scopeCategory}
+            onChange={e => handleNewCategoryChange(e.target.value)}
+            className={selectCls}>
+            <option value="">Categoria (opcional)</option>
+            {catNames.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
 
-          {/* Custom category text input — shown when "Editável" is selected */}
-          {newItem.scopeCategory === "Editável" && (
-            <input
-              data-testid="input-scope-category-custom"
-              type="text"
-              value={newItem.customCategory}
-              onChange={e => setNewItem(p => ({ ...p, customCategory: e.target.value }))}
-              placeholder="Nome da categoria..."
-              className="px-3 py-2 rounded-xl border-2 border-yellow-400 text-sm focus:border-yellow-500 outline-none min-w-[160px]"
-            />
-          )}
-
-          {/* 4. Produto */}
-          <select
-            data-testid="select-scope-product"
-            value={newItem.productId}
+          {/* Produto */}
+          <select data-testid="select-scope-product" value={newItem.productId}
             onChange={e => setNewItem(p => ({ ...p, productId: e.target.value }))}
-            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none min-w-[180px]"
-          >
+            className={selectCls}>
             <option value="">Produto...</option>
-            {filteredProducts.map((p: any) => (
+            {(newItem.scopeCategory ? newItemProducts : allActiveProducts).map((p: any) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
 
-          {/* 5. Quantidade */}
-          <input
-            data-testid="input-scope-quantity"
-            type="number"
-            min="1"
-            value={newItem.quantity}
-            onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))}
-            placeholder="Qtd"
-            className="px-3 py-2 rounded-xl border-2 border-border text-sm focus:border-primary outline-none w-20"
-          />
+          {/* Qtd */}
+          <input data-testid="input-scope-quantity" type="number" min="1"
+            value={newItem.quantity} onChange={e => setNewItem(p => ({ ...p, quantity: e.target.value }))}
+            placeholder="Qtd" className={inputCls} />
 
-          <button
-            data-testid="button-add-scope"
-            onClick={addScope}
+          {/* Preço unitário */}
+          <input data-testid="input-scope-price" type="number" min="0" step="0.01"
+            value={newItem.unitPrice} onChange={e => setNewItem(p => ({ ...p, unitPrice: e.target.value }))}
+            placeholder="Preço unit. (R$)" className={inputCls} />
+
+          {/* Custo médio */}
+          <input data-testid="input-scope-cost" type="number" min="0" step="0.01"
+            value={newItem.averageCost} onChange={e => setNewItem(p => ({ ...p, averageCost: e.target.value }))}
+            placeholder="Custo médio (opcional)" className={inputCls} />
+
+          {/* Total preview */}
+          <div className="px-2.5 py-1.5 rounded-lg bg-primary/5 border border-primary/20 text-xs text-center flex flex-col justify-center">
+            <span className="text-muted-foreground">Total</span>
+            <span className="font-bold text-primary">
+              {newItem.quantity && newItem.unitPrice
+                ? `R$ ${(Number(newItem.quantity) * Number(newItem.unitPrice)).toFixed(2).replace('.', ',')}`
+                : '—'}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button data-testid="button-add-scope" onClick={addScope}
             disabled={saving || !newItem.dayOfWeek || !newItem.productId}
-            className="px-4 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5 text-sm"
-          >
-            <Save className="w-3.5 h-3.5" /> Adicionar
+            className="px-5 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2 text-sm">
+            <Save className="w-3.5 h-3.5" /> {saving ? 'Adicionando...' : 'Adicionar item'}
           </button>
         </div>
-
-        {/* Preview of what will be added */}
-        {newItem.dayOfWeek && newItem.productId && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-            <span className="font-medium text-foreground">{newItem.dayOfWeek}</span>
-            {newItem.weekNumber && hasWeekRotation && <><span>·</span><span>{WEEK_LABELS[`week${newItem.weekNumber}`]}</span></>}
-            {effectiveCategory && <><span>·</span><span className={`px-2 py-0.5 rounded-full font-semibold ${getCategoryColor(effectiveCategory)}`}>{effectiveCategory}</span></>}
-            <span>·</span>
-            <span>{(filteredProducts.find((p: any) => p.id === Number(newItem.productId)) as any)?.name || '—'}</span>
-            <span>·</span>
-            <span className="font-bold">{newItem.quantity}x</span>
-          </div>
-        )}
       </div>
 
-      {/* Current scopes */}
+      {/* ── Scope table ── */}
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando escopo...</p>
+        <p className="text-sm text-muted-foreground py-4 text-center">Carregando escopo...</p>
       ) : visibleScopes.length === 0 ? (
-        <div className="py-8 text-center text-muted-foreground border border-dashed border-border rounded-xl">
+        <div className="py-10 text-center text-muted-foreground border border-dashed border-border rounded-xl">
           <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">Nenhum produto no escopo. Adicione itens acima.</p>
+          <p className="text-sm">Nenhum item no escopo. Adicione itens acima.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {groups.map((group) => (
-            <div key={`${group.day}__${group.weekKey}`} className="border border-border/50 rounded-xl overflow-hidden">
-              {/* Day + Week header */}
-              <div className="px-4 py-2.5 bg-primary/5 border-b border-border/50 flex items-center gap-2">
-                <CalendarDays className="w-4 h-4 text-primary" />
-                <p className="font-bold text-sm text-foreground">{group.day}</p>
-                {hasWeekRotation && group.weekKey !== 'week0' && (
-                  <span className="px-2 py-0.5 bg-secondary/20 text-secondary text-xs font-bold rounded-full">
-                    {group.weekLabel}
-                  </span>
-                )}
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {Object.values(group.byCategory).reduce((acc, items) => acc + items.length, 0)} {Object.values(group.byCategory).reduce((acc, items) => acc + items.length, 0) === 1 ? 'item' : 'itens'}
-                </span>
-              </div>
-
-              {/* Category sections within this day/week */}
-              {Object.entries(group.byCategory).map(([cat, catItems]: [string, any[]]) => (
-                <div key={cat}>
-                  {/* Category sub-header */}
-                  <div className="px-4 py-1.5 bg-muted/30 border-b border-border/30 flex items-center gap-2">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getCategoryColor(cat === '(Sem categoria)' ? null : cat)}`}>
-                      {cat}
+        <div className="space-y-4">
+          {groups.map((group) => {
+            const groupTotal = group.items.reduce((sum: number, s: any) => {
+              return sum + (Number(s.quantity) * (s.unitPrice != null ? Number(s.unitPrice) : 0));
+            }, 0);
+            return (
+              <div key={`${group.day}__${group.weekKey}`} className="border border-border/60 rounded-xl overflow-hidden">
+                {/* Day header */}
+                <div className="px-4 py-2.5 bg-primary/5 border-b border-border/50 flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4 text-primary" />
+                  <p className="font-bold text-sm text-foreground">{group.day}</p>
+                  {hasWeekRotation && group.weekNum > 0 && (
+                    <span className="px-2 py-0.5 bg-secondary/20 text-secondary text-xs font-bold rounded-full">
+                      {WEEK_LABELS[group.weekKey] || group.weekKey}
                     </span>
-                    <span className="text-xs text-muted-foreground">{catItems.length} {catItems.length === 1 ? 'produto' : 'produtos'}</span>
-                  </div>
-                  {/* Items in this category */}
-                  <div className="divide-y divide-border/50">
-                    {catItems.map((s: any) => {
-                      const product = (filteredProducts || []).find((p: any) => p.id === Number(s.productId));
-                      return (
-                        <div key={s.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-muted/20 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <span className="w-7 h-7 bg-primary/10 text-primary text-xs font-bold rounded-lg flex items-center justify-center flex-shrink-0">
-                              {s.quantity}x
-                            </span>
-                            <div>
-                              <p className="text-sm font-medium text-foreground">{product?.name || `Produto #${s.productId}`}</p>
-                              {product?.unit && <p className="text-xs text-muted-foreground">{product.unit}</p>}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            data-testid={`button-remove-scope-${s.id}`}
-                            onClick={() => onDelete(s.id)}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {group.items.length} {group.items.length === 1 ? 'item' : 'itens'}
+                    {hasPrices && groupTotal > 0 && <span className="ml-2 font-bold text-primary">{fmt(String(groupTotal))}</span>}
+                  </span>
+                </div>
+
+                {/* Table header */}
+                <div className="grid grid-cols-[1fr_1fr_1fr_80px_90px_90px_90px_60px] text-xs font-bold text-muted-foreground bg-muted/20 px-3 py-1.5 border-b border-border/40 gap-2">
+                  <span>Categoria</span>
+                  <span>Produto</span>
+                  <span>Unidade</span>
+                  <span className="text-right">Qtd</span>
+                  <span className="text-right">Preço unit.</span>
+                  <span className="text-right">Custo</span>
+                  <span className="text-right">Total</span>
+                  <span />
+                </div>
+
+                {/* Rows */}
+                {group.items.map((s: any) => {
+                  const product = allActiveProducts.find((p: any) => p.id === Number(s.productId))
+                    || (products || []).find((p: any) => p.id === Number(s.productId));
+                  const isEditing = editingId === s.id;
+                  const editProducts = editRow.scopeCategory
+                    ? getProductsForCategory(editRow.scopeCategory)
+                    : allActiveProducts;
+                  const rowTotal = Number(s.quantity) * (s.unitPrice != null ? Number(s.unitPrice) : 0);
+
+                  if (isEditing) {
+                    return (
+                      <div key={s.id} className="grid grid-cols-[1fr_1fr_1fr_80px_90px_90px_90px_60px] items-center px-3 py-2 gap-2 bg-primary/3 border-b border-border/40">
+                        {/* Categoria */}
+                        <select value={editRow.scopeCategory} onChange={e => {
+                          const cat = e.target.value;
+                          const fp = getProductsForCategory(cat);
+                          const ok = fp.some((p: any) => String(p.id) === editRow.productId);
+                          setEditRow((r: any) => ({ ...r, scopeCategory: cat, productId: ok ? r.productId : "" }));
+                        }} className={selectCls}>
+                          <option value="">Sem categoria</option>
+                          {catNames.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        {/* Produto */}
+                        <select value={editRow.productId} onChange={e => setEditRow((r: any) => ({ ...r, productId: e.target.value }))} className={selectCls}>
+                          <option value="">Produto...</option>
+                          {editProducts.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        {/* Unidade */}
+                        <span className="text-xs text-muted-foreground">{(editProducts.find((p: any) => String(p.id) === editRow.productId) as any)?.unit || '—'}</span>
+                        {/* Qtd */}
+                        <input type="number" min="1" value={editRow.quantity}
+                          onChange={e => setEditRow((r: any) => ({ ...r, quantity: e.target.value }))}
+                          className={inputCls + " text-right"} />
+                        {/* Preço */}
+                        <input type="number" min="0" step="0.01" value={editRow.unitPrice}
+                          onChange={e => setEditRow((r: any) => ({ ...r, unitPrice: e.target.value }))}
+                          placeholder="R$" className={inputCls + " text-right"} />
+                        {/* Custo */}
+                        <input type="number" min="0" step="0.01" value={editRow.averageCost}
+                          onChange={e => setEditRow((r: any) => ({ ...r, averageCost: e.target.value }))}
+                          placeholder="R$" className={inputCls + " text-right"} />
+                        {/* Total preview */}
+                        <span className="text-right text-xs font-bold text-primary">
+                          {editRow.quantity && editRow.unitPrice
+                            ? `R$ ${(Number(editRow.quantity) * Number(editRow.unitPrice)).toFixed(2).replace('.', ',')}`
+                            : '—'}
+                        </span>
+                        {/* Actions */}
+                        <div className="flex gap-1">
+                          <button onClick={() => saveEdit(s.id)} disabled={editSaving}
+                            className="p-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50">
+                            <Save className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => setEditingId(null)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors">
+                            <X className="w-3 h-3" />
                           </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={s.id} className="grid grid-cols-[1fr_1fr_1fr_80px_90px_90px_90px_60px] items-center px-3 py-2.5 gap-2 hover:bg-muted/20 transition-colors border-b border-border/30 last:border-0 group">
+                      {/* Categoria */}
+                      <span>
+                        {s.scopeCategory
+                          ? <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${catColor(s.scopeCategory, catNames)}`}>{s.scopeCategory}</span>
+                          : <span className="text-xs text-muted-foreground italic">—</span>}
+                      </span>
+                      {/* Produto */}
+                      <p className="text-sm font-medium text-foreground truncate">{product?.name || `Produto #${s.productId}`}</p>
+                      {/* Unidade */}
+                      <p className="text-xs text-muted-foreground">{product?.unit || '—'}</p>
+                      {/* Qtd */}
+                      <p className="text-sm font-bold text-right">{s.quantity}</p>
+                      {/* Preço */}
+                      <p className="text-sm text-right text-foreground">{s.unitPrice != null ? fmt(s.unitPrice) : <span className="text-muted-foreground">—</span>}</p>
+                      {/* Custo */}
+                      <p className="text-sm text-right text-muted-foreground">{s.averageCost != null ? fmt(s.averageCost) : '—'}</p>
+                      {/* Total */}
+                      <p className="text-sm font-bold text-right text-primary">
+                        {s.unitPrice != null ? fmt(String(rowTotal)) : '—'}
+                      </p>
+                      {/* Actions */}
+                      <div className="flex gap-1 justify-end">
+                        <button type="button" onClick={() => startEdit(s)}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors opacity-0 group-hover:opacity-100">
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                        <button type="button" data-testid={`button-remove-scope-${s.id}`} onClick={() => onDelete(s.id)}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1111,7 +1234,7 @@ export default function CompaniesPage() {
                         set("clientType", opt.value);
                         if (opt.value !== 'contratual') {
                           set("contractModel", "");
-                          if (activeTab === 'contrato') setActiveTab('config');
+                          if ((activeTab as string) === 'contrato') setActiveTab('config');
                         }
                       }}
                       className={`flex-1 min-w-[100px] px-4 py-3 rounded-xl font-bold text-sm border-2 transition-all text-left ${formData.clientType === opt.value ? 'bg-primary text-white border-primary' : 'border-border text-muted-foreground hover:border-primary/50'}`}>

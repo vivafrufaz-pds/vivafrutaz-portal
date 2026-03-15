@@ -1264,9 +1264,28 @@ export async function registerRoutes(
         scopeCategory: req.body.scopeCategory ?? null,
         productId: Number(req.body.productId),
         quantity: Number(req.body.quantity) || 1,
+        unitPrice: req.body.unitPrice != null ? String(req.body.unitPrice) : null,
+        averageCost: req.body.averageCost != null ? String(req.body.averageCost) : null,
         observation: req.body.observation ?? null,
       });
       res.status(201).json(scope);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put('/api/companies/:id/contract-scopes/:scopeId', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const updates: any = {};
+      if (req.body.dayOfWeek !== undefined) updates.dayOfWeek = req.body.dayOfWeek;
+      if (req.body.weekNumber !== undefined) updates.weekNumber = req.body.weekNumber ?? null;
+      if (req.body.scopeCategory !== undefined) updates.scopeCategory = req.body.scopeCategory ?? null;
+      if (req.body.productId !== undefined) updates.productId = Number(req.body.productId);
+      if (req.body.quantity !== undefined) updates.quantity = Number(req.body.quantity) || 1;
+      if (req.body.unitPrice !== undefined) updates.unitPrice = req.body.unitPrice != null ? String(req.body.unitPrice) : null;
+      if (req.body.averageCost !== undefined) updates.averageCost = req.body.averageCost != null ? String(req.body.averageCost) : null;
+      if (req.body.observation !== undefined) updates.observation = req.body.observation ?? null;
+      const scope = await storage.updateContractScope(Number(req.params.scopeId), updates);
+      res.json(scope);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
