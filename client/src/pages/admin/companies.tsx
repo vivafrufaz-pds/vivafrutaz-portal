@@ -149,7 +149,7 @@ function fmt(v: string | null | undefined) {
 
 // ─── Contract Scope Manager ──────────────────────────────────────
 function ContractScopeManager({ company, contractModel, hiddenIds, onDelete,
-  autoCalcCost, autoPriceFromCatalog, manualAvgCost, priceGroupId, onFlagChange }: {
+  autoCalcCost, autoPriceFromCatalog, manualAvgCost, priceGroupId, onFlagChange, clientType }: {
   company: any | null;
   contractModel: string;
   hiddenIds: number[];
@@ -159,6 +159,7 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete,
   manualAvgCost: string;
   priceGroupId: number | null;
   onFlagChange: (flag: string, val: any) => void;
+  clientType: string;
 }) {
   const { data: products } = useProducts();
   const queryClient = useQueryClient();
@@ -195,6 +196,26 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete,
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editRow, setEditRow] = useState<any>({});
   const [editSaving, setEditSaving] = useState(false);
+
+  // Order generation state
+  const [generating, setGenerating] = useState(false);
+  const handleGenerateOrders = async () => {
+    if (!company?.id) return;
+    if (!confirm('Gerar pedidos desta semana a partir do escopo contratual?')) return;
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/companies/${company.id}/generate-orders-from-scope`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Erro ao gerar pedidos');
+      alert(`✅ ${data.created} pedido(s) gerado(s) com sucesso para a semana atual!`);
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+    } catch (e: any) {
+      alert('Erro: ' + e.message);
+    } finally { setGenerating(false); }
+  };
 
   const { data: scopes, isLoading } = useQuery<any[]>({
     queryKey: ['/api/companies', company?.id, 'contract-scopes'],
@@ -303,6 +324,21 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete,
     );
   }
 
+  if (clientType !== 'contratual') {
+    return (
+      <div className="py-14 text-center text-muted-foreground flex flex-col items-center gap-3">
+        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+          <Lock className="w-8 h-8 opacity-25" />
+        </div>
+        <div>
+          <p className="font-bold text-sm text-foreground">Escopo Contratual bloqueado</p>
+          <p className="text-xs mt-1 text-muted-foreground">Disponível apenas para empresas do tipo <strong>Contratual</strong>.</p>
+          <p className="text-xs text-muted-foreground">Altere o tipo de cliente na aba <strong>Configurações</strong>.</p>
+        </div>
+      </div>
+    );
+  }
+
   const isAlternado = contractModel === 'alternado';
   const isRotacao4 = contractModel === 'rotacao4';
   const hasWeekRotation = isAlternado || isRotacao4;
@@ -319,8 +355,18 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete,
   const totalValor = visibleScopes.reduce((sum: number, s: any) => {
     return sum + (Number(s.quantity) * (s.unitPrice != null ? Number(s.unitPrice) : 0));
   }, 0);
-  const custoMedioAuto = totalQtd > 0 ? totalValor / totalQtd : 0;
   const hasPrices = visibleScopes.some((s: any) => s.unitPrice != null);
+  const hasCosts = visibleScopes.some((s: any) => s.averageCost != null);
+  const manualCostNum = parseFloat(manualAvgCost) || 0;
+  const custoEstimado = visibleScopes.reduce((sum: number, s: any) => {
+    const itemCost = s.averageCost != null
+      ? Number(s.averageCost)
+      : (!autoCalcCost && manualCostNum > 0 ? manualCostNum : 0);
+    return sum + (Number(s.quantity) * itemCost);
+  }, 0);
+  const valorSemanal = totalValor;
+  const valorMensal = totalValor * 4;
+  const margemEstimada = valorSemanal - custoEstimado;
 
   // ── Group by day → week ───────────────────────────────────
   const DAY_ORDER = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
@@ -384,40 +430,63 @@ function ContractScopeManager({ company, contractModel, hiddenIds, onDelete,
         </label>
       </div>
 
-      {/* ── Summary panel ── */}
+      {/* ── Resumo financeiro do contrato ── */}
       {visibleScopes.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl border border-green-200 bg-green-50 p-3">
-            <p className="text-xs text-muted-foreground font-medium">📦 Quantidade total</p>
-            <p className="text-xl font-bold text-foreground mt-0.5">{totalQtd}</p>
-            <p className="text-xs text-muted-foreground">unidades no escopo</p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Resumo Financeiro do Contrato</p>
+            <button
+              type="button"
+              data-testid="btn-generate-orders"
+              onClick={handleGenerateOrders}
+              disabled={generating || visibleScopes.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-white text-xs font-bold rounded-lg shadow hover:-translate-y-0.5 transition-transform disabled:opacity-50"
+            >
+              {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Package className="w-3.5 h-3.5" />}
+              {generating ? 'Gerando...' : 'Gerar Pedidos da Semana'}
+            </button>
           </div>
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-            <p className="text-xs text-muted-foreground font-medium">💰 Valor total</p>
-            <p className="text-xl font-bold text-foreground mt-0.5">{hasPrices ? fmt(String(totalValor)) : '—'}</p>
-            <p className="text-xs text-muted-foreground">soma dos itens</p>
-          </div>
-          <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
-            <p className="text-xs text-muted-foreground font-medium">📊 Custo médio unitário</p>
-            {autoCalcCost ? (
-              <>
-                <p className="text-xl font-bold text-foreground mt-0.5">
-                  {hasPrices && totalQtd > 0 ? fmt(String(custoMedioAuto)) : '—'}
-                </p>
-                <p className="text-xs text-muted-foreground">valor total ÷ qtd total</p>
-              </>
-            ) : (
-              <div className="mt-1 flex items-center gap-1.5">
-                <input
-                  type="number" min="0" step="0.01"
-                  data-testid="input-manual-avg-cost"
-                  value={manualAvgCost}
-                  onChange={e => onFlagChange('manualAvgCost', e.target.value)}
-                  placeholder="R$ 0,00"
-                  className="w-full px-2 py-1 rounded-lg border border-orange-300 text-sm font-bold bg-white outline-none focus:border-orange-500"
-                />
-              </div>
-            )}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-green-200 bg-green-50 p-3">
+              <p className="text-xs text-muted-foreground font-medium">💰 Valor estimado semanal</p>
+              <p className="text-xl font-bold text-green-700 mt-0.5">{hasPrices ? fmt(String(valorSemanal)) : '—'}</p>
+              <p className="text-xs text-muted-foreground">soma dos itens do escopo</p>
+            </div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+              <p className="text-xs text-muted-foreground font-medium">📅 Valor estimado mensal</p>
+              <p className="text-xl font-bold text-blue-700 mt-0.5">{hasPrices ? fmt(String(valorMensal)) : '—'}</p>
+              <p className="text-xs text-muted-foreground">valor semanal × 4</p>
+            </div>
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+              <p className="text-xs text-muted-foreground font-medium">📦 Custo estimado</p>
+              {autoCalcCost ? (
+                <>
+                  <p className="text-xl font-bold text-orange-700 mt-0.5">
+                    {(hasCosts || manualCostNum > 0) ? fmt(String(custoEstimado)) : '—'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">custo por item do escopo</p>
+                </>
+              ) : (
+                <div className="mt-1 space-y-1">
+                  <input
+                    type="number" min="0" step="0.01"
+                    data-testid="input-manual-avg-cost"
+                    value={manualAvgCost}
+                    onChange={e => onFlagChange('manualAvgCost', e.target.value)}
+                    placeholder="Custo médio R$"
+                    className="w-full px-2 py-1 rounded-lg border border-orange-300 text-sm font-bold bg-white outline-none focus:border-orange-500"
+                  />
+                  <p className="text-xs text-muted-foreground">custo médio manual × qtd</p>
+                </div>
+              )}
+            </div>
+            <div className={`rounded-xl border p-3 ${margemEstimada >= 0 ? 'border-purple-200 bg-purple-50' : 'border-red-200 bg-red-50'}`}>
+              <p className="text-xs text-muted-foreground font-medium">📊 Margem estimada</p>
+              <p className={`text-xl font-bold mt-0.5 ${margemEstimada >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
+                {hasPrices && (hasCosts || !autoCalcCost) ? fmt(String(margemEstimada)) : '—'}
+              </p>
+              <p className="text-xs text-muted-foreground">valor − custo estimado</p>
+            </div>
           </div>
         </div>
       )}
@@ -1528,6 +1597,7 @@ export default function CompaniesPage() {
               manualAvgCost={formData.manualAvgCost}
               priceGroupId={formData.priceGroupId ? Number(formData.priceGroupId) : null}
               onFlagChange={(flag, val) => set(flag as any, val)}
+              clientType={formData.clientType}
             />
           )}
 

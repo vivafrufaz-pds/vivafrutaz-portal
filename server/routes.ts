@@ -1297,6 +1297,103 @@ export async function registerRoutes(
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // Generate orders from contract scope for the current week
+  app.post('/api/companies/:id/generate-orders-from-scope', async (req, res) => {
+    try {
+      if (!req.session?.userId) return res.status(401).json({ message: 'Não autenticado' });
+      const companyId = Number(req.params.id);
+      const company = await storage.getCompany(companyId);
+      if (!company) return res.status(404).json({ message: 'Empresa não encontrada' });
+      if ((company as any).clientType !== 'contratual') {
+        return res.status(400).json({ message: 'Empresa não é do tipo contratual' });
+      }
+      const scopes = await storage.getContractScopes(companyId);
+      if (!scopes.length) return res.status(400).json({ message: 'Escopo contratual vazio. Adicione itens ao escopo primeiro.' });
+
+      const products = await storage.getProducts();
+      const prodById = new Map(products.map(p => [p.id, p]));
+
+      // Map PT-BR day names to ISO weekday offset from Monday (0=Mon, 1=Tue, ...)
+      const DAY_OFFSET: Record<string, number> = {
+        'Segunda-feira': 0, 'Terça-feira': 1, 'Quarta-feira': 2,
+        'Quinta-feira': 3, 'Sexta-feira': 4,
+      };
+
+      // Compute Monday of current week
+      const today = new Date();
+      const isoDay = today.getDay() === 0 ? 7 : today.getDay(); // Mon=1..Sun=7
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - (isoDay - 1));
+      monday.setHours(15, 0, 0, 0);
+
+      const year = today.getFullYear();
+      const weekNum = Math.ceil((monday.getDate() + new Date(year, monday.getMonth(), 1).getDay()) / 7);
+      const monthName = monday.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+      const weekLabel = `Semana ${weekNum} - ${monthName.charAt(0).toUpperCase() + monthName.slice(1)}`;
+
+      // Group scope items by dayOfWeek
+      const byDay: Record<string, typeof scopes> = {};
+      for (const s of scopes) {
+        if (!byDay[s.dayOfWeek]) byDay[s.dayOfWeek] = [];
+        byDay[s.dayOfWeek].push(s);
+      }
+
+      const createdOrders = [];
+      for (const [dayName, dayScopes] of Object.entries(byDay)) {
+        const offset = DAY_OFFSET[dayName];
+        if (offset === undefined) continue;
+        const deliveryDate = new Date(monday);
+        deliveryDate.setDate(monday.getDate() + offset);
+
+        const items = dayScopes.map(scope => {
+          const unitPrice = scope.unitPrice ? Number(scope.unitPrice) : 0;
+          const qty = Number(scope.quantity) || 1;
+          return {
+            productId: scope.productId,
+            quantity: String(qty),
+            unitPrice: String(unitPrice),
+            totalPrice: String(Math.round(unitPrice * qty * 100) / 100),
+          };
+        }).filter(item => {
+          const prod = prodById.get(item.productId);
+          return !!prod;
+        });
+
+        if (!items.length) continue;
+
+        const totalValue = items.reduce((s, i) => s + Number(i.totalPrice), 0);
+
+        const order = await storage.createOrder({
+          companyId,
+          deliveryDate,
+          weekReference: weekLabel,
+          totalValue: String(Math.round(totalValue * 100) / 100),
+          status: 'ACTIVE',
+          orderNote: `Gerado automaticamente do escopo contratual (${dayName})`,
+          orderDate: new Date(),
+          adminNote: null,
+          allowReplication: false,
+          nimbiExpiration: null,
+          reopenReason: null,
+          reopenRequestedAt: null,
+          fiscalStatus: 'nota_pendente',
+          preNotaNumber: null,
+          erpExportStatus: 'nao_exportado',
+          erpExportedAt: null,
+          erpId: null,
+          erpExportError: null,
+        } as any, items as any);
+
+        createdOrders.push({ ...order, dayName });
+      }
+
+      res.json({ created: createdOrders.length, orders: createdOrders, weekLabel });
+    } catch (e: any) {
+      console.error('Generate orders from scope error:', e);
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   // Company validation endpoint — checks all companies for missing required fields
   app.get('/api/admin/companies/validate', async (req, res) => {
     try {
@@ -3410,6 +3507,40 @@ export async function registerRoutes(
             entry.companies.push({
               companyId: sr.companyId, companyName, quantity: qty,
               deliveryDate: delivDate, orderId: sr.id, orderCode: `PP-${sr.id}`,
+            });
+          }
+        }
+      }
+
+      // Contract scope demand (contratual companies) — shows expected weekly demand
+      if (!sourceFilter || sourceFilter === 'all' || sourceFilter === 'scope') {
+        const DAY_OFFSET: Record<string, number> = {
+          'Segunda-feira': 0, 'Terça-feira': 1, 'Quarta-feira': 2,
+          'Quinta-feira': 3, 'Sexta-feira': 4,
+        };
+        const contratualCompanies = allCompanies.filter(c => (c as any).clientType === 'contratual');
+        for (const c of contratualCompanies) {
+          const companyScopes = await storage.getContractScopes(c.id);
+          for (const scope of companyScopes) {
+            const prod = productById.get(scope.productId);
+            const productName = prod?.name || `Produto #${scope.productId}`;
+            const unit = prod?.unit || 'un';
+            const offset = DAY_OFFSET[scope.dayOfWeek];
+            if (offset === undefined) continue;
+            const deliveryDate = new Date(startD);
+            deliveryDate.setDate(startD.getDate() + offset);
+            const delivDateStr = deliveryDate.toISOString().split('T')[0];
+            if (categoryFilter && categoryFilter !== 'all') continue; // scopes don't have category filter here
+            const key = `scope__${productName}`;
+            if (!productMap.has(key)) {
+              productMap.set(key, { productId: scope.productId, productName, totalQty: 0, unit, source: 'scope' as any, companies: [] });
+            }
+            const entry = productMap.get(key)!;
+            const qty = Number(scope.quantity) || 0;
+            entry.totalQty += qty;
+            entry.companies.push({
+              companyId: c.id, companyName: c.companyName, quantity: qty,
+              deliveryDate: delivDateStr, orderId: 0, orderCode: `SC-${c.id}`,
             });
           }
         }

@@ -1,134 +1,87 @@
 # VivaFrutaz B2B Ordering System
 
 ## Overview
-
-VivaFrutaz is a B2B corporate fruit ordering platform designed for companies to place weekly fruit orders. It features a dual-portal system for admin staff and client companies, supporting role-based access, time-windowed ordering, and comprehensive reporting. The platform includes a built-in logistics module, executive dashboard, Flora IA (intelligent chat assistant with smart export and intelligence modules), and incident management for both internal and client-related issues. The system is entirely in Brazilian Portuguese (PT-BR).
-
-### Push Notification System
-- **VAPID Keys**: Hardcoded in `server/pushService.ts` (public: `BL_IPIPX...`, private: `p9zFMm...`)
-- **Database tables**: `push_subscriptions` (endpoint, p256dh, auth, userId/companyId) and `notification_settings` (7 default events, seeded on startup)
-- **Events**: `order_created`, `order_cancelled`, `order_updated`, `client_inactive`, `low_stock`, `flora_task`, `flora_alert`
-- **Backend routes**: `GET /api/push/vapid-public-key` (public), `POST /api/push/subscribe`, `POST /api/push/unsubscribe`, `GET/PATCH /api/push/settings` (admin), `POST /api/push/test` (admin)
-- **Hooks**: Order creation fires `order_created`; status changes fire `order_cancelled` or `order_updated`; Flora task creation fires `flora_task`
-- **Frontend**: `usePushNotifications` hook in `client/src/hooks/use-push-notifications.ts`; auto-subscribes staff on first login (8s delay, once per browser); `Layout.tsx` calls the hook
-- **Admin Page**: `/admin/notification-settings` — toggle events on/off, see subscriber count, send test notification; Bell icon in sidebar for ADMIN/DIRECTOR/DEVELOPER
-- **Service Worker**: `sw.js` handles `push` events (show notification) and `notificationclick` (open URL or focus window)
-- **iOS**: Requires iOS 16.4+ and standalone PWA mode; shown in compatibility notice on settings page
-
-### PWA Support
-- **Manifest**: `client/public/manifest.json` with 8 icon sizes (72–512px), standalone display, PT-BR locale
-- **Icons**: Generated via `pngjs` in `client/public/icon-{size}.png` + `apple-touch-icon.png`
-- **Service Worker**: `client/public/sw.js` — caches static assets, skips API/auth routes, offline-ready
-- **Registration**: Service worker registered in `client/src/main.tsx` on page load
-- **Install Prompt**: `PWAInstallPrompt.tsx` handles `beforeinstallprompt` (Android/Desktop) and iOS Share Sheet guide; shows after 3s delay; dismissible per session
-- **Mobile Sidebar**: Hamburger drawer in Layout.tsx — `Menu` button in header opens sliding panel; overlay click/Escape closes it; auto-closes on navigation
-
-### Flora IA (VirtualAssistant.tsx)
-- **Panel-first interface**: opens in "Painel" mode (grid of categorized shortcuts), chat is secondary
-- **Smart Export**: interprets natural language like "exportar pedidos da semana" or "exportar faturamento do mês", generates XLSX via `GET /api/flora/export`
-- **Export shortcuts**: direct download buttons in panel for orders/financial by period (week/month/lastmonth)
-- **Intelligence modules**: commercial risk, financial forecast, logistics analysis, system efficiency intents
-- **Chat mode**: toggled from panel via "Chat com a Flora" button; export responses include a download button
-- **Flora Training**: admin CRUD at `/admin/flora-training` with keyword matching in chat
+VivaFrutaz is a B2B corporate fruit ordering platform in Brazilian Portuguese (PT-BR), designed for companies to place weekly fruit orders. It features a dual-portal system for admin and client companies, supporting role-based access, time-windowed ordering, comprehensive reporting, and a built-in logistics module. Key capabilities include an executive dashboard, Flora IA (an intelligent chat assistant with smart export and intelligence modules), and an incident management system for both internal and client-related issues. The project aims to streamline the B2B fruit ordering process, improve logistics, and provide advanced analytics for better decision-making.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
 ### Frontend Architecture
-- **Framework**: React with TypeScript, using Vite.
+- **Framework**: React with TypeScript and Vite.
 - **Routing**: Wouter, with `ProtectedRoute` for access control.
 - **State Management**: TanStack React Query for server state.
-- **UI Components**: shadcn/ui (New York style) built on Radix UI, styled with Tailwind CSS (green/orange palette).
+- **UI Components**: shadcn/ui (New York style) based on Radix UI, styled with Tailwind CSS (green/orange palette).
 - **Forms**: React Hook Form with Zod validation.
-- **Charts**: Recharts for data visualization in dashboards.
+- **Charts**: Recharts for data visualization.
 - **Modals**: Custom `Modal.tsx` component.
-- **Auth Flow**: `useAuth` hook and `ProtectedRoute` determine session type (`isStaff`/`isClient`) and manage access.
+- **Authentication**: `useAuth` hook and `ProtectedRoute` manage session types (`isStaff`/`isClient`) and access.
+- **PWA Support**: Manifest and service worker for offline capabilities and install prompt.
+- **Push Notifications**: Integrated system with VAPID keys, database tables for subscriptions/settings, and event-driven notifications.
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express 5.
 - **Language**: TypeScript, compiled with `tsx` (dev) and esbuild (prod).
 - **Session Management**: `express-session` with `memorystore`.
-- **API Design**: Centralized, typed API definitions (`shared/routes.ts`) with Zod schemas for validation and `buildUrl()` for path parameter handling.
+- **API Design**: Centralized, typed API definitions (`shared/routes.ts`) with Zod schemas for validation.
 - **Storage Layer**: `IStorage` interface implemented using Drizzle ORM and PostgreSQL.
 - **Build**: `script/build.ts` orchestrates client (Vite) and server (esbuild) bundling.
 
 ### Data Storage
 - **Database**: PostgreSQL, accessed via `drizzle-orm/node-postgres`.
-- **ORM**: Drizzle ORM, with schema defined in `shared/schema.ts`.
-- **Migrations**: Drizzle Kit.
-- **Key Tables**: `users`, `price_groups`, `companies`, `products`, `product_prices`, `order_windows`, `orders`, `order_items`, `system_settings`.
-- **Business Rules**: Companies linked to one `price_group_id`. Product prices filtered by company's price group. `finalPrice = product.basePrice × (1 + company.adminFee / 100)`. Order codes are auto-generated (`VF-YEAR-XXXXXX`). Orders blocked after Thursday 12:00 (unless `forceOpen`). `orders_enabled` in `system_settings` controls system-wide ordering.
+- **ORM**: Drizzle ORM, with schema defined in `shared/schema.ts` and migrations via Drizzle Kit.
+- **Key Tables**: `users`, `price_groups`, `companies`, `products`, `orders`, `system_settings`, `order_windows`, `order_items`, `push_subscriptions`, `notification_settings`, `waste_control`, `purchase_plan_status`, `danfe_records`, `company_config`, `inventory_settings`, `inventory_entries`, `inventory_movements`, `inventory_physical_counts`, `about_us`, `smtp_config`.
+- **Business Rules**: Companies linked to price groups; `finalPrice` calculation includes `adminFee`; auto-generated order codes; time-windowed order blocking with override.
 
 ### Authentication & Authorization
-- Session-based authentication using `express-session`.
-- Supports `admin` and `company` user types with distinct roles (e.g., ADMIN, OPERATIONS_MANAGER, PURCHASE_MANAGER, LOGISTICS).
-- Role-based route protection implemented via `ProtectedRoute`.
-- Passwords are currently plain text and require hashing for production.
-
-### Shared Code (`shared/`)
-- `schema.ts`: Defines DB schema and Zod insert schemas for both client and server.
-- `routes.ts`: Typed API route registry with paths, HTTP methods, and Zod schemas.
+- Session-based authentication with `express-session`.
+- Role-based access control for `admin` and `company` user types (ADMIN, OPERATIONS_MANAGER, PURCHASE_MANAGER, LOGISTICS, FINANCEIRO, DIRECTOR, DEVELOPER).
+- Role-based route and tab protection enforced by `ProtectedRoute` and `tabPermissions`.
 
 ### Core Features
-- **Role-Based Access**: ADMIN, DIRECTOR, OPERATIONS_MANAGER, PURCHASE_MANAGER, FINANCEIRO, DEVELOPER, LOGISTICS.
-- **Price Management**: Price groups, `adminFee` calculation, product pricing per group.
-- **Ordering System**: Time-windowed orders, special orders (Pedidos Pontuais), cart auto-save/recovery, duplicate order protection, order notes.
-- **Reporting**: Purchasing and financial reports with CSV export (NF/Nimbi formats).
-- **User Management**: CRUD for staff, login blocking, password management.
-- **System Automation**: Daily DB backups (with UI management), automatic email system (order status, password reset, etc.), cron for log cleanup.
-- **Developer Tools**: System Logs (advanced filtering, export, cleanup), Auditoria (KPIs), System Sync (`Sincronização Global`) for verifying system dimensions, AI Bug Detector, System Health.
-- **Logistics Module (`Módulo Logística`)**: Routes, Drivers, Vehicles, Maintenance, Quotations (`Cotações`) with delivery windows management. Includes **Route Assistant** tab (`🧠 Assistente`) at `/admin/logistics` — select a day of week + optional delivery date, endpoint `GET /api/logistics/route-assistant?day=...&date=...` returns companies sorted by delivery window start time, user can reorder manually, print a formatted manifesto PDF, or create a logistics route directly. Each saved route also has a print manifesto (🖨️) button in the Rotas tab.
-- **Executive Dashboard (`Dashboard Executivo`)**: KPIs, charts, alerts, top companies/products.
-- **Virtual Assistant (`Assistente Virtual`)**: Floating chat widget with FAQ-based answers.
-- **Incident Management**: Client incidents (`Ocorrências de Clientes`) and internal incidents (`Ocorrências Internas`) with workflows and status tracking.
-- **Maintenance/Test Modes**: System-wide toggles with bypass for privileged roles.
-- **Tab-Level Permissions**: `tabPermissions jsonb` on users; admin UI checkboxes per-role; `Layout.tsx` filters sidebar; `ProtectedRoute` enforces per-tab access. ADMIN/DIRECTOR/DEVELOPER can configure.
-- **Order Date-Lock & Reopen Workflow**: New orders start as `CONFIRMED` (locked). Clients request reopening from history page; admins (ADMIN/DIRECTOR/OPERATIONS_MANAGER/LOGISTICS) approve/deny from `/admin/orders`; approved orders enter `OPEN_FOR_EDITING` state, client edits via `/client/order/edit/:id`, and finalizes back to `CONFIRMED`. Status flow: `CONFIRMED → REOPEN_REQUESTED → OPEN_FOR_EDITING → CONFIRMED`. Date-lock blocks duplicate delivery date orders on create page.
-- **Quotation → Company Conversion**: APPROVED quotations show a green "Converter" button. Opens `ConvertToCompanyModal` with pre-filled company form from quotation data. On submit: POST `/api/companies`, then PATCH quotation status. Invalidates both caches. Shows success screen with default password reminder.
-- **SISTEMA_TESTE Role**: Staff users with role `SISTEMA_TESTE` always have their orders redirected to `test_orders` table (same as test_mode for clients), regardless of test mode setting. Check is in `POST /api/orders` before test_mode check.
-- **Company GPS Coordinates**: `latitude` and `longitude` numeric fields added to `companies` table and company edit form (under "Endereço de Entrega" section). Used by Route Assistant for geographic grouping. Optional — existing companies work without coordinates.
-- **Company Contract Types**: Companies can be `semanal`, `mensal`, `pontual`, or `contratual`. Contratual companies have a `contractModel` (fixo/variável/alternado/rotacao4) and a contract scope (`contract_scopes` table) defining weekly product quantities per day/week rotation. `rotacao4` shows a 4-option week selector (Semana 1–4 / Listas A–D) in the ContractScopeManager. Managed via the "Escopo Contratual" tab in the admin companies panel.
-- **Waste Control Module (`Controle de Desperdício`)**: Table `waste_control` tracks waste events with date, product, quantity, reason (expired/damaged/overripe/separation_error/logistics_error/other), description, and financial impact. API: `GET/POST/PATCH/DELETE /api/waste-control`. Page at `/admin/waste-control` shows KPI cards (total events, total quantity, total financial impact), filters by reason/month, full CRUD table with create/edit dialog. Nav item added for ADMIN, DIRECTOR, OPERATIONS_MANAGER.
-- **Purchase Planning Module (`Planejamento de Compras`)**: API `GET /api/purchase-planning?startDate=&endDate=&weekRef=` aggregates confirmed order items grouped by product across the date range, `GET /api/purchase-planning/status` + `PATCH /api/purchase-planning/status` + `GET /api/purchase-planning/statuses` manage per-product-week purchase statuses (`purchase_plan_status` table: productName, weekRef, status PENDING/BUYING/BOUGHT/UNAVAILABLE). Page at `/admin/purchase-planning` shows a week picker, aggregated list of all products needed, expandable company breakdown per product, status chips per product with a dialog to change status. Nav item added for ADMIN, DIRECTOR, PURCHASE_MANAGER.
-- **Logistics Company Auto-Fill**: Route creation dialog in the RoutesTab (logistics.tsx) uses a company picker Select (populated from `/api/companies`) instead of a plain text field. Selecting a company auto-appends to the `companyNames` field and shows the company's address in a toast.
-- **Geocoding via Backend Proxy**: `GET /api/geocode?q=...` proxies Nominatim OpenStreetMap with proper `User-Agent` header from the server (browsers can't set User-Agent). The "Buscar Coordenadas" button in the company form calls this proxy with the full address + "Brasil" appended.
-- **Faturamento Mínimo Semanal**: In `create-order.tsx`, weekly billing validation uses `companyOrders` filtered by `weekReference === activeWindow.weekReference` to compute `weeklyOrdersTotal`. A progress bar in the cart shows current week total vs minimum. When `projectedWeeklyTotal < minWeeklyBilling` on submit, a warning modal appears with "Adicionar Mais Produtos" (dismiss) and "Continuar Pedido" (force submit) options.
-- **Janela de Entrega**: In companies.tsx Config tab, the "Horário de Entrega" single time picker is replaced by a "Janela de Entrega" read-only view that displays all enabled days from `deliveryConfigJson` with their start–end time windows. The `deliveryTime` field is preserved in the schema for legacy compatibility.
-- **DANFE Internal PDF Generator**: Client-side PDF generation using jsPDF + jspdf-autotable + QRCode. Available in the expanded order view on `/admin/orders` for ADMIN, DIRECTOR, FINANCEIRO, LOGISTICS, DEVELOPER, OPERATIONS_MANAGER roles. Generates a styled DANFE Interno document with company info, client info, product table (with NCM/CFOP columns when available), totals, logistics info, and a QR code linking to the order. Includes pre-nota number, natureza da operação, IE for both sender and recipient. Generation history is logged in the `danfe_records` table. Library at `client/src/lib/danfe-generator.ts`. Remetente block automatically populates from `company_config` table.
-- **Fiscal Export Module (ERP)**: Fully integrated fiscal management per order in the expanded order view. Includes: (1) DANFE section for PDF download/view, (2) ERP Export section with Excel (.xlsx via xlsx library) and XML NF-e export buttons, (3) Fiscal Status panel with 4 status options (nota_pendente/nota_exportada/nota_emitida/nota_cancelada) — each can be set via toggle buttons, (4) Pre-nota number display with auto-generation button (VF-NF-XXXXXX format). Fiscal status badge appears in the order table rows. Filter by fiscal status with dropdown filter. Backend routes: `PATCH /api/orders/:id/fiscal`, `POST /api/orders/:id/generate-prenota`, `GET /api/orders/:id/export-erp`. Orders table now has `fiscalStatus` (default: nota_pendente) and `preNotaNumber` columns.
-- **Fiscal Fields on Products**: Products now have `ncm` (Nomenclatura Comum do Mercosul), `cfop` (Código Fiscal de Operações), and `commercialUnit` fields. These are shown in the product form under a "Dados Fiscais" section and are included in DANFE/Excel/XML exports. 
-- **Client Incident Delete & PDF**: Admins (ADMIN/DIRECTOR/DEVELOPER) can delete client incidents with a confirmation dialog. All users can download a PDF report of any incident via `client/src/lib/incident-pdf-generator.ts`. Deletion syncs instantly — the record is removed from DB so the client no longer sees it.
-- **Company Config (Suporte/DANFE)**: `company_config` table stores company name, fantasy name, address, city, state, CEP, phone, email, CNPJ, IE (stateRegistration), support phone/email, default help message, defaultCfop, and defaultNatureza. Managed at `/admin/support` (ADMIN/DIRECTOR/DEVELOPER only). API: `GET/PATCH /api/company-config`. DANFE automatically reads this config for the Remetente block including all fiscal fields.
-- **Inventory Module (Módulo Estoque)**: Tables `inventory_settings`, `inventory_entries`, `inventory_movements`, `inventory_physical_counts`. Full CRUD API (10 endpoints). Page at `/admin/inventory` with 4 tabs: Painel (KPIs + low-stock alerts), Entradas (product entry records), Movimentações (stock movements with type tracking), Inventário Físico (physical count sessions with discrepancy tracking). Auto-deduction on order CONFIRM. CSV export.
-- **ERP Bling Export**: Orders have 4 new fields: `erpExportStatus` (nao_exportado/exportando/exportado/erro), `erpExportedAt`, `erpId`, `erpExportError`. POST `/api/orders/:id/bling-export` executes export, generates ERP ID (BLING-YEAR-XXXXXX-timestamp), blocks re-export (409 if already exportado). Status badge appears in order list for non-"nao_exportado" statuses. Expanded order card shows dedicated Bling ERP section with status badge, ERP ID, export timestamp, and export button (disabled once exported).
-- **Quem Somos Nós (Institutional Page)**: `about_us` table stores title, content, foundingYear, mission, vision, values, imageBase64, imageType. API: `GET /api/about-us` (all authenticated users), `PUT /api/about-us` (ADMIN/DIRECTOR/DEVELOPER). Admin page at `/admin/about-us` with full edit capabilities including image upload via base64. Client read-only page at `/client/about-us`. Accessible from sidebar for all roles (admin + client).
-- **SMTP Configuration (Configuração SMTP)**: `smtp_config` table stores host, port, user, password, senderEmail, senderName. API: `GET /api/smtp-config` (masked password), `PUT /api/smtp-config` (saves config + reloads mailer), `POST /api/smtp-config/test` (sends test email). Admin page at `/admin/smtp-config` (ADMIN/DIRECTOR/DEVELOPER). Mailer dynamically loads SMTP from DB on startup/reload, falls back to env vars if DB config is empty. Password shown as `••••••••` after save; only updated when user types a new password.
-- **IA Operacional — Central de Inteligência**: `GET /api/admin/intelligence` runs a 5-category predictive analysis (estoque, clientes, produtos, logística, sistema) — no extra DB tables needed, uses existing data. Returns `{ alerts[], summary, generatedAt }` where each alert has: id, category, severity (CRITICAL/HIGH/MEDIUM/LOW), title, description, actionLabel, actionHref, data. Analysis: (1) Estoque — stocks below minimum + days-until-depletion using weekly consumption forecast; (2) Clientes — companies whose gap since last order exceeds 1.8× historical average; (3) Produtos — zero sales in 4 weeks or >60% demand drop; (4) Logística — routes without driver/vehicle; (5) Sistema — ≥10 login failures + repeated ERROR log patterns. Page at `/admin/intelligence` has summary KPI cards (by severity), tabbed filter, per-alert action buttons linking to relevant modules. VirtualAssistant reads the intelligence API: badge count = critical+high, greeting mentions IA alerts, developer menu "I" option explains the module. Accessible to ADMIN, DIRECTOR, DEVELOPER, OPERATIONS_MANAGER, PURCHASE_MANAGER, LOGISTICS.
+- **Role-Based Access**: Granular permissions across various roles.
+- **Price Management**: Dynamic pricing via price groups and `adminFee`.
+- **Ordering System**: Time-windowed orders, special orders, cart features, order notes, and an order date-lock/reopen workflow.
+- **Reporting & Exports**: Purchasing and financial reports with CSV export, DANFE Internal PDF generator, ERP Bling Export, and Fiscal Export Module (XML/XLSX).
+- **User Management**: CRUD operations for staff, login blocking, password management.
+- **System Automation**: Daily DB backups, automated email system, cron for log cleanup.
+- **Developer Tools**: System Logs, Auditoria (KPIs), System Sync, AI Bug Detector, System Health.
+- **Logistics Module**: Manages routes, drivers, vehicles, maintenance, quotations, and includes a Route Assistant with geocoding integration for optimized delivery planning.
+- **Executive Dashboard**: Provides KPIs, charts, and alerts.
+- **Virtual Assistant (Flora IA)**: Panel-first interface with smart export capabilities (e.g., "exportar pedidos da semana"), intelligence modules (commercial risk, financial forecast), and a trainable chat mode.
+- **Incident Management**: Tracks client and internal incidents with workflows and status.
+- **Maintenance/Test Modes**: System-wide toggles and a `SISTEMA_TESTE` role for testing.
+- **Company Features**: GPS coordinates for logistics, various contract types (semanal, mensal, pontual, contratual with `contractModel` and `contract_scopes`), minimum weekly billing validation.
+- **Waste Control Module**: Tracks waste events, reasons, and financial impact.
+- **Purchase Planning Module**: Aggregates order items for procurement planning, including per-product-week purchase statuses.
+- **Fiscal Management**: Product fiscal fields (NCM, CFOP, commercialUnit), fiscal status tracking, pre-nota generation, and ERP integration.
+- **Inventory Module**: Comprehensive system for managing inventory entries, movements, physical counts, and low-stock alerts.
+- **Institutional Page**: Customizable "Quem Somos Nós" page.
+- **SMTP Configuration**: Dynamic configuration of email settings.
+- **IA Operacional — Central de Inteligência**: Predictive analysis across inventory, clients, products, logistics, and system, generating actionable alerts.
 
 ## External Dependencies
 
 ### Core Infrastructure
-- **PostgreSQL**: Primary database.
-- **Node.js / Express 5**: Server runtime and framework.
+- **PostgreSQL**: Primary relational database.
+- **Node.js / Express 5**: Backend runtime and web application framework.
 
 ### Key npm Packages
-- `drizzle-orm`, `drizzle-zod`, `drizzle-kit`: ORM and database tooling.
+- `drizzle-orm`, `drizzle-zod`, `drizzle-kit`: ORM and database schema tools.
 - `pg`: PostgreSQL client.
-- `express-session`, `memorystore`: Session management.
-- `wouter`: Frontend routing.
-- `@tanstack/react-query`: Server state management.
-- `react-hook-form`, `@hookform/resolvers`: Form handling.
-- `zod`: Schema validation.
-- `recharts`: Charting library.
-- `date-fns`: Date utility library.
-- `lucide-react`: Icon library.
-- `nanoid`: ID generation.
-- `jspdf`, `jspdf-autotable`: Client-side PDF generation for DANFE and Special Order PDFs.
-- `qrcode`: QR code generation embedded in DANFE PDFs.
-- `xlsx`: Excel (.xlsx) spreadsheet generation for ERP fiscal export.
+- `express-session`, `memorystore`: Session management for Express.
+- `wouter`: Lightweight client-side router for React.
+- `@tanstack/react-query`: Data fetching and state management.
+- `react-hook-form`, `@hookform/resolvers`: Form management and validation.
+- `zod`: Schema declaration and validation library.
+- `recharts`: Composable charting library built with React and D3.
+- `date-fns`: Modern JavaScript date utility library.
+- `lucide-react`: Collection of beautiful open-source icons.
+- `nanoid`: Tiny, secure, URL-friendly, unique string ID generator.
+- `jspdf`, `jspdf-autotable`: Libraries for client-side PDF generation.
+- `qrcode`: Library for generating QR codes.
+- `xlsx`: Library for reading and writing Excel (XLSX) files.
 
 ### Fonts
 - Plus Jakarta Sans (body) and Outfit (display/headings) via Google Fonts CDN.
