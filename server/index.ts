@@ -35,10 +35,23 @@ export function log(message: string, source = "express") {
 }
 
 app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   if (req.path.startsWith('/api')) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+  }
+  next();
+});
+
+app.use((req, res, next) => {
+  const BLOCKED_EXTENSIONS = ['.map', '.dev', '.source'];
+  const isBlocked = BLOCKED_EXTENSIONS.some(ext => req.path.endsWith(ext));
+  if (isBlocked) {
+    return res.status(403).json({ message: 'Acesso negado' });
   }
   next();
 });

@@ -176,9 +176,22 @@ export default function PurchasePlanningPage() {
       if (!res.ok) throw new Error('Erro ao carregar previsão');
       return res.json();
     },
-    enabled: tab === 'forecast',
     staleTime: 10 * 60 * 1000,
   });
+
+  const variationAlerts = useMemo(() => {
+    if (!planData || !forecastData?.forecast.length) return [];
+    const alerts: { productName: string; currentTotal: number; avgWeekly: number; pct: number }[] = [];
+    for (const item of planData.items) {
+      const fc = forecastData.forecast.find(f => f.productName === item.productName);
+      if (!fc || fc.avgWeekly <= 0) continue;
+      const pct = ((item.totalQty - fc.avgWeekly) / fc.avgWeekly) * 100;
+      if (Math.abs(pct) >= 80) {
+        alerts.push({ productName: item.productName, currentTotal: item.totalQty, avgWeekly: fc.avgWeekly, pct: Math.round(pct) });
+      }
+    }
+    return alerts.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 10);
+  }, [planData, forecastData]);
 
   const upsertMutation = useMutation({
     mutationFn: (payload: any) => apiRequest('POST', '/api/purchase-planning/status', payload),
@@ -421,6 +434,27 @@ export default function PurchasePlanningPage() {
 
       {/* ── Tab: Lista Consolidada ────────────────────────────────── */}
       {tab === 'list' && (
+        <div className="space-y-4">
+        {variationAlerts.length > 0 && (
+          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-2">
+            <div className="flex items-center gap-2 font-bold text-orange-800 text-sm">
+              <AlertCircle className="w-4 h-4" /> {variationAlerts.length} Produto(s) com Volume Fora do Padrão Histórico
+            </div>
+            <p className="text-xs text-orange-700">Comparado à média das últimas 8 semanas (alertas com variação ≥ 80%)</p>
+            {variationAlerts.map((a, i) => (
+              <div key={i} className="flex items-center justify-between bg-white/70 rounded-lg px-3 py-2 text-sm">
+                <span className="font-medium">{a.productName}</span>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">Média: <strong>{a.avgWeekly} un</strong></span>
+                  <span className="text-muted-foreground">Semana atual: <strong>{a.currentTotal} un</strong></span>
+                  <span className={`px-2 py-0.5 rounded-full font-bold ${a.pct > 0 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {a.pct > 0 ? '+' : ''}{a.pct}%
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="bg-card rounded-2xl border border-border/50 overflow-hidden">
           <div className="px-5 py-4 border-b border-border/50 bg-muted/20 flex items-center justify-between">
             <h2 className="font-bold text-foreground flex items-center gap-2">
@@ -483,6 +517,7 @@ export default function PurchasePlanningPage() {
               );
             })
           )}
+        </div>
         </div>
       )}
 

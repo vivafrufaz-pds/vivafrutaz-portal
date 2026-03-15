@@ -177,8 +177,13 @@ export async function registerRoutes(
     try {
       const issues: Array<{ severity: string; category: string; message: string }> = [];
       const summary = { totalUsers: 0, activeUsers: 0, totalCompanies: 0, activeCompanies: 0, errors: 0, loginFails: 0 };
+      const details: {
+        inactiveCompanies: any[];
+        inactiveProducts: any[];
+        loginFails: any[];
+        systemErrors: any[];
+      } = { inactiveCompanies: [], inactiveProducts: [], loginFails: [], systemErrors: [] };
 
-      // Check DB tables reachability
       try {
         const users = await storage.getUsers();
         summary.totalUsers = users.length;
@@ -196,6 +201,21 @@ export async function registerRoutes(
         if (inactive.length > 0) issues.push({ severity: 'INFO', category: 'Empresas', message: `${inactive.length} empresa(s) inativa(s) no sistema.` });
         const noPriceGroup = companies.filter((c: any) => !c.priceGroupId && c.active);
         if (noPriceGroup.length > 0) issues.push({ severity: 'WARN', category: 'Empresas', message: `${noPriceGroup.length} empresa(s) ativa(s) sem grupo de preço configurado.` });
+
+        const orders = await storage.getOrders();
+        const now = Date.now();
+        details.inactiveCompanies = inactive.map((c: any) => {
+          const compOrders = orders.filter((o: any) => o.companyId === c.id);
+          const lastOrder = compOrders.sort((a: any, b: any) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())[0];
+          const lastOrderDate = lastOrder ? lastOrder.orderDate : null;
+          const daysSinceOrder = lastOrderDate ? Math.floor((now - new Date(lastOrderDate).getTime()) / 86400000) : null;
+          return {
+            id: c.id, companyName: c.companyName, cnpj: c.cnpj || null,
+            city: c.addressCity || null, email: c.email || null,
+            registeredAt: c.createdAt || null, responsible: c.responsible || null,
+            lastOrderDate, daysSinceOrder, active: c.active,
+          };
+        });
       } catch (e: any) {
         issues.push({ severity: 'ERROR', category: 'Banco de Dados', message: `Erro ao acessar tabela de empresas: ${e.message}` });
       }
@@ -214,22 +234,42 @@ export async function registerRoutes(
 
       try {
         const products = await storage.getProducts();
+        const allOrders = await storage.getOrders();
         const inactive = products.filter((p: any) => !p.active);
         if (inactive.length > 0) issues.push({ severity: 'INFO', category: 'Produtos', message: `${inactive.length} produto(s) inativo(s) no catálogo.` });
         const noPrice = products.filter((p: any) => !p.basePrice);
         if (noPrice.length > 0) issues.push({ severity: 'WARN', category: 'Produtos', message: `${noPrice.length} produto(s) sem preço base definido.` });
+
+        details.inactiveProducts = await Promise.all(inactive.map(async (p: any) => {
+          return {
+            id: p.id, name: p.name, category: p.category || null, active: p.active,
+            basePrice: p.basePrice || null, createdAt: p.createdAt || null,
+          };
+        }));
       } catch (e: any) {
         issues.push({ severity: 'ERROR', category: 'Banco de Dados', message: `Erro ao acessar tabela de produtos: ${e.message}` });
       }
 
       try {
-        const recentLogs = await storage.getLogs(100);
-        const loginFails = recentLogs.filter((l: any) => l.action === 'LOGIN_FAILED');
-        summary.loginFails = loginFails.length;
-        if (loginFails.length >= 5) issues.push({ severity: 'WARN', category: 'Segurança', message: `${loginFails.length} tentativas de login falhas recentes detectadas.` });
+        const recentLogs = await storage.getLogs(500);
+        const loginFailLogs = recentLogs.filter((l: any) => l.action === 'LOGIN_FAILED');
+        summary.loginFails = loginFailLogs.length;
+        if (loginFailLogs.length >= 5) issues.push({ severity: 'WARN', category: 'Segurança', message: `${loginFailLogs.length} tentativas de login falhas recentes detectadas.` });
         const errors = recentLogs.filter((l: any) => l.level === 'ERROR');
         summary.errors = errors.length;
         if (errors.length > 0) issues.push({ severity: 'ERROR', category: 'Logs', message: `${errors.length} evento(s) de erro registrado(s) recentemente.` });
+
+        details.loginFails = loginFailLogs.slice(0, 50).map((l: any) => ({
+          id: l.id, email: l.userEmail || l.description?.match(/[\w.+-]+@[\w.]+/)?.[0] || 'desconhecido',
+          createdAt: l.createdAt, ip: l.ip || null, description: l.description || '',
+          userAgent: null,
+        }));
+
+        details.systemErrors = errors.slice(0, 50).map((l: any) => ({
+          id: l.id, action: l.action, description: l.description || '',
+          level: l.level, createdAt: l.createdAt, userEmail: l.userEmail || null,
+          userId: l.userId || null,
+        }));
       } catch (e: any) {
         issues.push({ severity: 'ERROR', category: 'Logs', message: `Erro ao acessar logs do sistema: ${e.message}` });
       }
@@ -239,7 +279,7 @@ export async function registerRoutes(
       }
 
       await storage.createLog({ action: 'AUDIT_RUN', description: `Auditoria executada. ${issues.length} item(ns) encontrado(s).`, level: 'INFO' });
-      res.json({ issues, summary, scannedAt: new Date().toISOString() });
+      res.json({ issues, summary, details, scannedAt: new Date().toISOString() });
     } catch (err) {
       res.status(500).json({ message: "Erro ao executar auditoria" });
     }

@@ -3,7 +3,7 @@ import { Layout } from "@/components/Layout";
 import {
   Shield, RefreshCw, AlertTriangle, CheckCircle, Info, LogIn, ShoppingCart, Edit,
   Scan, Bug, Wrench, Zap, Play, Database, AlertCircle, Trash2, Activity, Server, Clock,
-  Download, Calendar, X
+  Download, Calendar, X, ChevronDown
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
@@ -34,6 +34,12 @@ function formatDate(iso: string) {
 }
 
 type AuditIssue = { severity: string; category: string; message: string };
+type AuditDetails = {
+  inactiveCompanies: { id: number; companyName: string; cnpj: string | null; city: string | null; email: string | null; registeredAt: string | null; responsible: string | null; lastOrderDate: string | null; daysSinceOrder: number | null; active: boolean }[];
+  inactiveProducts: { id: number; name: string; category: string | null; active: boolean; basePrice: string | null; createdAt: string | null }[];
+  loginFails: { id: number; email: string; createdAt: string; ip: string | null; description: string }[];
+  systemErrors: { id: number; action: string; description: string; level: string; createdAt: string; userEmail: string | null }[];
+};
 
 function analyzeLogsForBugs(logs: any[]): Array<{ type: string; description: string; suggestion: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> {
   const bugs: Array<{ type: string; description: string; suggestion: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
@@ -159,6 +165,10 @@ export default function DeveloperPage() {
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [activeTab, setActiveTab] = useState<'logs' | 'audit' | 'ai' | 'health' | 'sync'>('logs');
+  const [auditDetailPanel, setAuditDetailPanel] = useState<string | null>(null);
+  const [inactiveFilter, setInactiveFilter] = useState<'all' | '30' | '60' | '90'>('all');
+  const [bugTypeFilter, setBugTypeFilter] = useState<string>('ALL');
+  const [bugStatusMap, setBugStatusMap] = useState<Record<string, 'aberto' | 'analisando' | 'resolvido'>>({});
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [selectedLogs, setSelectedLogs] = useState<Set<number>>(new Set());
   const [showDateCleanup, setShowDateCleanup] = useState(false);
@@ -594,115 +604,391 @@ export default function DeveloperPage() {
               </div>
               <div>
                 <h3 className="font-bold text-foreground text-lg">Auditoria Completa do Sistema</h3>
-                <p className="text-sm text-muted-foreground">Verifica usuários, empresas, pedidos, ocorrências e logs em busca de inconsistências.</p>
+                <p className="text-sm text-muted-foreground">Verifica usuários, empresas, pedidos, produtos e logs em busca de inconsistências.</p>
               </div>
             </div>
-            <button onClick={() => auditMutation.mutate()} disabled={auditMutation.isPending}
-              data-testid="button-run-audit"
-              className="flex items-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 shadow-lg shadow-primary/20">
-              <Play className="w-4 h-4" />
-              {auditMutation.isPending ? "Executando auditoria..." : "Executar Auditoria"}
-            </button>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => { auditMutation.mutate(); setAuditDetailPanel(null); }} disabled={auditMutation.isPending}
+                data-testid="button-run-audit"
+                className="flex items-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 shadow-lg shadow-primary/20">
+                <Play className="w-4 h-4" />
+                {auditMutation.isPending ? "Executando auditoria..." : "Executar Auditoria"}
+              </button>
+              {auditMutation.data && (
+                <button onClick={() => {
+                  const d = auditMutation.data as any;
+                  const lines = [
+                    'Auditoria VivaFrutaz',
+                    `Data: ${new Date(d.scannedAt).toLocaleString('pt-BR')}`,
+                    '',
+                    '=== RESUMO ===',
+                    `Usuários: ${d.summary.activeUsers}/${d.summary.totalUsers} ativos`,
+                    `Empresas: ${d.summary.activeCompanies}/${d.summary.totalCompanies} ativas`,
+                    `Login Fails: ${d.summary.loginFails}`,
+                    `Erros nos logs: ${d.summary.errors}`,
+                    '',
+                    '=== PROBLEMAS ===',
+                    ...(d.issues || []).map((i: any) => `[${i.severity}] ${i.category}: ${i.message}`),
+                    '',
+                    '=== EMPRESAS INATIVAS ===',
+                    ...(d.details?.inactiveCompanies || []).map((c: any) => `${c.companyName} | CNPJ: ${c.cnpj || '-'} | Cidade: ${c.city || '-'} | Email: ${c.email || '-'} | Último pedido: ${c.lastOrderDate ? new Date(c.lastOrderDate).toLocaleDateString('pt-BR') : 'nunca'}`),
+                    '',
+                    '=== PRODUTOS INATIVOS ===',
+                    ...(d.details?.inactiveProducts || []).map((p: any) => `${p.name} | Categoria: ${p.category || '-'}`),
+                    '',
+                    '=== LOGINS FALHOS ===',
+                    ...(d.details?.loginFails || []).map((l: any) => `${new Date(l.createdAt).toLocaleString('pt-BR')} | Email: ${l.email} | IP: ${l.ip || '-'}`),
+                  ];
+                  const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a'); a.href = url; a.download = `auditoria-${new Date().toISOString().slice(0,10)}.txt`; a.click(); URL.revokeObjectURL(url);
+                }}
+                data-testid="button-export-audit"
+                className="flex items-center gap-2 px-5 py-2.5 border-2 border-border rounded-xl text-sm font-bold hover:bg-muted transition-colors">
+                  <Download className="w-4 h-4" /> Exportar Relatório
+                </button>
+              )}
+            </div>
 
-            {auditMutation.data && (
-              <div className="mt-6 space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[
-                    { label: 'Usuários', value: `${(auditMutation.data as any).summary?.activeUsers}/${(auditMutation.data as any).summary?.totalUsers}`, sub: 'ativos/total' },
-                    { label: 'Empresas', value: `${(auditMutation.data as any).summary?.activeCompanies}/${(auditMutation.data as any).summary?.totalCompanies}`, sub: 'ativas/total' },
-                    { label: 'Erros', value: (auditMutation.data as any).summary?.errors, sub: 'nos logs', color: (auditMutation.data as any).summary?.errors > 0 ? 'text-red-600' : 'text-green-600' },
-                    { label: 'Login Fails', value: (auditMutation.data as any).summary?.loginFails, sub: 'tentativas', color: (auditMutation.data as any).summary?.loginFails > 5 ? 'text-orange-600' : 'text-foreground' },
-                  ].map(c => (
-                    <div key={c.label} className="bg-muted/30 rounded-xl p-3 text-center">
-                      <p className={`text-xl font-bold ${c.color || 'text-foreground'}`}>{c.value}</p>
-                      <p className="text-xs text-muted-foreground">{c.label} ({c.sub})</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-bold text-muted-foreground">{(auditMutation.data as any).issues?.length || 0} problema(s) encontrado(s):</p>
-                  {(auditMutation.data as any).issues?.length === 0 && (
-                    <div className="flex items-center gap-2 p-4 bg-green-50 border border-green-200 rounded-xl">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                      <p className="text-sm text-green-700 font-medium">Sistema sem inconsistências detectadas!</p>
+            {auditMutation.data && (() => {
+              const d = auditMutation.data as any;
+              const details: AuditDetails = d.details || { inactiveCompanies: [], inactiveProducts: [], loginFails: [], systemErrors: [] };
+              return (
+                <div className="mt-6 space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Usuários', value: `${d.summary?.activeUsers}/${d.summary?.totalUsers}`, sub: 'ativos/total', key: null },
+                      { label: 'Empresas', value: `${d.summary?.activeCompanies}/${d.summary?.totalCompanies}`, sub: 'ativas/total', key: null },
+                      { label: 'Erros nos Logs', value: d.summary?.errors, sub: 'clique p/ ver', color: d.summary?.errors > 0 ? 'text-red-600' : 'text-green-600', key: 'systemErrors' },
+                      { label: 'Login Fails', value: d.summary?.loginFails, sub: 'clique p/ ver', color: d.summary?.loginFails > 5 ? 'text-orange-600' : 'text-foreground', key: 'loginFails' },
+                    ].map(c => (
+                      <div key={c.label}
+                        onClick={() => c.key ? setAuditDetailPanel(auditDetailPanel === c.key ? null : c.key) : null}
+                        className={`bg-muted/30 rounded-xl p-3 text-center ${c.key ? 'cursor-pointer hover:bg-muted/60 transition-colors border-2 border-transparent hover:border-primary/30' : ''}`}>
+                        <p className={`text-xl font-bold ${c.color || 'text-foreground'}`}>{c.value}</p>
+                        <p className="text-xs text-muted-foreground">{c.label} ({c.sub})</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold text-muted-foreground">{d.issues?.length || 0} problema(s) encontrado(s) — clique para ver detalhes:</p>
+                    {d.issues?.length === 0 && (
+                      <div className="flex items-center gap-2 p-4 bg-green-50 border border-green-200 rounded-xl">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <p className="text-sm text-green-700 font-medium">Sistema sem inconsistências detectadas!</p>
+                      </div>
+                    )}
+                    {d.issues?.map((issue: any, i: number) => {
+                      const cfg = SEVERITY_CONFIG[issue.severity] || SEVERITY_CONFIG.INFO;
+                      const SevIcon = issue.severity === 'ERROR' ? AlertCircle : issue.severity === 'WARN' ? AlertTriangle : CheckCircle;
+                      const panelKey = issue.category === 'Empresas' && details.inactiveCompanies.length > 0 ? 'inactiveCompanies'
+                        : issue.category === 'Produtos' && details.inactiveProducts.length > 0 ? 'inactiveProducts'
+                        : issue.category === 'Segurança' && details.loginFails.length > 0 ? 'loginFails'
+                        : issue.category === 'Logs' && details.systemErrors.length > 0 ? 'systemErrors'
+                        : null;
+                      return (
+                        <div key={i}
+                          onClick={() => panelKey ? setAuditDetailPanel(auditDetailPanel === panelKey ? null : panelKey) : null}
+                          data-testid={`audit-issue-${i}`}
+                          className={`flex items-start gap-3 p-4 rounded-xl border ${cfg.bg} ${panelKey ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}>
+                          <SevIcon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${cfg.color}`} />
+                          <div className="flex-1">
+                            <p className="text-sm text-foreground">{issue.message}</p>
+                            {panelKey && <p className="text-xs text-muted-foreground mt-0.5">↓ Clique para ver detalhes</p>}
+                          </div>
+                          {panelKey && <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${auditDetailPanel === panelKey ? 'rotate-180' : ''}`} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* ── Inactive Companies Detail ── */}
+                  {auditDetailPanel === 'inactiveCompanies' && details.inactiveCompanies.length > 0 && (
+                    <div className="bg-muted/20 rounded-2xl border border-border/50 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-border/50 bg-muted/30 flex items-center justify-between gap-3 flex-wrap">
+                        <p className="font-bold text-sm">Empresas Inativas ({details.inactiveCompanies.length})</p>
+                        <div className="flex gap-1">
+                          {(['all', '30', '60', '90'] as const).map(f => (
+                            <button key={f} onClick={() => setInactiveFilter(f)}
+                              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${inactiveFilter === f ? 'bg-primary text-white' : 'bg-white border border-border text-muted-foreground hover:bg-muted/40'}`}>
+                              {f === 'all' ? 'Todas' : `${f} dias`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="text-xs text-muted-foreground bg-muted/10 border-b border-border/50">
+                            <th className="text-left px-4 py-2">Empresa</th>
+                            <th className="text-left px-4 py-2">CNPJ</th>
+                            <th className="text-left px-4 py-2">Cidade</th>
+                            <th className="text-left px-4 py-2">E-mail</th>
+                            <th className="text-left px-4 py-2">Último Pedido</th>
+                            <th className="text-left px-4 py-2">Ações</th>
+                          </tr></thead>
+                          <tbody className="divide-y divide-border/40">
+                            {details.inactiveCompanies
+                              .filter(c => {
+                                if (inactiveFilter === 'all') return true;
+                                return c.daysSinceOrder === null || c.daysSinceOrder >= Number(inactiveFilter);
+                              })
+                              .map(c => (
+                                <tr key={c.id} className="hover:bg-muted/20" data-testid={`audit-inactive-company-${c.id}`}>
+                                  <td className="px-4 py-2.5 font-medium">{c.companyName}</td>
+                                  <td className="px-4 py-2.5 text-muted-foreground">{c.cnpj || '—'}</td>
+                                  <td className="px-4 py-2.5 text-muted-foreground">{c.city || '—'}</td>
+                                  <td className="px-4 py-2.5 text-muted-foreground">{c.email || '—'}</td>
+                                  <td className="px-4 py-2.5">
+                                    {c.lastOrderDate
+                                      ? <span className={`font-medium ${c.daysSinceOrder && c.daysSinceOrder > 60 ? 'text-red-600' : 'text-muted-foreground'}`}>{new Date(c.lastOrderDate).toLocaleDateString('pt-BR')} <span className="text-xs">({c.daysSinceOrder}d)</span></span>
+                                      : <span className="text-orange-600 font-medium">Nunca</span>}
+                                  </td>
+                                  <td className="px-4 py-2.5">
+                                    <a href={`/admin/companies`} data-testid={`link-open-company-${c.id}`}
+                                      className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-lg font-bold hover:bg-primary/20 transition-colors">
+                                      Abrir Cadastro
+                                    </a>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
-                  {(auditMutation.data as any).issues?.map((issue: any, i: number) => {
-                    const cfg = SEVERITY_CONFIG[issue.severity] || SEVERITY_CONFIG.INFO;
-                    const SevIcon = issue.severity === 'ERROR' ? AlertCircle : issue.severity === 'WARN' ? AlertTriangle : CheckCircle;
-                    return (
-                      <div key={i} className={`flex items-start gap-3 p-4 rounded-xl border ${cfg.bg}`}>
-                        <SevIcon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${cfg.color}`} />
-                        <p className="text-sm text-foreground">{issue.message}</p>
+
+                  {/* ── Inactive Products Detail ── */}
+                  {auditDetailPanel === 'inactiveProducts' && details.inactiveProducts.length > 0 && (
+                    <div className="bg-muted/20 rounded-2xl border border-border/50 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-border/50 bg-muted/30">
+                        <p className="font-bold text-sm">Produtos Inativos ({details.inactiveProducts.length})</p>
                       </div>
-                    );
-                  })}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="text-xs text-muted-foreground bg-muted/10 border-b border-border/50">
+                            <th className="text-left px-4 py-2">Produto</th>
+                            <th className="text-left px-4 py-2">Categoria</th>
+                            <th className="text-left px-4 py-2">Preço Base</th>
+                            <th className="text-left px-4 py-2">Ações</th>
+                          </tr></thead>
+                          <tbody className="divide-y divide-border/40">
+                            {details.inactiveProducts.map(p => (
+                              <tr key={p.id} className="hover:bg-muted/20" data-testid={`audit-inactive-product-${p.id}`}>
+                                <td className="px-4 py-2.5 font-medium">{p.name}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground">{p.category || '—'}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground">{p.basePrice ? `R$ ${Number(p.basePrice).toFixed(2)}` : '—'}</td>
+                                <td className="px-4 py-2.5">
+                                  <a href="/admin/products" data-testid={`link-edit-product-${p.id}`}
+                                    className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-lg font-bold hover:bg-blue-200 transition-colors">
+                                    Editar / Reativar
+                                  </a>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Login Fails Detail ── */}
+                  {auditDetailPanel === 'loginFails' && details.loginFails.length > 0 && (
+                    <div className="bg-muted/20 rounded-2xl border border-border/50 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-border/50 bg-muted/30">
+                        <p className="font-bold text-sm">Tentativas de Login Falhas ({details.loginFails.length})</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="text-xs text-muted-foreground bg-muted/10 border-b border-border/50">
+                            <th className="text-left px-4 py-2">E-mail</th>
+                            <th className="text-left px-4 py-2">Data/Hora</th>
+                            <th className="text-left px-4 py-2">IP</th>
+                            <th className="text-left px-4 py-2">Descrição</th>
+                          </tr></thead>
+                          <tbody className="divide-y divide-border/40">
+                            {details.loginFails.map(l => (
+                              <tr key={l.id} className="hover:bg-muted/20" data-testid={`audit-login-fail-${l.id}`}>
+                                <td className="px-4 py-2.5 font-medium text-red-700">{l.email}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground text-xs">{formatDate(l.createdAt)}</td>
+                                <td className="px-4 py-2.5 font-mono text-xs">{l.ip || '—'}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground text-xs truncate max-w-xs">{l.description || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── System Errors Detail ── */}
+                  {auditDetailPanel === 'systemErrors' && details.systemErrors.length > 0 && (
+                    <div className="bg-muted/20 rounded-2xl border border-border/50 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-border/50 bg-muted/30">
+                        <p className="font-bold text-sm">Erros do Sistema ({details.systemErrors.length})</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="text-xs text-muted-foreground bg-muted/10 border-b border-border/50">
+                            <th className="text-left px-4 py-2">Ação</th>
+                            <th className="text-left px-4 py-2">Descrição</th>
+                            <th className="text-left px-4 py-2">Data/Hora</th>
+                            <th className="text-left px-4 py-2">Usuário</th>
+                          </tr></thead>
+                          <tbody className="divide-y divide-border/40">
+                            {details.systemErrors.map(e => (
+                              <tr key={e.id} className="hover:bg-muted/20" data-testid={`audit-error-${e.id}`}>
+                                <td className="px-4 py-2.5 font-mono text-xs font-bold text-red-700">{e.action}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground text-xs truncate max-w-xs">{e.description || '—'}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground text-xs">{formatDate(e.createdAt)}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground text-xs">{e.userEmail || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}
 
       {/* Tab: AI Bug Detector */}
-      {activeTab === 'ai' && (
-        <div className="space-y-4">
-          <div className="bg-card rounded-2xl border border-border/50 p-6 premium-shadow">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center">
-                <Zap className="w-6 h-6 text-purple-600" />
+      {activeTab === 'ai' && (() => {
+        const allBugTypes = Array.from(new Set(aiBugs.map(b => b.type)));
+        const filteredBugs = aiBugs.filter(b => bugTypeFilter === 'ALL' || b.type === bugTypeFilter);
+        const statusColors: Record<string, string> = { aberto: 'bg-red-100 text-red-700', analisando: 'bg-orange-100 text-orange-700', resolvido: 'bg-green-100 text-green-700' };
+        return (
+          <div className="space-y-4">
+            <div className="bg-card rounded-2xl border border-border/50 p-6 premium-shadow">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-2xl bg-purple-100 flex items-center justify-center">
+                  <Zap className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-foreground text-lg">Detector de Bugs com IA</h3>
+                  <p className="text-sm text-muted-foreground">Análise dos logs para detectar padrões suspeitos e sugerir correções.</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-foreground text-lg">Detector de Bugs com IA</h3>
-                <p className="text-sm text-muted-foreground">Análise dos logs para detectar padrões suspeitos e sugerir correções.</p>
+              <div className="flex gap-2 mb-4 flex-wrap">
+                <button onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] })} data-testid="button-detect-bugs"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors">
+                  <Bug className="w-4 h-4" /> Detectar Bugs
+                </button>
+                <button onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] })} data-testid="button-suggest-fix"
+                  className="flex items-center gap-2 px-5 py-2.5 border-2 border-purple-300 text-purple-700 font-bold rounded-xl hover:bg-purple-50 transition-colors">
+                  <Wrench className="w-4 h-4" /> Atualizar Análise
+                </button>
+                {aiBugs.length > 0 && (
+                  <button data-testid="button-export-bugs"
+                    onClick={() => {
+                      const lines = ['Relatório de Bugs — VivaFrutaz', `Gerado em: ${new Date().toLocaleString('pt-BR')}`, '', ...aiBugs.map((b, i) => `[${b.priority}] ${b.type}\nStatus: ${bugStatusMap[b.type] || 'aberto'}\nDescrição: ${b.description}\nSugestão: ${b.suggestion}\n`)];
+                      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+                      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `bugs-${new Date().toISOString().slice(0,10)}.txt`; a.click(); URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-2 px-5 py-2.5 border-2 border-border rounded-xl text-sm font-bold hover:bg-muted transition-colors">
+                    <Download className="w-4 h-4" /> Exportar Relatório
+                  </button>
+                )}
+              </div>
+
+              {aiBugs.length > 0 && (
+                <div className="flex items-center gap-2 mb-4 flex-wrap">
+                  <span className="text-xs font-bold text-muted-foreground">Filtrar por tipo:</span>
+                  <button onClick={() => setBugTypeFilter('ALL')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${bugTypeFilter === 'ALL' ? 'bg-purple-600 text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
+                    Todos ({aiBugs.length})
+                  </button>
+                  {allBugTypes.map(t => (
+                    <button key={t} onClick={() => setBugTypeFilter(t)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${bugTypeFilter === t ? 'bg-purple-600 text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
+                      {t.split('—')[0].trim()}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {isLoading ? (
+                <div className="p-8 text-center text-muted-foreground">Analisando logs...</div>
+              ) : filteredBugs.length === 0 ? (
+                <div className="p-8 text-center">
+                  <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                  <p className="font-bold text-green-700 text-lg">Nenhum bug detectado!</p>
+                  <p className="text-sm text-muted-foreground mt-1">Análise dos logs não encontrou padrões suspeitos.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm font-bold text-muted-foreground">{filteredBugs.length} problema(s) {bugTypeFilter !== 'ALL' ? 'filtrado(s)' : 'detectado(s)'}:</p>
+                  {filteredBugs.map((bug, i) => {
+                    const colors: Record<string, string> = { HIGH: 'border-red-200 bg-red-50', MEDIUM: 'border-orange-200 bg-orange-50', LOW: 'border-blue-200 bg-blue-50' };
+                    const badges: Record<string, string> = { HIGH: 'bg-red-100 text-red-700', MEDIUM: 'bg-orange-100 text-orange-700', LOW: 'bg-blue-100 text-blue-700' };
+                    const bugStatus = bugStatusMap[bug.type] || 'aberto';
+                    return (
+                      <div key={i} className={`rounded-xl border p-5 ${colors[bug.priority]}`} data-testid={`bug-card-${i}`}>
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
+                          <Bug className="w-5 h-5 text-foreground/60" />
+                          <span className="font-bold text-foreground">{bug.type}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${badges[bug.priority]}`}>
+                            {bug.priority === 'HIGH' ? 'Alta Prioridade' : bug.priority === 'MEDIUM' ? 'Média Prioridade' : 'Baixa Prioridade'}
+                          </span>
+                          <div className="ml-auto flex gap-1">
+                            {(['aberto', 'analisando', 'resolvido'] as const).map(s => (
+                              <button key={s} data-testid={`bug-status-${i}-${s}`}
+                                onClick={() => setBugStatusMap(prev => ({ ...prev, [bug.type]: s }))}
+                                className={`px-2 py-0.5 rounded text-xs font-bold transition-colors ${bugStatus === s ? statusColors[s] : 'bg-white/60 text-muted-foreground hover:bg-white'}`}>
+                                {s === 'aberto' ? 'Aberto' : s === 'analisando' ? 'Analisando' : 'Resolvido'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-sm text-foreground mb-3">{bug.description}</p>
+                        <div className="flex items-start gap-2 bg-white/70 rounded-lg p-3">
+                          <Wrench className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-sm text-green-800 font-medium">{bug.suggestion}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Error History Table */}
+            <div className="bg-card rounded-2xl border border-border/50 overflow-hidden">
+              <div className="px-5 py-4 border-b border-border/50 bg-muted/20 flex items-center justify-between">
+                <h3 className="font-bold text-sm">Histórico de Erros do Sistema</h3>
+                <span className="text-xs text-muted-foreground">{(logs || []).filter((l: any) => l.level === 'ERROR').length} erros registrados</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-xs text-muted-foreground bg-muted/10 border-b border-border/50">
+                    <th className="text-left px-4 py-2">Ação</th>
+                    <th className="text-left px-4 py-2">Descrição</th>
+                    <th className="text-left px-4 py-2">Data/Hora</th>
+                    <th className="text-left px-4 py-2">Usuário</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-border/40">
+                    {(logs || []).filter((l: any) => l.level === 'ERROR').slice(0, 20).map((l: any) => (
+                      <tr key={l.id} className="hover:bg-muted/10" data-testid={`error-row-${l.id}`}>
+                        <td className="px-4 py-2 font-mono text-xs font-bold text-red-700">{l.action}</td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-xs">{l.description || '—'}</td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs">{formatDate(l.createdAt)}</td>
+                        <td className="px-4 py-2 text-muted-foreground text-xs">{l.userEmail || '—'}</td>
+                      </tr>
+                    ))}
+                    {(logs || []).filter((l: any) => l.level === 'ERROR').length === 0 && (
+                      <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground text-sm">Nenhum erro registrado.</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div className="flex gap-2 mb-6 flex-wrap">
-              <button onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] })} data-testid="button-detect-bugs"
-                className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition-colors">
-                <Bug className="w-4 h-4" /> Detectar Bugs
-              </button>
-              <button onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] })} data-testid="button-suggest-fix"
-                className="flex items-center gap-2 px-5 py-2.5 border-2 border-purple-300 text-purple-700 font-bold rounded-xl hover:bg-purple-50 transition-colors">
-                <Wrench className="w-4 h-4" /> Sugerir Correção
-              </button>
-            </div>
-            {isLoading ? (
-              <div className="p-8 text-center text-muted-foreground">Analisando logs...</div>
-            ) : aiBugs.length === 0 ? (
-              <div className="p-8 text-center">
-                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                <p className="font-bold text-green-700 text-lg">Nenhum bug detectado!</p>
-                <p className="text-sm text-muted-foreground mt-1">Análise dos logs não encontrou padrões suspeitos.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm font-bold text-muted-foreground">{aiBugs.length} problema(s) detectado(s):</p>
-                {aiBugs.map((bug, i) => {
-                  const colors: Record<string, string> = { HIGH: 'border-red-200 bg-red-50', MEDIUM: 'border-orange-200 bg-orange-50', LOW: 'border-blue-200 bg-blue-50' };
-                  const badges: Record<string, string> = { HIGH: 'bg-red-100 text-red-700', MEDIUM: 'bg-orange-100 text-orange-700', LOW: 'bg-blue-100 text-blue-700' };
-                  return (
-                    <div key={i} className={`rounded-xl border p-5 ${colors[bug.priority]}`}>
-                      <div className="flex items-center gap-3 mb-2">
-                        <Bug className="w-5 h-5 text-foreground/60" />
-                        <span className="font-bold text-foreground">{bug.type}</span>
-                        <span className={`ml-auto px-2 py-0.5 rounded-full text-xs font-bold ${badges[bug.priority]}`}>
-                          {bug.priority === 'HIGH' ? 'Alta' : bug.priority === 'MEDIUM' ? 'Média' : 'Baixa'}
-                        </span>
-                      </div>
-                      <p className="text-sm text-foreground mb-3">{bug.description}</p>
-                      <div className="flex items-start gap-2 bg-white/70 rounded-lg p-3">
-                        <Wrench className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-green-800 font-medium">{bug.suggestion}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Tab: Health */}
       {activeTab === 'health' && <HealthTab />}
