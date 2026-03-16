@@ -32,8 +32,7 @@ import {
   type NotificationSetting, type InsertNotificationSetting,
   type ScopeSimulation, type InsertScopeSimulation
 } from "@shared/schema";
-import { eq, and, desc, gte, lte, sql, inArray } from "drizzle-orm";
-
+import { eq, and, desc, gte, lte, sql, inArray, lt } from "drizzle-orm";
 export interface IStorage {
   // Auth & Users
   getUserByEmail(email: string): Promise<User | undefined>;
