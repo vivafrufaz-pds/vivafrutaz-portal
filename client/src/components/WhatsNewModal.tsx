@@ -65,7 +65,6 @@ export function WhatsNewModal() {
   const askFlora = (msg: string) => {
     window.dispatchEvent(new CustomEvent('flora:ask', { detail: { message: msg } }));
   };
-  const onAskFlora = askFlora;
   const { isStaff } = useAuth();
   const [visible, setVisible] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -85,8 +84,8 @@ export function WhatsNewModal() {
   };
 
   const handleTutorial = (feature: Feature) => {
-    if (feature.tutorialMessage && onAskFlora) {
-      onAskFlora(feature.tutorialMessage);
+    if (feature.tutorialMessage) {
+      askFlora(feature.tutorialMessage);
     }
     handleClose();
   };
@@ -149,7 +148,7 @@ export function WhatsNewModal() {
                   {activeIndex === i && (
                     <div className="mt-2 space-y-2">
                       <p className="text-xs text-muted-foreground leading-relaxed">{feature.description}</p>
-                      {feature.tutorialMessage && onAskFlora && (
+                      {feature.tutorialMessage && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); handleTutorial(feature); }}

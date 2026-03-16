@@ -35,9 +35,13 @@ window.addEventListener('unhandledrejection', (event) => {
   reportError(`UnhandledRejection: ${msg}`, 'unhandledrejection');
 });
 
-// Register Service Worker for PWA support
+// Service Worker: in development, clear stale caches and re-register
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+  window.addEventListener('load', async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    } catch {}
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
 }
