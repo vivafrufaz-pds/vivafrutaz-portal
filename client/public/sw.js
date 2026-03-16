@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vivafrutaz-v2';
+const CACHE_NAME = 'vivafrutaz-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -30,6 +30,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Never cache Vite dev assets — they change on every rebuild
+  if (
+    url.pathname.includes('node_modules') ||
+    url.pathname.includes('.vite') ||
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/@fs/') ||
+    url.searchParams.has('v') ||
+    url.searchParams.has('t') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.tsx') ||
+    url.pathname.endsWith('.jsx') ||
+    url.pathname.endsWith('.js')
+  ) {
+    return;
+  }
+
   // For navigation requests (HTML), try network first, fall back to cache
   if (event.request.mode === 'navigate') {
     event.respondWith(
@@ -40,7 +57,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For static assets, try cache first
+  // For static assets (icons, manifest, favicon), try cache first
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;

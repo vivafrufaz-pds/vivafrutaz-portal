@@ -5,7 +5,12 @@ import "./index.css";
 (window as any).APP_NAME = "VivaFrutaz";
 
 // ── Global error handlers ─────────────────────────────────────────────────────
+const _reportedErrors = new Set<string>();
 function reportError(message: string, source?: string) {
+  const key = `${source}:${message}`;
+  if (_reportedErrors.has(key)) return;
+  _reportedErrors.add(key);
+  setTimeout(() => _reportedErrors.delete(key), 10000);
   try {
     fetch('/api/logs', {
       method: 'POST',

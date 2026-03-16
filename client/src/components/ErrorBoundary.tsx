@@ -57,8 +57,15 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             <div className="flex gap-3 justify-center">
               <button
-                onClick={() => this.setState({ hasError: false, errorMessage: '' })}
+                onClick={() => {
+                  if (!isPage) {
+                    window.location.reload();
+                  } else {
+                    this.setState({ hasError: false, errorMessage: '' });
+                  }
+                }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors text-sm"
+                data-testid="button-error-retry"
               >
                 <RefreshCw className="w-4 h-4" /> Tentar novamente
               </button>
@@ -66,6 +73,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 <button
                   onClick={() => { window.location.href = '/admin/dashboard'; }}
                   className="inline-flex items-center gap-2 px-5 py-2.5 border border-border text-foreground font-bold rounded-xl hover:bg-muted transition-colors text-sm"
+                  data-testid="button-error-home"
                 >
                   <Home className="w-4 h-4" /> Ir para o início
                 </button>
